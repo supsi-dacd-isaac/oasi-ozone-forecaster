@@ -198,10 +198,9 @@ if __name__ == "__main__":
     # Get raw files from FTP server
     tmp_folder = 'tmp'
 
-    # todo currently FTP not used
-    # if cfg['ftp']['enabled'] == 'yes':
-    #     get_raw_files(ftp_address=cfg['ftp']['host'], ftp_user=cfg['ftp']['user'], ftp_pwd=cfg['ftp']['password'],
-    #                   ftp_root_dir='%s/' % cfg['ftp']['folder'])
+    if cfg['ftp']['enabled'] == 'yes':
+        get_raw_files(ftp_address=cfg['ftp']['host'], ftp_user=cfg['ftp']['user'], ftp_pwd=cfg['ftp']['password'],
+                      ftp_root_dir='%s/' % cfg['ftp']['folder'])
 
     # Insert data into InfluxDB
     insert_data()
