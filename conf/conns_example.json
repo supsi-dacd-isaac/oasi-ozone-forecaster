@@ -1,0 +1,33 @@
+{
+  "ftp": {
+    "host": "supersonic",
+    "user": "noel",
+    "password": "gallagher",
+    "remoteFolders": {
+      "measures": "liveforever",
+      "forecasts": "whatever",
+      "results": "wonderwall"
+    },
+    "localFolders": {
+      "measures": "out/data/measures",
+      "forecasts": "out/data/forecasts",
+      "results": "tmp"
+    }
+  },
+  "influxDB": {
+      "host": "dontlookbackinanger",
+      "port": 8086,
+      "user": "liam",
+      "password": "gallagher",
+      "database": "themasterplan",
+      "maxLinesPerInsert": 5000,
+      "waitAfterInsert": 1,
+      "measurementOASI": "locations_data",
+      "measurementARPA": "arpa_data",
+      "measurementMeteoSuisse": "meteosuisse_data",
+      "measurementGlobal": "global_data",
+      "measurementForecasts": "o3_forecasts",
+      "measurementForecastsQuantiles": "o3_forecasts_quantiles",
+      "timePrecision": "s"
+  }
+}

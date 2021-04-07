@@ -1,0 +1,77 @@
+{
+  "connectionsFile": "conf/conns.json",
+  "local": {
+    "timeZone": "Europe/Zurich",
+    "timeFormatMeasures": "%d.%m.%Y %H:%M",
+    "timeFormatForecasts": "%Y%m%d %H:%M",
+    "timeFormatGlobal": "%Y%m%d%H%M%S",
+    "waitAfterRequest": 1,
+    "inputMat": "data/inbox",
+    "outputMat": "data/outbox",
+    "trainingDatasets": "data/training_datasets"
+  },
+  "matlab": {
+    "scriptLauncher": "matlab/O3_forecaster/run_O3_forecaster.sh",
+    "forecastersFolder": "matlab/O3_forecaster/forecasters",
+    "runtimeEnvironmentFolder": "/usr/local/MATLAB/MATLAB_Runtime/R2018a/v94"
+  },
+  "forecastPeriod" : {
+    "case": "current",
+    "startDate": "2019-07-04",
+    "endDate": "2019-07-04"
+  },
+  "kpis": {
+    "startingDates": ["2019-05-10"]
+  },
+  "locations": [
+    {
+      "code": "BIO",
+      "predictorsFeatures": {
+        "MOR": { "20190604": {"surrogate": "off" } },
+        "EVE": { "20190604": {"surrogate": "off" } }
+      }
+    },
+    {
+      "code": "BRI",
+      "predictorsFeatures": {
+        "MOR": { "20190604": {"surrogate": "off" } },
+        "EVE": { "20190604": {"surrogate": "off" } }
+      }
+    },
+    {
+      "code": "CHI",
+      "predictorsFeatures": {
+        "MOR": { "20190604": {"surrogate": "off" } },
+        "EVE": { "20190604": {"surrogate": "off" } }
+      }
+    },
+    {
+      "code": "LOC",
+      "predictorsFeatures": {
+        "MOR": { "20190604": {"surrogate": "off" } },
+        "EVE": { "20190604": {"surrogate": "off" } }
+      }
+    },
+    {
+      "code": "MEN",
+      "predictorsFeatures": {
+        "MOR": { "20190604": {"surrogate": "off" } },
+        "EVE": { "20190604": {"surrogate": "off" } }
+      }
+    },
+    {
+      "code": "SAG",
+      "predictorsFeatures": {
+        "MOR": { "20190604": {"surrogate": "off" } },
+        "EVE": { "20190604": {"surrogate": "off" } }
+      }
+    },
+    {
+      "code": "TES",
+      "predictorsFeatures": {
+        "MOR": { "20190604": {"surrogate": "off" } },
+        "EVE": { "20190604": {"surrogate": "off" } }
+      }
+    }
+  ]
+}
