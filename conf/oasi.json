@@ -1,5 +1,6 @@
 {
   "connectionsFile": "conf/conns.json",
+  "globalSignals": ["RHW"],
   "local": {
     "timeZone": "Europe/Zurich",
     "timeFormatMeasures": "%d.%m.%Y %H:%M",
