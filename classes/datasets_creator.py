@@ -5,7 +5,7 @@ import pandas as pd
 from datetime import datetime, timedelta
 from influxdb import InfluxDBClient
 
-from classes.dataset_builder import DatasetBuilder
+from classes.forecaster import Forecaster
 
 class DatasetsCreator:
     """
@@ -74,17 +74,17 @@ class DatasetsCreator:
 
                         self.logger.info('Day %s' % self.cfg['dayToForecast'])
 
+                        # todo The code in the followingIF mus be checked carefully
                         # check if the day is not already saved
                         if self.cfg['dayToForecast'] not in days_already_saved:
-
-                            dsb = DatasetBuilder(influxdb_client=self.influx_client, cfg=self.cfg, logger=self.logger,
+                            forecaster = Forecaster(influxdb_client=self.influx_client, cfg=self.cfg, logger=self.logger,
                                                  forecast_type=forecast_type,
                                                  predictors_folder=self.cfg['local']['signalsConfigFolder'])
-                            dsb.build(location=location)
+                            forecaster.build(location=location)
 
                             # save the header
                             if header is None:
-                                signals_code = dsb.cfg_signals['signals']
+                                signals_code = forecaster.cfg_signals['signals']
                                 signals_code.insert(0, 'date')
                                 header = signals_code
 
@@ -98,15 +98,15 @@ class DatasetsCreator:
                                         flag_header = True
                                     csv_fw.close()
 
-                            dsb.input_data_values.insert(0, self.cfg['dayToForecast'])
+                            forecaster.input_data_values.insert(0, self.cfg['dayToForecast'])
 
                             vals = []
                             for code_desc in header:
                                 if code_desc != 'date':
-                                    if code_desc in dsb.input_data.keys():
-                                        vals.append(dsb.input_data[code_desc])
+                                    if code_desc in forecaster.input_data.keys():
+                                        vals.append(forecaster.input_data[code_desc])
                                 else:
-                                    vals.append(dsb.input_data_values[0])
+                                    vals.append(forecaster.input_data_values[0])
 
                             # check if all the data are available
                             if len(header) == len(vals):
@@ -119,7 +119,7 @@ class DatasetsCreator:
                             else:
                                 self.logger.error('Dataset not available for day %s' % self.cfg['dayToForecast'])
 
-                            del dsb
+                            del forecaster
 
                         else:
                             self.logger.error('Day %s already saved in dataset file' % self.cfg['dayToForecast'])

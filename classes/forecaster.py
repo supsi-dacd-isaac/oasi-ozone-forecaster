@@ -2,6 +2,7 @@
 import json
 import scipy.io as sio
 import numpy as np
+import pandas as pd
 import pytz
 import os
 
@@ -11,89 +12,73 @@ from datetime import date, datetime, timedelta
 
 import constants
 
-class DatasetBuilder:
+
+class Forecaster:
     """
-    Builder of the input dataset for the forecaster
+    Class handling the forecasting of a couple location_case (e.g. BIO_MOR)
     """
 
-    def __init__(self, influxdb_client, cfg, logger, forecast_type, predictors_folder):
+    def __init__(self, influxdb_client, forecast_type, location, cfg, logger):
         """
         Constructor
-
         :param influxdb_client: InfluxDB client
         :type influxdb_client: InfluxDBClient
+        :param forecast_type: Forecast type (MOR | EVE)
+        :type forecast_type: str
+        :param location: Location
+        :type location: str
         :param cfg: FTP parameters for the files exchange
         :type cfg: dict
         :param logger: Logger
         :type logger: Logger object
-        :param forecast_type: forecast type (MOR | EVE)
-        :type forecast_type: string
-        :param predictors_folder: folder where the predictors are located with the related inputs
-        :type predictors_folder: string
         """
         # set the variables
         self.influxdb_client = influxdb_client
-        self.cfg = cfg
+        self.location = location
         self.forecast_type = forecast_type
+        self.cfg = cfg
         self.logger = logger
         self.input_data = dict()
         self.input_data_desc = []
         self.input_data_values = []
         self.day_to_predict = None
         self.cfg_signals = None
-        self.predictors_folder = predictors_folder
+        self.input_df = None
 
-    def build(self, location):
+    def build_input_dataset(self):
         """
-        Build the dataset for a given station
+        Build the dataset
+        """
+        inputs_file = '%s%s%s_%s_inputs.json' % (self.cfg['folders']['models'], os.sep, self.location['code'],
+                                                 self.forecast_type)
+        self.logger.info('Create input dataset for signals configured in %s' % inputs_file)
 
-        :param location: location to predict
-        :type location: string
-        """
-        self.logger.info('Dataset creation for location %s' % location)
         self.input_data = dict()
         self.input_data_desc = []
         self.input_data_values = []
         self.day_to_predict = None
 
-        # load the signals to use in the prediction for the proper couple location_case (e.g. CHI_MOR)
-        sigs_file = '%s/json/%s_%s.json' % (self.predictors_folder, location['code'], self.forecast_type)
-
-        self.cfg_signals = json.loads(open(sigs_file).read())
-        location['signals'] = self.cfg_signals['signals']
+        self.cfg_signals = json.loads(open(inputs_file).read())
 
         # get the values in the DB
-        for signal in location['signals']:
+        for signal in self.cfg_signals['signals']:
             self.add_input_value(signal=signal)
 
         # organize the array
-        self.input_data_desc = location['signals']
+        self.input_data_desc = self.cfg_signals['signals']
         self.input_data_values = []
-        for signal in location['signals']:
+        for signal in self.cfg_signals['signals']:
             self.input_data_values.append(self.input_data[signal])
 
-        # Check the surrogate_on features of the predictors
-        tmp = self.predictors_folder.split(os.sep)
-        predictor = tmp[-1]
+        self.logger.info('Create the input dataframe')
+        self.input_df = pd.DataFrame([self.input_data_values], columns=self.input_data_desc,
+                                     index=[pd.DatetimeIndex([self.day_to_predict*1e9])])
 
-        # check if the  feature is set in the configuration file
-        if 'predictorsFeatures' in location.keys() and \
-            predictor in location['predictorsFeatures'][self.forecast_type].keys() and \
-            'surrogate' in location['predictorsFeatures'][self.forecast_type][predictor]:
-
-            # check if the surrogate feature is off
-            if location['predictorsFeatures'][self.forecast_type][predictor]['surrogate'] == 'off':
-                # if surrogate is not enabled then do not perform the prediction
-                if None in self.input_data_values:
-                    self.input_data = dict()
-                    self.input_data_desc = []
-                    self.input_data_values = []
-        else:
-            # To be sure consider this case as a surrogate off
-            if None in self.input_data_values:
-                self.input_data = dict()
-                self.input_data_desc = []
-                self.input_data_values = []
+    def predict(self):
+        # todo load the module from the pickle file
+        model_file = '%s%s%s_%s_model.json' % (self.cfg['folders']['models'], os.sep, self.location['code'],
+                                               self.forecast_type)
+        self.logger.info('Load the predictor model from pickle file %s' % model_file)
 
     def add_input_value(self, signal):
         """
@@ -384,21 +369,6 @@ class DatasetBuilder:
                 else:
                     self.input_data[signal_data] = 0.0
 
-    def save_training_data(self, location):
-        # check if new data are available
-        if len(self.input_data_values) > 0:
-            str_new_vals = '%s' % datetime.strftime(datetime.now(), '%Y-%m-%d')
-
-            for val in self.input_data_values:
-                str_new_vals = '%s,%f' % (str_new_vals, val)
-
-            # create a new the temporary file where the inputs will be saved
-            inputs_tmp_file = '%s/tmp/%s_%s.csv' % (self.cfg['local']['trainingDatasets'], location['code'],
-                                                    self.forecast_type)
-            self.logger.info('Create input temporary file %s' % inputs_tmp_file)
-            with open(inputs_tmp_file, 'w') as fw:
-                fw.write('%s\n' % str_new_vals)
-            fw.close()
 
     def set_forecast_day(self):
         """
