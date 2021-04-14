@@ -21,5 +21,8 @@
       "code": "BIO",
       "name": "Bioggio"
     }
-  ]
+  ],
+  "artificialFeatures":{
+      "inputs": ["T", "P"]
+    }
 }

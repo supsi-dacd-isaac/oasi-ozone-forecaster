@@ -104,22 +104,29 @@ def global_signals_handling(file_path, dps, tz_local):
     return dps
 
 
-def location_signals_handling(file_path, file_name, dps, tz_local):
+def location_signals_handling(file_path, file_name, dps, tz_local, artsig_inputs):
     # Open the file
     f = open(file_path, 'rb')
 
-    # check ARPA datasets
+    # Read the first line
     raw = f.readline()
-    # ARPA case
+
+    # Check the datasets cases
     if 'arpa' in file_name:
+        # ARPA case
         str_locations = raw.decode(constants.ENCODING)
         arpa_locations_keys = str_locations[:-1].split(';')[1:]
         measurement = cfg['influxDB']['measurementARPA']
-    # OASI case
     else:
-        # get location code
-        [oasi_location_key, stuff] = file_name.split('-')
-        measurement = cfg['influxDB']['measurementOASI']
+        if 'meteosvizzera' in file_name:
+            # MeteoSuisse case
+            [key1, key2, _, _] = file_name.split('-')
+            oasi_location_key = '%s-%s' % (key1, key2)
+            measurement = cfg['influxDB']['measurementMeteoSuisse']
+        else:
+            # OASI case
+            [oasi_location_key, _, _] = file_name.split('-')
+            measurement = cfg['influxDB']['measurementOASI']
 
     # signals
     raw = f.readline()
@@ -167,13 +174,20 @@ def location_signals_handling(file_path, file_name, dps, tz_local):
                 }
                 dps.append(copy.deepcopy(point))
 
+                # Checj if this measure refers to a signal needed to calculate the artificial features
+                if signals[i] in cfg['artificialFeatures']['inputs']:
+                    if (location_tag, signals[i]) not in artsig_inputs.keys():
+                        artsig_inputs[(location_tag, signals[i])] = [point]
+                    else:
+                        artsig_inputs[(location_tag, signals[i])].append(point)
+
                 if len(dps) >= int(cfg['influxDB']['maxLinesPerInsert']):
                     logger.info('Sent %i points to InfluxDB server' % len(dps))
                     influx_client.write_points(dps, time_precision=cfg['influxDB']['timePrecision'])
                     dps = []
                     time.sleep(0.1)
 
-    return dps
+    return dps, artsig_inputs
 
 
 def insert_data():
@@ -181,6 +195,10 @@ def insert_data():
     file_names = os.listdir(tmp_folder)
     dps = []
 
+    # Define artsig_inputs dictionary to collect inputs for the artificial features
+    artsig_inputs = dict()
+
+    # Define the time zone
     tz_local = pytz.timezone(cfg['local']['timeZone'])
 
     for file_name in file_names:
@@ -193,7 +211,10 @@ def insert_data():
 
         # The signal is related to a specific location (belonging either to OASI or to ARPA domains)
         else:
-            dps = location_signals_handling(file_path, file_name, dps, tz_local)
+            dps, artsig_inputs = location_signals_handling(file_path, file_name, dps, tz_local, artsig_inputs)
+
+    # todo for Dario: in artsig_inputs there should be everything you need to create the artificial features insert
+    #  here the calculations
 
     # Send remaining points to InfluxDB
     logger.info('Sent %i points to InfluxDB server' % len(dps))
