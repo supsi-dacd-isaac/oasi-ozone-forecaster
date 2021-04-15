@@ -29,7 +29,7 @@ def is_float(s):
         return False
 
 
-def get_raw_files(ftp_address, ftp_user, ftp_pwd, ftp_root_folders):
+def get_raw_files(ftp_address, ftp_user, ftp_pwd, ftp_root_folders, tmp_folder):
     ftp_root_dirs = '%s/' % cfg['ftp']['remoteFolders']
 
     if os.path.isdir(tmp_folder) is False:
@@ -190,7 +190,7 @@ def location_signals_handling(file_path, file_name, dps, tz_local, artsig_inputs
     return dps, artsig_inputs
 
 
-def insert_data():
+def insert_data(tmp_folder):
     logging.info('Started data inserting into DB')
     file_names = os.listdir(tmp_folder)
     dps = []
@@ -272,14 +272,15 @@ if __name__ == "__main__":
         sys.exit(3)
     logger.info('Connection successful')
 
-    # Get raw files from FTP server
-    tmp_folder = 'tmp'
-
     if cfg['ftp']['enabled'] is True:
+        # Get raw files from FTP server
+        logger.info('Download data from FTP server')
         get_raw_files(ftp_address=cfg['ftp']['host'], ftp_user=cfg['ftp']['user'], ftp_pwd=cfg['ftp']['password'],
-                      ftp_root_folders=cfg['ftp']['remoteFolders'])
+                      ftp_root_folders=cfg['ftp']['remoteFolders'], tmp_folder=cfg['ftp']['localFolders']['tmp'])
 
-    # Insert data into InfluxDB
-    insert_data()
+    if cfg['influxDB']['importingEnabled'] is True:
+        # Insert data into InfluxDB
+        logger.info('Importing in InfluxDB data related to files in %s' % cfg['ftp']['localFolders']['tmp'])
+        insert_data(tmp_folder=cfg['ftp']['localFolders']['tmp'])
 
     logger.info("Ending program")
