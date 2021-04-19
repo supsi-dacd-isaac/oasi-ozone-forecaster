@@ -23,10 +23,10 @@ def perform_forecast(day_case):
     # set the day_case (current | %Y-%m-%d)
     cfg['dayToForecast'] = day_case
 
-    # todo check this part is still needed
-    # dm.cfg['dayToForecast'] = day_case
-    # Calculate the day_case-1d O3 values and insert them in the DB
-    # dm.calc_yesterday_o3_daily_values()
+        # todo check this part is still needed
+        # dm.cfg['dayToForecast'] = day_case
+        # Calculate the day_case-1d O3 values and insert them in the DB
+        # dm.calc_yesterday_o3_daily_values()
 
     logger.info('Perform the prediction for day \"%s\"' % day_case)
 

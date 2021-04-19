@@ -2,6 +2,7 @@
 import os
 import datetime
 import tailhead
+import copy
 import pytz
 import time
 import ftplib
@@ -20,7 +21,7 @@ class DataManager:
     Generic interface for data (measures and forecasts) management
     """
 
-    def __init__(self, influxdb_client, cfg, logger, forecast_type):
+    def __init__(self, influxdb_client, cfg, logger):
         """
         Constructor
 
@@ -30,52 +31,204 @@ class DataManager:
         :type cfg: dict
         :param logger: Logger
         :type logger: Logger object
-        :param forecast_type: forecast type (MOR | EVE)
-        :type forecast_type: string
         """
         # set the variables
         self.influxdb_client = influxdb_client
         self.cfg = cfg
         self.logger = logger
-        self.forecast_type = forecast_type
 
-    def get_files(self, remote_folder, local_folder):
-        """
-        Download data files via FTP
+        # Define the time zone
+        self.tz_local = pytz.timezone(self.cfg['local']['timeZone'])
 
-        :param remote_folder: remote (input) folder
-        :type remote_folder: string
-        :param local_folder: local (output) folder
-        :type local_folder: string
-        """
+    def get_raw_files(self):
+
+        if os.path.isdir(self.cfg['ftp']['localFolders']['tmp']) is False:
+            os.mkdir(self.cfg['ftp']['localFolders']['tmp'])
+
         try:
+            # perform FTP connection and login
             ftp = ftplib.FTP(self.cfg['ftp']['host'])
             ftp.login(self.cfg['ftp']['user'], self.cfg['ftp']['password'])
-            ftp.cwd(remote_folder)
 
-            # cycle over the remote files
-            for file_name in ftp.nlst('*.csv'):
-                try:
-                    self.logger.info('%s: ftp://%s@%s:%s -> %s' % (file_name,
-                                                                   self.cfg['ftp']['user'],
-                                                                   self.cfg['ftp']['host'],
-                                                                   remote_folder,
-                                                                   local_folder))
+            for ftp_dir in [self.cfg['ftp']['remoteFolders']['measures'],
+                            self.cfg['ftp']['remoteFolders']['forecasts']]:
+                self.logger.info('Getting files via FTP from %s/%s' % (self.cfg['ftp']['host'], ftp_dir))
+                ftp.cwd('/%s' % ftp_dir)
 
-                    # get the file from the server
-                    with open('%s/%s' % (local_folder, file_name), 'wb') as f:
-                        def callback(data):
-                            f.write(data)
-                        ftp.retrbinary('RETR %s' % file_name, callback)
+                # cycle over the remote files
+                for file_name in ftp.nlst('*'):
+                    tmp_local_file = os.path.join(self.cfg['ftp']['localFolders']['tmp'] + "/", file_name)
+                    try:
+                        self.logger.info('%s -> %s/%s/%s' % (file_name, os.getcwd(),
+                                                             self.cfg['ftp']['localFolders']['tmp'], file_name))
 
-                    # delete the remote file
-                    # ftp.delete(file_name)
-                except Exception as e:
-                    self.logger.error('Downloading exception: %s' % str(e))
+                        # get the file from the server
+                        with open(tmp_local_file, 'wb') as f:
+                            def callback(data):
+                                f.write(data)
 
+                            ftp.retrbinary("RETR " + file_name, callback)
+
+                        # delete the remote file
+                        # ftp.delete(file_name)
+                    except Exception as e:
+                        self.logger.error('Downloading exception: %s' % str(e))
         except Exception as e:
             self.logger.error('Connection exception: %s' % str(e))
+
+        # close the FTP connection
         ftp.close()
+
+    def insert_data(self):
+        self.logger.info('Started data inserting into DB')
+        file_names = os.listdir(self.cfg['ftp']['localFolders']['tmp'])
+        dps = []
+
+        # Define artsig_inputs dictionary to collect inputs for the artificial features
+        artsig_inputs = dict()
+
+        for file_name in file_names:
+            file_path = '%s/%s' % (self.cfg['ftp']['localFolders']['tmp'], file_name)
+            self.logger.info('Getting data from %s' % file_path)
+
+            # The signal is related to the entire Ticino canton (currently only RHW signal is handled)
+            if 'VOPA' in file_name:
+                dps = self.global_signals_handling(file_path, dps)
+
+            # The signal is related to a specific location (belonging either to OASI or to ARPA domains)
+            else:
+                dps, artsig_inputs = self.location_signals_handling(file_path, file_name, dps, artsig_inputs)
+
+        # todo for Dario: in artsig_inputs there should be everything you need to create the artificial features insert
+        #  here the calculations
+
+        # Send remaining points to InfluxDB
+        self.logger.info('Sent %i points to InfluxDB server' % len(dps))
+        self.influxdb_client.write_points(dps, time_precision=self.cfg['influxDB']['timePrecision'])
+
+    def global_signals_handling(self, file_path, dps):
+        f = open(file_path, 'rb')
+
+        # cycling over the data
+        for raw_row in f:
+            # decode raw bytes
+            row = raw_row.decode(constants.ENCODING)
+
+            # Check the row considering the configured global signals
+            for global_signal in self.cfg['globalSignals']:
+
+                # Check if the row contains a RHW value
+                if global_signal in row:
+                    # discard final \r and \n characters
+                    row = row[:-1]
+
+                    # get data array
+                    data = row.replace(' ', '').split('|')
+
+                    # timestamp management
+                    naive_time = datetime.strptime(data[1], '%Y%m%d000000')
+                    local_dt = self.tz_local.localize(naive_time)
+                    # add an hour to delete the DST influence (OASI timestamps are always in UTC+1 format)
+                    utc_dt = local_dt.astimezone(pytz.utc) + local_dt.dst()
+
+                    point = {
+                        'time': int(utc_dt.timestamp()),
+                        'measurement': self.cfg['influxDB']['measurementGlobal'],
+                        'fields': dict(value=float(data[3])),
+                        'tags': dict(signal=global_signal)
+                    }
+                    dps.append(copy.deepcopy(point))
+
+        return dps
+
+    def location_signals_handling(self, file_path, file_name, dps, artsig_inputs):
+        # Open the file
+        f = open(file_path, 'rb')
+
+        # Read the first line
+        raw = f.readline()
+
+        # Check the datasets cases
+        if 'arpa' in file_name:
+            # ARPA case
+            str_locations = raw.decode(constants.ENCODING)
+            arpa_locations_keys = str_locations[:-1].split(';')[1:]
+            measurement = self.cfg['influxDB']['measurementARPA']
+        else:
+            if 'meteosvizzera' in file_name:
+                # MeteoSuisse case
+                [key1, key2, _, _] = file_name.split('-')
+                oasi_location_key = '%s-%s' % (key1, key2)
+                measurement = self.cfg['influxDB']['measurementMeteoSuisse']
+            else:
+                # OASI case
+                [oasi_location_key, _, _] = file_name.split('-')
+                measurement = self.cfg['influxDB']['measurementOASI']
+
+        # Signals
+        raw = f.readline()
+        str_signals = raw.decode(constants.ENCODING)
+        signals = str_signals[:-1].split(';')[1:]
+
+        # measure units, not used
+        f.readline()
+
+        # cycling over the data
+        for raw_row in f:
+            # decode raw bytes
+            row = raw_row.decode(constants.ENCODING)
+            row = row[:-1]
+
+            # get raw date time
+            dt = row.split(';')[0]
+
+            # get data array
+            data = row.split(';')[1:]
+
+            # timestamp management
+            naive_time = datetime.strptime(dt, self.cfg['local']['timeFormatMeasures'])
+            local_dt = self.tz_local.localize(naive_time)
+            # add an hour to delete the DST influence (OASI timestamps are always in UTC+1 format)
+            utc_dt = local_dt.astimezone(pytz.utc) + local_dt.dst()
+
+            # calculate the UTC timestamp
+            utc_ts = int(utc_dt.timestamp())
+
+            for i in range(0, len(data)):
+
+                # Currently, the status are not taken into account
+                if self.is_float(data[i]) is True and signals[i] != 'status':
+                    if 'arpa' in file_name:
+                        location_tag = constants.LOCATIONS[arpa_locations_keys[i]]
+                    else:
+                        location_tag = constants.LOCATIONS[oasi_location_key]
+
+                    point = {
+                        'time': utc_ts,
+                        'measurement': measurement,
+                        'fields': dict(value=float(data[i])),
+                        'tags': dict(signal=signals[i], location=location_tag, case='MEASURED')
+                    }
+                    dps.append(copy.deepcopy(point))
+
+                    # Check if this measure refers to a signal needed to calculate the artificial features
+                    if signals[i] in self.cfg['artificialFeatures']['inputs']:
+                        if (location_tag, signals[i]) not in artsig_inputs.keys():
+                            artsig_inputs[(location_tag, signals[i])] = [point]
+                        else:
+                            artsig_inputs[(location_tag, signals[i])].append(point)
+
+                    dps = self.point_handling(dps, point)
+
+        return dps, artsig_inputs
+
+    @staticmethod
+    def is_float(s):
+        try:
+            float(s)
+            return True
+        except ValueError:
+            return False
 
     def save_measures_data(self, input_folder):
         """
