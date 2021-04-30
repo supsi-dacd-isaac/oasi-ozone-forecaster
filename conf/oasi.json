@@ -13,8 +13,8 @@
   },
   "forecastPeriod" : {
     "case": "custom",
-    "startDate": "2019-09-05",
-    "endDate": "2019-09-05"
+    "startDate": "2019-07-17",
+    "endDate": "2019-07-17"
   },
   "locations": [
     {

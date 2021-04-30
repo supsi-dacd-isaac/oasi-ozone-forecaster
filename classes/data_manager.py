@@ -426,52 +426,49 @@ class DataManager:
             time.sleep(0.1)
         return dps
 
-    def calc_yesterday_o3_daily_values(self):
-        """
-        Calc daily data of O3 values related to yesterday
-        """
-        # get the date to analyze
-        dt = self.get_previous_day()
-
-        query = 'SELECT mean(value) FROM %s WHERE signal=\'O3\' AND time>=\'%sT00:00:00Z\' AND ' \
-                'time<=\'%sT23:59:59Z\' GROUP BY time(1h), location, signal' % (self.cfg['influxDB']['measurementOASI'],
-                                                                                dt.strftime('%Y-%m-%d'),
-                                                                                dt.strftime('%Y-%m-%d'))
-
-        self.logger.info('Performing query: %s' % query)
-        res = self.influxdb_client.query(query, epoch='s')
-
-        utc_ts = int(dt.timestamp())
-        dps = []
-        for series in res.raw['series']:
-            vals = []
-            for i in range(0, len(series['values'])):
-                if series['values'][i][1] is not None:
-                    vals.append(series['values'][i][1])
-            daily_max = np.max(vals)
-            daily_idx = self.get_index(np.max(vals))
-
-            point = {
-                        'time': utc_ts,
-                        'measurement': self.cfg['influxDB']['measurementOASI'],
-                        'fields': dict(value=float(daily_max)),
-                        'tags': dict(signal='YO3', location=series['tags']['location'])
-                    }
-            dps.append(point)
-
-            point = {
-                        'time': utc_ts,
-                        'measurement': self.cfg['influxDB']['measurementOASI'],
-                        'fields': dict(value=float(daily_idx)),
-                        'tags': dict(signal='YO3_index', location=series['tags']['location'])
-                    }
-            dps.append(point)
-
-            # Update the training datasets
-            self.update_training_datasets(new_value=daily_max, location=series['tags']['location'])
-
-        self.logger.info('Sent %i points to InfluxDB server' % len(dps))
-        self.influxdb_client.write_points(dps, time_precision=self.cfg['influxDB']['timePrecision'])
+    # def calc_yesterday_o3_daily_values(self):
+    #     """
+    #     Calc daily data of O3 values related to yesterday
+    #     """
+    #     # get the date to analyze
+    #     dt = self.get_previous_day()
+    #
+    #     query = 'SELECT mean(value) FROM %s WHERE signal=\'O3\' AND time>=\'%sT00:00:00Z\' AND ' \
+    #             'time<=\'%sT23:59:59Z\' GROUP BY time(1h), location, signal' % (self.cfg['influxDB']['measurementOASI'],
+    #                                                                             dt.strftime('%Y-%m-%d'),
+    #                                                                             dt.strftime('%Y-%m-%d'))
+    #
+    #     self.logger.info('Performing query: %s' % query)
+    #     res = self.influxdb_client.query(query, epoch='s')
+    #
+    #     utc_ts = int(dt.timestamp())
+    #     dps = []
+    #     for series in res.raw['series']:
+    #         vals = []
+    #         for i in range(0, len(series['values'])):
+    #             if series['values'][i][1] is not None:
+    #                 vals.append(series['values'][i][1])
+    #         daily_max = np.max(vals)
+    #         daily_idx = self.get_index(np.max(vals))
+    #
+    #         point = {
+    #                     'time': utc_ts,
+    #                     'measurement': self.cfg['influxDB']['measurementOASI'],
+    #                     'fields': dict(value=float(daily_max)),
+    #                     'tags': dict(signal='YO3', location=series['tags']['location'])
+    #                 }
+    #         dps.append(point)
+    #
+    #         point = {
+    #                     'time': utc_ts,
+    #                     'measurement': self.cfg['influxDB']['measurementOASI'],
+    #                     'fields': dict(value=float(daily_idx)),
+    #                     'tags': dict(signal='YO3_index', location=series['tags']['location'])
+    #                 }
+    #         dps.append(point)
+    #
+    #     self.logger.info('Sent %i points to InfluxDB server' % len(dps))
+    #     self.influxdb_client.write_points(dps, time_precision=self.cfg['influxDB']['timePrecision'])
 
     def update_training_datasets(self, new_value, location):
         """
@@ -523,27 +520,48 @@ class DataManager:
             self.logger.warning('No inputs available for station %s, case %s, day %s' % (location, self.forecast_type,
                                                                                          yesterday))
 
-    @staticmethod
-    def get_index(val):
-        """
-        Get ozone index value (http://www.oasi.ti.ch/web/dati/aria.html)
-        :param val: ozone value
-        :type val: float
-        :return: ozone index
-        :rtype: int
-        """
-        if 0 <= val <= 60:
-            return 1
-        elif 60 < val <= 120:
-            return 2
-        elif 120 < val <= 135:
-            return 3
-        elif 135 < val <= 180:
-            return 4
-        elif 180 < val <= 240:
-            return 5
-        else:
-            return 6
+    # @staticmethod
+    # def get_index(val):
+    #     """
+    #     Get ozone index value (http://www.oasi.ti.ch/web/dati/aria.html)
+    #     :param val: ozone value
+    #     :type val: float
+    #     :return: ozone index
+    #     :rtype: int
+    #     """
+    #     if 0 <= val <= 60:
+    #         return 1
+    #     elif 60 < val <= 120:
+    #         return 2
+    #     elif 120 < val <= 135:
+    #         return 3
+    #     elif 135 < val <= 180:
+    #         return 4
+    #     elif 180 < val <= 240:
+    #         return 5
+    #     else:
+    #         return 6
+    # @staticmethod
+    # def get_index(val):
+    #     """
+    #     Get ozone index value (http://www.oasi.ti.ch/web/dati/aria.html)
+    #     :param val: ozone value
+    #     :type val: float
+    #     :return: ozone index
+    #     :rtype: int
+    #     """
+    #     if 0 <= val <= 60:
+    #         return 1
+    #     elif 60 < val <= 120:
+    #         return 2
+    #     elif 120 < val <= 135:
+    #         return 3
+    #     elif 135 < val <= 180:
+    #         return 4
+    #     elif 180 < val <= 240:
+    #         return 5
+    #     else:
+    #         return 6
 
     @staticmethod
     def is_float(s):
@@ -553,14 +571,14 @@ class DataManager:
         except ValueError:
             return False
 
-    def get_previous_day(self):
-        if self.cfg['forecastPeriod']['case'] == 'current':
-            dt = datetime.now(pytz.utc) - timedelta(1)
-        else:
-            dt = datetime.strptime(self.cfg['dayToForecast'], '%Y-%m-%d')
-            dt = pytz.utc.localize(dt)
-            dt = dt - timedelta(1)
-        return dt
+    # def get_previous_day(self):
+    #     if self.cfg['forecastPeriod']['case'] == 'current':
+    #         dt = datetime.now(pytz.utc) - timedelta(1)
+    #     else:
+    #         dt = datetime.strptime(self.cfg['dayToForecast'], '%Y-%m-%d')
+    #         dt = pytz.utc.localize(dt)
+    #         dt = dt - timedelta(1)
+    #     return dt
 
     def calc_kpis(self):
         # get the date to analyze

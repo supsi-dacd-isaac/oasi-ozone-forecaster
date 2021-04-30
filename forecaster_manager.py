@@ -7,12 +7,13 @@ import sys
 import argparse
 import logging
 import json
+import glob
 
 from influxdb import InfluxDBClient
 from datetime import timedelta, datetime
 
-# from classes.data_manager import DataManager
 from classes.forecaster import Forecaster
+from classes.inputs_gatherer import InputsGatherer
 
 
 #  --------------------------------------------------------------------------- #
@@ -23,31 +24,38 @@ def perform_forecast(day_case, forecast_type):
     # set the day_case (current | %Y-%m-%d)
     cfg['dayToForecast'] = day_case
 
-        # todo check this part is still needed
-        # dm.cfg['dayToForecast'] = day_case
-        # Calculate the day_case-1d O3 values and insert them in the DB
-        # dm.calc_yesterday_o3_daily_values()
+    logger.info('Perform the prediction for day \"%s\"' % cfg['dayToForecast'] )
 
-    logger.info('Perform the prediction for day \"%s\"' % day_case)
+    # Create the inputs gatherer instance
+    inputs_gatherer = InputsGatherer(influxdb_client=influx_client, forecast_type=forecast_type, cfg=cfg, logger=logger)
+    # Calculate the day_case-1d O3 values and insert them in the DB
+    inputs_gatherer.calc_yesterday_o3_daily_values()
 
-    # Create the inputs datasets
-    # todo calculate the inputs for all the predictors
+    # Calculate the inputs required by all the models of the configured locations
+    inputs_gatherer.build_global_input_dataset()
 
-    forecaster = Forecaster(influxdb_client=influx_client, forecast_type=forecast_type, location='ALL', cfg=cfg, logger=logger)
-    forecaster.build_input_dataset()
+    # Cycle over the locations
+    for location in cfg['locations']:
 
-    # inputs_dict = calc_all_inputs(forecast_type)
-    # for location in cfg['locations']:
-    #
-    #     forecaster = Forecaster(influxdb_client=influx_client, forecast_type=forecast_type, location=location,
-    #                             cfg=cfg, logger=logger)
-    #
-    #     # Create the inputs dataframe
-    #     todo Pass the inputs_dict
-    #     forecaster.build_input_dataset(inputs_dict)
-    #
-    #     # Perform the prediction
-    #     forecaster.predict()
+        # Cycle over the models files
+        tmp_folder = '%s%s*%s' % (cfg['folders']['models'], os.sep, forecast_type)
+        for input_cfg_file in glob.glob('%s%s/inputs_*.json' % (tmp_folder, os.sep)):
+
+            # Check if the current folder refers to a location configured for the prediction
+            if location['code'] in input_cfg_file.split(os.sep)[-2]:
+                model_name = input_cfg_file.split('inputs_')[-1].split('.json')[0]
+
+                # todo Create an independent thread for each model
+                logger.info('Create predictor -> type: %s, location: %s, name: %s' % (forecast_type, location['code'],
+                                                                                      model_name))
+                forecaster = Forecaster(influxdb_client=influx_client, forecast_type=forecast_type, location=location,
+                                        model_name=model_name, cfg=cfg, logger=logger)
+
+                # Create the inputs dataframe
+                forecaster.build_model_input_dataset(inputs_gatherer.input_data, inputs_gatherer.day_to_predict, input_cfg_file)
+
+                # Perform the prediction
+                forecaster.predict(input_cfg_file.replace('inputs', 'predictor').replace('json', 'pkl'))
 
     # todo check this part is still needed, probably yes but calc_kpis() has to be changed strongly
     # if cfg['dayToForecast'] == 'current':
@@ -111,20 +119,6 @@ if __name__ == "__main__":
         logger.error('EXCEPTION: %s' % str(e))
         sys.exit(3)
     logger.info('Connection successful')
-
-    # todo Check this part, the downloading and the data saving is supposed to be performed by data_importer_ftp.py
-    # Create the DataManager instance
-    # dm = DataManager(influxdb_client=influx_client, cfg=cfg, logger=logger, forecast_type=forecast_type)
-
-    # OASI/ARPA data handling
-    # dm.get_files(remote_folder=cfg['ftp']['remoteFolders']['measures'],
-    #              local_folder=cfg['ftp']['localFolders']['measures'])
-    # dm.save_measures_data(input_folder=cfg['ftp']['localFolders']['measures'])
-    #
-    # # MeteoSuisse data handling
-    # dm.get_files(remote_folder=cfg['ftp']['remoteFolders']['forecasts'],
-    #              local_folder=cfg['ftp']['localFolders']['forecasts'])
-    # dm.save_forecasts_data(input_folder=cfg['ftp']['localFolders']['forecasts'])
 
     # Perform the forecasts for a specific period/current day
     if cfg['forecastPeriod']['case'] == 'current':
