@@ -18,7 +18,7 @@ from classes.forecaster import Forecaster
 #  --------------------------------------------------------------------------- #
 # Functions
 # -----------------------------------------------------------------------------#
-def perform_forecast(day_case):
+def perform_forecast(day_case, forecast_type):
 
     # set the day_case (current | %Y-%m-%d)
     cfg['dayToForecast'] = day_case
@@ -31,18 +31,23 @@ def perform_forecast(day_case):
     logger.info('Perform the prediction for day \"%s\"' % day_case)
 
     # Create the inputs datasets
-    for forecast_type in ['MOR', 'EVE']:
-        # cycle over the locations to create the input files for the forecasters
-        for location in cfg['locations']:
+    # todo calculate the inputs for all the predictors
 
-            forecaster = Forecaster(influxdb_client=influx_client, forecast_type=forecast_type, location=location,
-                                    cfg=cfg, logger=logger)
+    forecaster = Forecaster(influxdb_client=influx_client, forecast_type=forecast_type, location='ALL', cfg=cfg, logger=logger)
+    forecaster.build_input_dataset()
 
-            # Create the inputs dataframe
-            forecaster.build_input_dataset()
-
-            # Perform the prediction
-            forecaster.predict()
+    # inputs_dict = calc_all_inputs(forecast_type)
+    # for location in cfg['locations']:
+    #
+    #     forecaster = Forecaster(influxdb_client=influx_client, forecast_type=forecast_type, location=location,
+    #                             cfg=cfg, logger=logger)
+    #
+    #     # Create the inputs dataframe
+    #     todo Pass the inputs_dict
+    #     forecaster.build_input_dataset(inputs_dict)
+    #
+    #     # Perform the prediction
+    #     forecaster.predict()
 
     # todo check this part is still needed, probably yes but calc_kpis() has to be changed strongly
     # if cfg['dayToForecast'] == 'current':
@@ -123,7 +128,7 @@ if __name__ == "__main__":
 
     # Perform the forecasts for a specific period/current day
     if cfg['forecastPeriod']['case'] == 'current':
-        perform_forecast(cfg['forecastPeriod']['case'])
+        perform_forecast(cfg['forecastPeriod']['case'], forecast_type)
     else:
         start_day = cfg['forecastPeriod']['startDate']
         end_day = cfg['forecastPeriod']['endDate']
@@ -133,7 +138,7 @@ if __name__ == "__main__":
         end_dt = datetime.strptime(end_day, '%Y-%m-%d')
         while True:
             # perform the prediction
-            perform_forecast(curr_day)
+            perform_forecast(curr_day, forecast_type)
 
             # add a day
             curr_dt = datetime.strptime(curr_day, '%Y-%m-%d')

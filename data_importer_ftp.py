@@ -74,9 +74,15 @@ if __name__ == "__main__":
         logger.info('Download data from FTP server')
         dm.get_raw_files()
 
-    if cfg['influxDB']['importingEnabled'] is True:
+    if cfg['influxDB']['rawDataImportingEnabled'] is True:
         # Insert data into InfluxDB
-        logger.info('Importing in InfluxDB data related to files in %s' % cfg['ftp']['localFolders']['tmp'])
+        logger.info('Importing in InfluxDB of raw data related to files in %s' % cfg['ftp']['localFolders']['tmp'])
         dm.insert_data()
+
+    if cfg['influxDB']['artificialDataImportingEnabled'] is True:
+        # Insert data into InfluxDB
+        logger.info('Importing in InfluxDB of artificial data')
+        # dm.insert_data()
+
 
     logger.info("Ending program")

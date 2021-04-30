@@ -1,5 +1,8 @@
 # import section
 import json
+import glob
+import time
+
 import scipy.io as sio
 import numpy as np
 import pandas as pd
@@ -49,20 +52,33 @@ class Forecaster:
         """
         Build the dataset
         """
-        inputs_file = '%s%s%s_%s_inputs.json' % (self.cfg['folders']['models'], os.sep, self.location['code'],
-                                                 self.forecast_type)
-        self.logger.info('Create input dataset for signals configured in %s' % inputs_file)
+        # inputs_file = '%s%s%s_%s_inputs.json' % (self.cfg['folders']['models'], os.sep, self.location['code'],
+        #                                          self.forecast_type)
+        # self.logger.info('Create input dataset for signals configured in %s' % inputs_file)
 
         self.input_data = dict()
         self.input_data_desc = []
         self.input_data_values = []
         self.day_to_predict = None
 
-        self.cfg_signals = json.loads(open(inputs_file).read())
+        # Create the signals list considering all the couples location-model
+        self.cfg_signals = dict(signals=[])
+        # Cycle over the locations
+        for tmp_folder in glob.glob('%s%s*%s' % (self.cfg['folders']['models'], os.sep, self.forecast_type)):
+            # Cycle over the input files
+            for input_cfg_file in glob.glob('%s%s/inputs_*.json' % (tmp_folder, os.sep)):
+                tmp_cfg_signals = json.loads(open(input_cfg_file).read())
+                self.cfg_signals['signals'] = self.cfg_signals['signals'] + tmp_cfg_signals['signals']
+
+        self.cfg_signals['signals'] = list(set(self.cfg_signals['signals']))
+
 
         # get the values in the DB
+        i = 1
         for signal in self.cfg_signals['signals']:
+            self.logger.info('Try to add input n. %02d/%2d' % (i, len(self.cfg_signals['signals'])))
             self.add_input_value(signal=signal)
+            self.logger.info('Added input n. %02d/%2d' % (i, len(self.cfg_signals['signals'])))
 
         # organize the array
         self.input_data_desc = self.cfg_signals['signals']
