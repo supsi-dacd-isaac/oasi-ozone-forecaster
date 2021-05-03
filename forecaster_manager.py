@@ -46,7 +46,7 @@ def perform_forecast(day_case, forecast_type):
                 model_name = input_cfg_file.split('inputs_')[-1].split('.json')[0]
 
                 # todo Create an independent thread for each model
-                logger.info('Create predictor -> type: %s, location: %s, name: %s' % (forecast_type, location['code'],
+                logger.info('Launch prediction -> type: %s, location: %s, name: %s' % (forecast_type, location['code'],
                                                                                       model_name))
                 forecaster = Forecaster(influxdb_client=influx_client, forecast_type=forecast_type, location=location,
                                         model_name=model_name, cfg=cfg, logger=logger)

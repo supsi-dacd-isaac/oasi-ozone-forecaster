@@ -201,7 +201,6 @@ class DataManager:
                         'fields': dict(value=float(data[i])),
                         'tags': dict(signal=signals[i], location=location_tag, case='MEASURED')
                     }
-                    # dps.append(copy.deepcopy(point))
                     dps = self.point_handling(dps, point)
 
         return dps
