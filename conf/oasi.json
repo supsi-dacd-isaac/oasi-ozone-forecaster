@@ -12,17 +12,14 @@
     "models": "models"
   },
   "forecastPeriod" : {
-    "case": "custom",
-    "startDate": "2019-07-17",
-    "endDate": "2019-07-17"
+    "case": "current",
+    "startDate": "2021-05-02",
+    "endDate": "2021-05-02"
   },
   "locations": [
     {
-      "code": "BIO",
-      "name": "Bioggio"
+      "code": "CHI",
+      "name": "Chiasso"
     }
-  ],
-  "artificialFeatures":{
-      "inputs": ["T", "P"]
-    }
+  ]
 }

@@ -2,6 +2,7 @@
 import json
 import pandas as pd
 import pickle
+from datetime import datetime
 from influxdb import InfluxDBClient
 
 
@@ -58,4 +59,6 @@ class Forecaster:
     def predict(self, predictor_file):
         model = pickle.load(open(predictor_file, 'rb'))
         res = model.pred_dist(self.input_df)
-        self.logger.info('Predictor stored in %s -> Forecast: %.1f' % (predictor_file, res.loc[0]))
+        self.logger.info('Predictor stored in %s -> Forecast for %s: %.1f' % (predictor_file,
+                                                                              datetime.fromtimestamp(self.day_to_predict).strftime('%Y-%m-%d'),
+                                                                              res.loc[0]))
