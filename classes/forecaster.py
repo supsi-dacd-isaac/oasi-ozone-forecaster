@@ -38,25 +38,42 @@ class Forecaster:
         self.day_to_predict = None
         self.cfg_signals = None
         self.input_df = None
+        self.available_variables = 0
 
-    def build_model_input_dataset(self, input_signals, day_to_predict, input_cfg_file):
+    def build_model_input_dataset(self, inputs_gatherer, input_cfg_file):
         """
         Build the dataset
         """
-        self.day_to_predict = day_to_predict
+        # input_signals = inputs_gatherer.input_data
+        # day_to_predict =
+
+
+        self.day_to_predict = inputs_gatherer.day_to_predict
         self.cfg_signals = json.loads(open(input_cfg_file).read())
 
         input_data_values = []
         for signal in self.cfg_signals['signals']:
             # Take into account only the inputs needed by the model
             if signal in self.cfg_signals['signals']:
-                input_data_values.append(input_signals[signal])
+                input_data_values.append(inputs_gatherer.input_data[signal])
 
         # self.logger.info('Create the input dataframe')
         self.input_df = pd.DataFrame([input_data_values], columns=self.cfg_signals['signals'],
                                      index=[pd.DatetimeIndex([self.day_to_predict*1e9])])
 
-        # todo Check if there is a NaN in the input dataframe, in case substitute the value with a mean imputation
+        # Check inputs effective availability
+        self.check_inputs_availability(inputs_gatherer.input_data_availability)
+
+    def check_inputs_availability(self, inputs_availability):
+        self.available_variables = 0
+        for col in self.input_df.columns:
+            if inputs_availability[col] is False:
+                self.logger.error('Data for code %s not available, used past values mean = %.1f' % (col, self.input_df[col].values[0]))
+            else:
+                self.available_variables += 1
+
+        # todo an additional alarm has to be sent (Slack, email)
+
 
     def predict(self, predictor_file):
         model = pickle.load(open(predictor_file, 'rb'))
@@ -67,11 +84,13 @@ class Forecaster:
 
 
         dps = []
+
         # Saving predicted value
+        perc_available_variables = round(self.available_variables*100/len(self.input_df.columns), 0)
         point = {
             'time': self.day_to_predict,
             'measurement': self.cfg['influxDB']['measurementForecasts'],
-            'fields': dict(PredictedValue=float(res.loc[0])),
+            'fields': dict(PredictedValue=float(res.loc[0]), AvailableFeatures=float(perc_available_variables)),
             'tags': dict(location=self.location['code'], case=self.forecast_type,
                          predictor=predictor_file.split(os.sep)[-1].split('.')[0].split('_')[-1])
         }

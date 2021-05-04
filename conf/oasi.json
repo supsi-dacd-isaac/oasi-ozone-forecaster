@@ -13,11 +13,12 @@
   },
   "forecastPeriod" : {
     "case": "current",
-    "startDate": "2021-05-01",
+    "startDate": "2021-05-02",
     "endDate": "2021-05-02"
   },
   "predictionSettings": {
-      "distributionSamples": 1000
+      "distributionSamples": 1000,
+      "startDateForMeanImputation": "2021-05-01"
   },
   "locations": [
     {

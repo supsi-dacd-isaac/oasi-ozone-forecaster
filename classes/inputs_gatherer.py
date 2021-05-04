@@ -1,11 +1,7 @@
 # import section
 import json
 import glob
-import time
-
-import scipy.io as sio
 import numpy as np
-import pandas as pd
 import pytz
 import os
 
@@ -78,6 +74,50 @@ class InputsGatherer:
             self.add_input_value(signal=signal)
             self.logger.info('Added input n. %02d/%2d' % (i, len(self.cfg_signals['signals'])))
             i += 1
+
+        # Check the data availability
+        self.check_inputs_availability()
+
+    def check_inputs_availability(self):
+        dps = []
+
+        self.input_data_availability = dict()
+        for k in self.input_data.keys():
+            if np.isnan(self.input_data[k]):
+                self.input_data[k] = self.retrieve_past_mean(code=k)
+                self.input_data_availability[k] = False
+            else:
+                self.input_data_availability[k] = True
+                point = {
+                    'time': int(self.day_to_predict),
+                    'measurement': self.cfg['influxDB']['measurementInputsHistory'],
+                    'fields': dict(value=float(self.input_data[k])),
+                    'tags': dict(code=k, case=self.forecast_type)
+                }
+                dps.append(point)
+
+        if len(dps) > 0:
+            self.logger.info('Inserted in the history %i inputs values related predictions of day %s, '
+                             'case %s' % (len(dps), datetime.fromtimestamp(self.day_to_predict).strftime('%Y-%m-%d'),
+                                          self.forecast_type))
+            self.influxdb_client.write_points(dps, time_precision=self.cfg['influxDB']['timePrecision'])
+
+    def retrieve_past_mean(self, code):
+
+        query = 'SELECT mean(value) FROM %s WHERE code=\'%s\' AND case=\'%s\' AND ' \
+                'time>=\'%s\' AND time<\'%s\'' % (self.cfg['influxDB']['measurementInputsHistory'], code,
+                                                  self.forecast_type,
+                                                  self.cfg['predictionSettings']['startDateForMeanImputation'],
+                                                  datetime.fromtimestamp(self.day_to_predict).strftime('%Y-%m-%d'))
+
+        self.logger.info('Performing query: %s' % query)
+        res = self.influxdb_client.query(query, epoch='s')
+
+        try:
+            return float(res.raw['series'][0]['values'][0][1])
+        except Exception as e:
+            self.logger.error('Impossible to calculate the eman of the past values')
+            return np.nan
 
     def add_input_value(self, signal):
         """

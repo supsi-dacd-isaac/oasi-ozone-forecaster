@@ -8,6 +8,7 @@ import argparse
 import logging
 import json
 import glob
+import time
 
 from influxdb import InfluxDBClient
 from datetime import timedelta, datetime
@@ -52,7 +53,7 @@ def perform_forecast(day_case, forecast_type):
                                         model_name=model_name, cfg=cfg, logger=logger)
 
                 # Create the inputs dataframe
-                forecaster.build_model_input_dataset(inputs_gatherer.input_data, inputs_gatherer.day_to_predict, input_cfg_file)
+                forecaster.build_model_input_dataset(inputs_gatherer, input_cfg_file)
 
                 # Perform the prediction
                 forecaster.predict(input_cfg_file.replace('inputs', 'predictor').replace('json', 'pkl'))
@@ -133,6 +134,7 @@ if __name__ == "__main__":
         while True:
             # perform the prediction
             perform_forecast(curr_day, forecast_type)
+            time.sleep(1)
 
             # add a day
             curr_dt = datetime.strptime(curr_day, '%Y-%m-%d')
