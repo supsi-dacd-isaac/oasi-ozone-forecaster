@@ -17,6 +17,7 @@
     "endDate": "2021-05-02"
   },
   "predictionSettings": {
+      "operationMode": "parallel",
       "distributionSamples": 1000,
       "startDateForMeanImputation": "2021-05-01"
   },

@@ -38,7 +38,10 @@ class Forecaster:
         self.day_to_predict = None
         self.cfg_signals = None
         self.input_df = None
-        self.available_variables = 0
+        self.available_features = 0
+        self.unavailable_features = []
+        self.predicted_value = 0
+        self.perc_available_features = 0
 
     def build_model_input_dataset(self, inputs_gatherer, input_cfg_file):
         """
@@ -65,12 +68,14 @@ class Forecaster:
         self.check_inputs_availability(inputs_gatherer.input_data_availability)
 
     def check_inputs_availability(self, inputs_availability):
-        self.available_variables = 0
+        self.available_features = 0
+        self.unavailable_features = []
         for col in self.input_df.columns:
             if inputs_availability[col] is False:
                 self.logger.error('Data for code %s not available, used past values mean = %.1f' % (col, self.input_df[col].values[0]))
+                self.unavailable_features.append(col)
             else:
-                self.available_variables += 1
+                self.available_features += 1
 
         # todo an additional alarm has to be sent (Slack, email)
 
@@ -78,19 +83,18 @@ class Forecaster:
     def predict(self, predictor_file):
         model = pickle.load(open(predictor_file, 'rb'))
         res = model.pred_dist(self.input_df)
-        self.logger.info('Performed prediction: model=%s -> max(O3)[%s] %.1f' % (predictor_file,
-                                                                                 datetime.fromtimestamp(self.day_to_predict).strftime('%Y-%m-%d'),
-                                                                                 res.loc[0]))
+        self.logger.info('Performed prediction: model=%s ' % predictor_file)
 
 
         dps = []
 
         # Saving predicted value
-        perc_available_variables = round(self.available_variables*100/len(self.input_df.columns), 0)
+        self.predicted_value = float(res.loc[0])
+        self.perc_available_features = round(self.available_features*100/len(self.input_df.columns), 0)
         point = {
             'time': self.day_to_predict,
             'measurement': self.cfg['influxDB']['measurementForecasts'],
-            'fields': dict(PredictedValue=float(res.loc[0]), AvailableFeatures=float(perc_available_variables)),
+            'fields': dict(PredictedValue=self.predicted_value, AvailableFeatures=float(self.perc_available_features)),
             'tags': dict(location=self.location['code'], case=self.forecast_type,
                          predictor=predictor_file.split(os.sep)[-1].split('.')[0].split('_')[-1])
         }

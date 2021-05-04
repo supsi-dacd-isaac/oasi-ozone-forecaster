@@ -12,14 +12,49 @@ import time
 
 from influxdb import InfluxDBClient
 from datetime import timedelta, datetime
+from multiprocessing import Queue, Process
 
 from classes.forecaster import Forecaster
 from classes.inputs_gatherer import InputsGatherer
 
+queue_results = Queue()
 
 #  --------------------------------------------------------------------------- #
 # Functions
 # -----------------------------------------------------------------------------#
+def predictor_process(inputs_gatherer, input_cfg_file, forecast_type, location, model_name, q, cfg, logger):
+    dp, pv, paf, uf = perform_single_forecast(inputs_gatherer, input_cfg_file, forecast_type, location, model_name, cfg, logger)
+
+    # Write on the queue
+    q.put(
+            {
+                'day_to_predict': dp,
+                'location': location,
+                'forecast_type': forecast_type,
+                'predictor': model_name,
+                'predicted_value': pv,
+                'perc_available_features': paf,
+                'unavailable_features': uf
+            }
+        )
+
+def perform_single_forecast(inputs_gatherer, input_cfg_file, forecast_type, location, model_name, cfg, logger):
+    logger.info('Launch prediction -> type: %s, location: %s, name: %s' % (forecast_type, location['code'], model_name))
+
+    forecaster = Forecaster(influxdb_client=influx_client, forecast_type=forecast_type, location=location,
+                            model_name=model_name, cfg=cfg, logger=logger)
+
+    # Create the inputs dataframe
+    forecaster.build_model_input_dataset(inputs_gatherer, input_cfg_file)
+
+    # Perform the prediction
+    forecaster.predict(input_cfg_file.replace('inputs', 'predictor').replace('json', 'pkl'))
+
+    return forecaster.day_to_predict,\
+           forecaster.predicted_value, \
+           forecaster.perc_available_features, \
+           forecaster.unavailable_features
+
 def perform_forecast(day_case, forecast_type):
 
     # set the day_case (current | %Y-%m-%d)
@@ -40,23 +75,61 @@ def perform_forecast(day_case, forecast_type):
 
         # Cycle over the models files
         tmp_folder = '%s%s*%s' % (cfg['folders']['models'], os.sep, forecast_type)
+
+        # Processes creation
+        procs = []
+        results = []
+        logger.info('Predictors will work in %s mode' % cfg['predictionSettings']['operationMode'])
         for input_cfg_file in glob.glob('%s%s/inputs_*.json' % (tmp_folder, os.sep)):
 
             # Check if the current folder refers to a location configured for the prediction
             if location['code'] in input_cfg_file.split(os.sep)[-2]:
                 model_name = input_cfg_file.split('inputs_')[-1].split('.json')[0]
 
-                # todo Create an independent thread for each model
-                logger.info('Launch prediction -> type: %s, location: %s, name: %s' % (forecast_type, location['code'],
-                                                                                      model_name))
-                forecaster = Forecaster(influxdb_client=influx_client, forecast_type=forecast_type, location=location,
-                                        model_name=model_name, cfg=cfg, logger=logger)
+                if cfg['predictionSettings']['operationMode'] == 'parallel':
+                    tmp_proc = Process(target=predictor_process, args=[inputs_gatherer, input_cfg_file, forecast_type,
+                                                                       location, model_name, queue_results, cfg, logger])
+                    tmp_proc.start()
+                    procs.append(tmp_proc)
+                else:
+                    logger.info('Predictors will work in sequence')
+                    dp, pv, paf, uf = perform_single_forecast(inputs_gatherer, input_cfg_file, forecast_type, location,
+                                                          model_name, cfg, logger)
+                    results.append({
+                                        'day_to_predict': dp,
+                                        'location': location,
+                                        'forecast_type': forecast_type,
+                                        'predictor': model_name,
+                                        'predictor': model_name,
+                                        'predicted_value': pv,
+                                        'perc_available_features': paf,
+                                        'unavailable_features': uf
+                                    })
 
-                # Create the inputs dataframe
-                forecaster.build_model_input_dataset(inputs_gatherer, input_cfg_file)
+        # Collect the results if teh predictors have worked in parallel mode
+        if cfg['predictionSettings']['operationMode'] == 'parallel':
+            results = []
+            for proc in procs:
+                proc.join()
 
-                # Perform the prediction
-                forecaster.predict(input_cfg_file.replace('inputs', 'predictor').replace('json', 'pkl'))
+            # Read from the queue
+            i = 0
+            while True:
+                item = queue_results.get()
+                results.append(item)
+                i += 1
+                if i == len(procs):
+                    break
+
+        logger.info('Print the predictor results')
+        for result in results:
+            dp_desc = datetime.fromtimestamp(result['day_to_predict']).strftime('%Y-%m-%d')
+            logger.info('[%s;%s;%s;%s] -> predicted max(O3) = %.1f, available features = %.0f%%' % (dp_desc,
+                                                                                                    result['location']['code'],
+                                                                                                    result['forecast_type'],
+                                                                                                    result['predictor'],
+                                                                                                    result['predicted_value'],
+                                                                                                    result['perc_available_features']))
 
     # todo check this part is still needed, probably yes but calc_kpis() has to be changed strongly
     # if cfg['dayToForecast'] == 'current':
