@@ -24,7 +24,13 @@
   "locations": [
     {
       "code": "CHI",
-      "name": "Chiasso"
+      "name": "Chiasso",
+      "alarms":{
+        "thresholds": {
+          "MOR": 95.0,
+          "EVE": 95.0
+        }
+      }
     }
   ]
 }

@@ -22,9 +22,9 @@ def slack_msg():
         str_err = ''
         for k in dm.files_not_correctly_handled:
             str_err = '%sFailed handling of file %s; Exception: %s\n' % (str_err, k, dm.files_not_correctly_handled[k])
-        slack_client.send_alert_message('OASI OZONE FORECASTER - INPUT DATA HANDLING FROM OASI SERVER TO DB\n%s' % str_err, '#ff0000')
+        slack_client.send_alert_message('OZONE FORECASTER - RAW FILES ALARM:\n%s' % str_err, '#ff0000')
     else:
-        slack_client.send_alert_message('OASI OZONE FORECASTER - INPUT DATA HANDLING FROM OASI SERVER TO DB WORKED OK', '#00ff00')
+        slack_client.send_alert_message('OZONE FORECASTER - RAW FILES PROPERLY HANDLED', '#00ff00')
 
 # --------------------------------------------------------------------------- #
 # Main

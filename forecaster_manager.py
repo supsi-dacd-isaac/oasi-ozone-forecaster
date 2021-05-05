@@ -15,6 +15,7 @@ from datetime import timedelta, datetime
 from multiprocessing import Queue, Process
 
 from classes.forecaster import Forecaster
+from classes.alerts import SlackClient, EmailClient
 from classes.inputs_gatherer import InputsGatherer
 
 queue_results = Queue()
@@ -22,6 +23,41 @@ queue_results = Queue()
 #  --------------------------------------------------------------------------- #
 # Functions
 # -----------------------------------------------------------------------------#
+def check_alert(prediction_results):
+    logger.info('Alert checking')
+    str_err = ''
+    str_info = ''
+    for result in prediction_results:
+        threshold = result['location']['alarms']['thresholds'][forecast_type]
+        if result['perc_available_features'] <= threshold:
+            str_err = '%s%s_%s: model %s -> available features %.1f%%, threshold %.1f%%' % (str_err,
+                                                                                            result['location']['code'],
+                                                                                            result['forecast_type'],
+                                                                                            result['predictor'],
+                                                                                            result['perc_available_features'],
+                                                                                            threshold)
+            str_err = '%s\nVariables that were surrogated:' % str_err
+            for uf in result['unavailable_features']:
+                str_err = '%s\n%s' % (str_err, uf)
+            str_err = '%s\n\n' % str_err
+        else:
+            str_info = '%s%s_%s: model %s -> available features %.1f%%, threshold %.1f%%\n\n' % (str_info,
+                                                                                                 result['location']['code'],
+                                                                                                 result['forecast_type'],
+                                                                                                 result['predictor'],
+                                                                                                 result['perc_available_features'],
+                                                                                                 threshold)
+
+    # Send Slack message
+    if cfg['alerts']['slack']['enabled'] is True:
+        slack_client = SlackClient(logger, cfg)
+        if len(str_err) > 0:
+            str_err = 'OZONE FORECASTER - FEATURES AVAILABILITY ALARM:\n%s' % str_err
+            slack_client.send_alert_message(str_err, '#ff0000')
+        else:
+            str_info = 'OZONE FORECASTER - FEATURES AVAILABILITY OK:\n%s' % str_info
+            slack_client.send_alert_message(str_info, '#00ff00')
+
 def predictor_process(inputs_gatherer, input_cfg_file, forecast_type, location, model_name, q, cfg, logger):
     dp, pv, paf, uf = perform_single_forecast(inputs_gatherer, input_cfg_file, forecast_type, location, model_name, cfg, logger)
 
@@ -130,6 +166,9 @@ def perform_forecast(day_case, forecast_type):
                                                                                                     result['predictor'],
                                                                                                     result['predicted_value'],
                                                                                                     result['perc_available_features']))
+
+    # Check if an alert has to be sent
+    check_alert(prediction_results=results)
 
     # todo check this part is still needed, probably yes but calc_kpis() has to be changed strongly
     # if cfg['dayToForecast'] == 'current':

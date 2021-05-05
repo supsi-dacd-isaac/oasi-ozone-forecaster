@@ -87,7 +87,7 @@ class SlackClient:
                                   data=json_data.encode('ascii'),
                                   headers={'Content-Type': 'application/json'})
             resp = request.urlopen(req)
-            self.logger.info(f"Sent message to slack.")
+            self.logger.info(f"Sent message to slack")
 
         except Exception as e:
             self.logger.error('EXCEPTION: %s' % str(e))
@@ -95,15 +95,11 @@ class SlackClient:
 
 class EmailClient:
 
-    def __init__(self, logger, cfg, subject, test=True):
+    def __init__(self, logger, cfg, subject):
 
         self.logger = logger
-        self.test = test
         self.cfg = cfg
-        if self.test:
-            self.to_emails = self.cfg["alerts"]["email"]["receiverAddressesTest"]
-        else:
-            self.to_emails = self.cfg["alerts"]["email"]["receiverAddresses"]
+        self.to_emails = self.cfg["email"]["receiverAddresses"]
         self.subject = subject
         self.body = "<!DOCTYPE html>\n<html>\n<body>\n"
 
@@ -122,15 +118,14 @@ class EmailClient:
         self.body += "</body>\n</html>"
 
         # create Mail instance
-        mail = Mail(from_email=self.cfg["alerts"]["email"]["senderAddress"],
-                    to_emails=self.cfg["alerts"]["email"]["senderAddress"],
+        mail = Mail(from_email=self.cfg["email"]["senderAddress"],
+                    to_emails=self.cfg["email"]["senderAddress"],
                     subject=self.subject,
                     html_content=self.body)
         for e in self.to_emails:
             mail.add_bcc(bcc_email=e)
         try:
-            sg = SendGridAPIClient(
-                self.cfg["alerts"]["email"]["sendgridAPIDev01"])
+            sg = SendGridAPIClient(self.cfg["email"]["sendgridAPI"])
             response = sg.send(mail)
             # self.logger.info(response.body)
             # self.logger.info(response.headers)

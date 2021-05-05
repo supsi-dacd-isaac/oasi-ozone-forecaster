@@ -47,10 +47,6 @@ class Forecaster:
         """
         Build the dataset
         """
-        # input_signals = inputs_gatherer.input_data
-        # day_to_predict =
-
-
         self.day_to_predict = inputs_gatherer.day_to_predict
         self.cfg_signals = json.loads(open(input_cfg_file).read())
 
@@ -76,9 +72,6 @@ class Forecaster:
                 self.unavailable_features.append(col)
             else:
                 self.available_features += 1
-
-        # todo an additional alarm has to be sent (Slack, email)
-
 
     def predict(self, predictor_file):
         model = pickle.load(open(predictor_file, 'rb'))
