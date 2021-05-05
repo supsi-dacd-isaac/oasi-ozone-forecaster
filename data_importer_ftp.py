@@ -8,6 +8,7 @@ import argparse
 import logging
 import json
 
+from classes.alerts import SlackClient
 from influxdb import InfluxDBClient
 
 from classes.data_manager import DataManager
@@ -15,6 +16,15 @@ from classes.data_manager import DataManager
 #  --------------------------------------------------------------------------- #
 # Functions
 # -----------------------------------------------------------------------------#
+def slack_msg():
+    slack_client = SlackClient(logger, cfg)
+    if bool(dm.files_not_correctly_handled):
+        str_err = ''
+        for k in dm.files_not_correctly_handled:
+            str_err = '%sFailed handling of file %s; Exception: %s\n' % (str_err, k, dm.files_not_correctly_handled[k])
+        slack_client.send_alert_message('OASI OZONE FORECASTER - INPUT DATA HANDLING FROM OASI SERVER TO DB\n%s' % str_err, '#ff0000')
+    else:
+        slack_client.send_alert_message('OASI OZONE FORECASTER - INPUT DATA HANDLING FROM OASI SERVER TO DB WORKED OK', '#00ff00')
 
 # --------------------------------------------------------------------------- #
 # Main
@@ -69,20 +79,27 @@ if __name__ == "__main__":
 
     dm = DataManager(influx_client, cfg, logger)
 
+    # Download files from the FTP server
     if cfg['ftp']['enabled'] is True:
-        # Get raw files from FTP server
         logger.info('Download data from FTP server')
-        dm.get_raw_files()
+        dm.open_ftp_connection()
+        dm.download_remote_files()
 
-    if cfg['influxDB']['rawDataImportingEnabled'] is True:
-        # Insert data into InfluxDB
+    # Insert data into InfluxDB
+    if cfg['influxDB']['dataImporting'] is True:
         logger.info('Importing in InfluxDB of raw data related to files in %s' % cfg['ftp']['localFolders']['tmp'])
         dm.insert_data()
 
-    if cfg['influxDB']['artificialDataImportingEnabled'] is True:
-        # Insert data into InfluxDB
-        logger.info('Importing in InfluxDB of artificial data')
-        # dm.insert_data()
+    # Delete files correctly handled on the FTP server and close the FTP connection
+    if cfg['ftp']['enabled'] is True:
+        if cfg['ftp']['deleteRemoteFile'] is True:
+            logger.info('Delete handled files from FTP server')
+            dm.delete_remote_files()
 
+        dm.close_ftp_connection()
+
+    # Slack alert
+    if cfg['alerts']['slack']['enabled'] is True:
+        slack_msg()
 
     logger.info("Ending program")

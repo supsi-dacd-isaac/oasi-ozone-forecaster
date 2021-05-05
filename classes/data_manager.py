@@ -38,70 +38,110 @@ class DataManager:
         self.influxdb_client = influxdb_client
         self.cfg = cfg
         self.logger = logger
+        self.files_correctly_downloaded = []
+        self.files_not_correctly_downloaded = dict()
+        self.files_correctly_handled = []
+        self.files_not_correctly_handled = dict()
+        self.ftp = None
 
         # Define the time zone
         self.tz_local = pytz.timezone(self.cfg['local']['timeZone'])
 
-    def get_raw_files(self):
+    def open_ftp_connection(self):
+        # perform FTP connection and login
+        self.ftp = ftplib.FTP(self.cfg['ftp']['host'])
+        self.ftp.login(self.cfg['ftp']['user'], self.cfg['ftp']['password'])
+
+    def close_ftp_connection(self):
+        # close the FTP connection
+        self.ftp.close()
+
+    def download_remote_files(self):
 
         if os.path.isdir(self.cfg['ftp']['localFolders']['tmp']) is False:
             os.mkdir(self.cfg['ftp']['localFolders']['tmp'])
 
-        try:
-            # perform FTP connection and login
-            ftp = ftplib.FTP(self.cfg['ftp']['host'])
-            ftp.login(self.cfg['ftp']['user'], self.cfg['ftp']['password'])
+        self.files_correctly_downloaded = []
+        self.files_not_correctly_downloaded = dict()
 
+        try:
+            # todo Check if also the forecast folder is effectively used
             for ftp_dir in [self.cfg['ftp']['remoteFolders']['measures'],
                             self.cfg['ftp']['remoteFolders']['forecasts']]:
                 self.logger.info('Getting files via FTP from %s/%s' % (self.cfg['ftp']['host'], ftp_dir))
-                ftp.cwd('/%s' % ftp_dir)
+                self.ftp.cwd('/%s' % ftp_dir)
 
                 # cycle over the remote files
-                for file_name in ftp.nlst('*'):
+                for file_name in self.ftp.nlst('*'):
                     tmp_local_file = os.path.join(self.cfg['ftp']['localFolders']['tmp'] + "/", file_name)
                     try:
-                        self.logger.info('%s -> %s/%s/%s' % (file_name, os.getcwd(),
-                                                             self.cfg['ftp']['localFolders']['tmp'], file_name))
+                        self.logger.info('%s/%s -> %s/%s/%s' % (ftp_dir, file_name, os.getcwd(),
+                                                                self.cfg['ftp']['localFolders']['tmp'], file_name))
 
                         # get the file from the server
                         with open(tmp_local_file, 'wb') as f:
                             def callback(data):
                                 f.write(data)
 
-                            ftp.retrbinary("RETR " + file_name, callback)
+                            self.ftp.retrbinary("RETR " + file_name, callback)
 
-                        if self.cfg['ftp']['deleteRemoteFile'] is True:
-                            # delete the remote file
-                            ftp.delete(file_name)
+                        self.files_correctly_downloaded.append(file_name)
                     except Exception as e:
                         self.logger.error('Downloading exception: %s' % str(e))
+                        self.files_not_correctly_downloaded[file_name] = str(e)
         except Exception as e:
             self.logger.error('Connection exception: %s' % str(e))
 
-        # close the FTP connection
-        ftp.close()
+
+    def delete_remote_files(self):
+
+        if os.path.isdir(self.cfg['ftp']['localFolders']['tmp']) is False:
+            os.mkdir(self.cfg['ftp']['localFolders']['tmp'])
+
+        try:
+            for ftp_dir in [self.cfg['ftp']['remoteFolders']['measures']]:
+                self.ftp.cwd('/%s' % ftp_dir)
+
+                # cycle over the remote files
+                for file_to_delete in self.files_correctly_handled:
+                    try:
+                        # delete the remote file
+                        self.logger.info('Delete remote file %s' % file_to_delete)
+                        self.ftp.delete(file_to_delete)
+                    except Exception as e:
+                        self.logger.error('Unable to delete remote file %s' % file_to_delete)
+                        self.logger.error('Exception: %s' % str(e))
+        except Exception as e:
+            self.logger.error('Connection exception: %s' % str(e))
 
     def insert_data(self):
         self.logger.info('Started data inserting into DB')
         file_names = os.listdir(self.cfg['ftp']['localFolders']['tmp'])
         dps = []
 
+        self.files_correctly_handled = []
+        self.files_not_correctly_handled = dict()
         for file_name in file_names:
             file_path = '%s/%s' % (self.cfg['ftp']['localFolders']['tmp'], file_name)
             self.logger.info('Getting data from %s' % file_path)
 
-            # Meteosuisse forecasts
-            if 'VOPA' in file_name or 'VNXA51' in file_name:
-                dps = self.handle_meteo_forecasts(file_path, dps)
+            try:
+                # Meteosuisse forecasts
+                if 'VOPA' in file_name or 'VNXA51' in file_name:
+                    dps = self.handle_meteo_forecasts(file_path, dps)
 
-            # OASI/ARPA/Meteosuisse measurements
-            else:
-                dps = self.location_signals_handling(file_path, file_name, dps)
+                # OASI/ARPA/Meteosuisse measurements
+                else:
+                    dps = self.location_signals_handling(file_path, file_name, dps)
 
-            # Archive file
-            self.archive_file(file_name)
-
+                # Archive file
+                self.archive_file(file_name)
+                self.files_correctly_handled.append(file_name)
+            except Exception as e:
+                self.logger.error('EXCEPTION: %s' % str(e))
+                self.files_not_correctly_handled[file_name] = str(e)
+                # Delete the raw file
+                os.unlink('%s%s%s' % (self.cfg['ftp']['localFolders']['tmp'], os.sep, file_name))
 
         # Send remaining points to InfluxDB
         self.logger.info('Sent %i points to InfluxDB server' % len(dps))
