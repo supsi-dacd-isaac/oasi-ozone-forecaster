@@ -31,6 +31,7 @@ LOCATIONS = {
                 'mendrisio': 'MEN',
                 'sagno': 'SAG',
                 'tesserete': 'TES',
+                'nabel-lugano': 'LUG',
 
                 # MeteoSvizzera locations
                 'meteosvizzera-stabio': 'MS-STB',

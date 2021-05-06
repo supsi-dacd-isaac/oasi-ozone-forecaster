@@ -99,18 +99,21 @@ class DataManager:
             os.mkdir(self.cfg['ftp']['localFolders']['tmp'])
 
         try:
-            for ftp_dir in [self.cfg['ftp']['remoteFolders']['measures']]:
-                self.ftp.cwd('/%s' % ftp_dir)
+            # cycle over the remote files
+            for file_to_delete in self.files_correctly_handled:
+                # Set the remote folder
+                if 'VOPA' in file_to_delete or 'VNXA51' in file_to_delete:
+                    self.ftp.cwd('/%s' % self.cfg['ftp']['remoteFolders']['forecasts'])
+                else:
+                    self.ftp.cwd('/%s' % self.cfg['ftp']['remoteFolders']['measures'])
 
-                # cycle over the remote files
-                for file_to_delete in self.files_correctly_handled:
-                    try:
-                        # delete the remote file
-                        self.logger.info('Delete remote file %s' % file_to_delete)
-                        self.ftp.delete(file_to_delete)
-                    except Exception as e:
-                        self.logger.error('Unable to delete remote file %s' % file_to_delete)
-                        self.logger.error('Exception: %s' % str(e))
+                try:
+                    # delete the remote file
+                    self.logger.info('Delete remote file %s' % file_to_delete)
+                    self.ftp.delete(file_to_delete)
+                except Exception as e:
+                    self.logger.error('Unable to delete remote file %s' % file_to_delete)
+                    self.logger.error('Exception: %s' % str(e))
         except Exception as e:
             self.logger.error('Connection exception: %s' % str(e))
 
@@ -152,7 +155,7 @@ class DataManager:
             archive_folder = '%s%s%s' % (self.cfg['ftp']['localFolders']['archive'], os.sep, file_name.split('.')[1][0:8])
             self.check_folder(archive_folder)
         else:
-            if 'meteosvizzera' in file_name or 'arpal' in file_name:
+            if 'meteosvizzera' in file_name or 'arpal' in file_name or 'nabel' in file_name:
                 archive_folder = '%s%s%s' % (self.cfg['ftp']['localFolders']['archive'], os.sep, file_name.split('-')[2])
                 self.check_folder(archive_folder)
             else:
@@ -180,7 +183,7 @@ class DataManager:
         # Read the first line
         raw = f.readline()
 
-        # Check the datasets cases
+        # Check the datasets cases, I apologize for the hard-coding
         if 'arpa' in file_name:
             # ARPA case
             str_locations = raw.decode(constants.ENCODING)
@@ -193,8 +196,13 @@ class DataManager:
                 oasi_location_key = '%s-%s' % (key1, key2)
                 measurement = self.cfg['influxDB']['measurementMeteoSuisse']
             else:
-                # OASI case
-                [oasi_location_key, _, _] = file_name.split('-')
+                if 'nabel' in file_name:
+                    # Nabel OASI case
+                    [key1, key2, _, _] = file_name.split('-')
+                    oasi_location_key = '%s-%s' % (key1, key2)
+                else:
+                    # Simple OASI case
+                    [oasi_location_key, _, _] = file_name.split('-')
                 measurement = self.cfg['influxDB']['measurementOASI']
 
         # Signals
