@@ -146,7 +146,10 @@ class InputsGatherer:
 
             # Measurement data
             else:
-                measurement = self.cfg['influxDB']['measurementOASI']
+                if tmp[0][0:2] == 'MS':
+                    measurement = self.cfg['influxDB']['measurementMeteoSuisse']
+                else:
+                    measurement = self.cfg['influxDB']['measurementOASI']
 
                 if '__d0' in signal or '__d1' in signal or '__d2' in signal or \
                    '__d3' in signal or '__d4' in signal or '__d5' in signal:

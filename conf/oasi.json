@@ -23,6 +23,16 @@
   },
   "locations": [
     {
+      "code": "BIO",
+      "name": "Bioggio",
+      "alarms":{
+        "thresholds": {
+          "MOR": 95.0,
+          "EVE": 95.0
+        }
+      }
+    },
+    {
       "code": "CHI",
       "name": "Chiasso",
       "alarms":{

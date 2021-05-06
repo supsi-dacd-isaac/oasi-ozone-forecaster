@@ -2,6 +2,7 @@
 import json
 import os
 import pandas as pd
+import math
 import pickle
 from datetime import datetime
 from influxdb import InfluxDBClient
@@ -40,8 +41,10 @@ class Forecaster:
         self.input_df = None
         self.available_features = 0
         self.unavailable_features = []
+        self.unsurrogable_features = []
         self.predicted_value = 0
         self.perc_available_features = 0
+        self.do_prediction = True
 
     def build_model_input_dataset(self, inputs_gatherer, input_cfg_file):
         """
@@ -66,49 +69,60 @@ class Forecaster:
     def check_inputs_availability(self, inputs_availability):
         self.available_features = 0
         self.unavailable_features = []
+        self.unsurrogable_features = []
+        self.do_prediction = True
         for col in self.input_df.columns:
             if inputs_availability[col] is False:
-                self.logger.error('Data for code %s not available, used past values mean = %.1f' % (col, self.input_df[col].values[0]))
+                if math.isnan(self.input_df[col].values[0]):
+                    self.logger.error('No surrogated data available for %s' % col)
+                    self.do_prediction = False
+                    self.unsurrogable_features.append(col)
+                else:
+                    self.logger.error('Data for code %s not available, used past values mean = %.1f' % (col, self.input_df[col].values[0]))
                 self.unavailable_features.append(col)
             else:
                 self.available_features += 1
 
     def predict(self, predictor_file):
-        model = pickle.load(open(predictor_file, 'rb'))
-        res = model.pred_dist(self.input_df)
-        self.logger.info('Performed prediction: model=%s ' % predictor_file)
+        if self.do_prediction is True:
+            model = pickle.load(open(predictor_file, 'rb'))
+            res = model.pred_dist(self.input_df)
+            self.logger.info('Performed prediction: model=%s ' % predictor_file)
 
+            dps = []
 
-        dps = []
-
-        # Saving predicted value
-        self.predicted_value = float(res.loc[0])
-        self.perc_available_features = round(self.available_features*100/len(self.input_df.columns), 0)
-        point = {
-            'time': self.day_to_predict,
-            'measurement': self.cfg['influxDB']['measurementForecasts'],
-            'fields': dict(PredictedValue=self.predicted_value, AvailableFeatures=float(self.perc_available_features)),
-            'tags': dict(location=self.location['code'], case=self.forecast_type,
-                         predictor=predictor_file.split(os.sep)[-1].split('.')[0].split('_')[-1])
-        }
-        dps.append(point)
-
-        # todo this part has to be checked
-        if self.cfg['predictionSettings']['distributionSamples'] > 1200:
-            samples = 1200
-        else:
-            samples = self.cfg['predictionSettings']['distributionSamples']
-
-        dist_data = res.sample(samples)
-        for i in range (0, samples):
+            # Saving predicted value
+            self.predicted_value = float(res.loc[0])
+            self.perc_available_features = round(self.available_features*100/len(self.input_df.columns), 0)
             point = {
-                'time': int(self.day_to_predict+(i*60)),
-                'measurement': self.cfg['influxDB']['measurementForecastsDist'],
-                'fields': dict(sample=float(dist_data[i])),
+                'time': self.day_to_predict,
+                'measurement': self.cfg['influxDB']['measurementForecasts'],
+                'fields': dict(PredictedValue=self.predicted_value, AvailableFeatures=float(self.perc_available_features)),
                 'tags': dict(location=self.location['code'], case=self.forecast_type,
                              predictor=predictor_file.split(os.sep)[-1].split('.')[0].split('_')[-1])
             }
             dps.append(point)
 
-        # Write results on InfluxDB
-        self.influxdb_client.write_points(dps, time_precision='s')
+            # todo this part has to be checked
+            if self.cfg['predictionSettings']['distributionSamples'] > 1200:
+                samples = 1200
+            else:
+                samples = self.cfg['predictionSettings']['distributionSamples']
+
+            dist_data = res.sample(samples)
+            for i in range (0, samples):
+                point = {
+                    'time': int(self.day_to_predict+(i*60)),
+                    'measurement': self.cfg['influxDB']['measurementForecastsDist'],
+                    'fields': dict(sample=float(dist_data[i])),
+                    'tags': dict(location=self.location['code'], case=self.forecast_type,
+                                 predictor=predictor_file.split(os.sep)[-1].split('.')[0].split('_')[-1])
+                }
+                dps.append(point)
+
+            # Write results on InfluxDB
+            self.influxdb_client.write_points(dps, time_precision='s')
+        else:
+            self.logger.error('Model %s can not perform prediction, some features cannot be surrogated' % predictor_file)
+            self.predicted_value = None
+            self.perc_available_features = None

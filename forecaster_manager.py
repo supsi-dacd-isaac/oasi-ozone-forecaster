@@ -29,37 +29,50 @@ def check_alert(prediction_results):
     str_info = ''
     for result in prediction_results:
         threshold = result['location']['alarms']['thresholds'][forecast_type]
-        if result['perc_available_features'] <= threshold:
-            str_err = '%s%s_%s: model %s -> available features %.1f%%, threshold %.1f%%' % (str_err,
-                                                                                            result['location']['code'],
-                                                                                            result['forecast_type'],
-                                                                                            result['predictor'],
-                                                                                            result['perc_available_features'],
-                                                                                            threshold)
-            str_err = '%s\nVariables that were surrogated:' % str_err
-            for uf in result['unavailable_features']:
+        if result['flag_prediction'] is True:
+            if result['perc_available_features'] <= threshold:
+                str_err = '%s%s_%s: model %s -> available features %.1f%%, threshold %.1f%%' % (str_err,
+                                                                                                result['location']['code'],
+                                                                                                result['forecast_type'],
+                                                                                                result['predictor'],
+                                                                                                result['perc_available_features'],
+                                                                                                threshold)
+                str_err = '%s\nVariables that were surrogated:' % str_err
+                for uf in result['unavailable_features']:
+                    str_err = '%s\n%s' % (str_err, uf)
+                str_err = '%s\n\n' % str_err
+            else:
+                str_info = '%s%s_%s: model %s -> available features %.1f%%, threshold %.1f%%\n\n' % (str_info,
+                                                                                                     result['location']['code'],
+                                                                                                     result['forecast_type'],
+                                                                                                     result['predictor'],
+                                                                                                     result['perc_available_features'],
+                                                                                                     threshold)
+        else:
+            str_err = '%s%s_%s: model %s -> prediction not performed' % (str_err, result['location']['code'],
+                                                                         result['forecast_type'], result['predictor'])
+            str_err = '%s\nVariables that cannot be surrogated via mean imputation:' % str_err
+            for uf in result['unsurrogable_features']:
                 str_err = '%s\n%s' % (str_err, uf)
             str_err = '%s\n\n' % str_err
-        else:
-            str_info = '%s%s_%s: model %s -> available features %.1f%%, threshold %.1f%%\n\n' % (str_info,
-                                                                                                 result['location']['code'],
-                                                                                                 result['forecast_type'],
-                                                                                                 result['predictor'],
-                                                                                                 result['perc_available_features'],
-                                                                                                 threshold)
 
     # Send Slack message
     if cfg['alerts']['slack']['enabled'] is True:
         slack_client = SlackClient(logger, cfg)
-        if len(str_err) > 0:
-            str_err = 'OZONE FORECASTER - FEATURES AVAILABILITY ALARM:\n%s' % str_err
-            slack_client.send_alert_message(str_err, '#ff0000')
-        else:
-            str_info = 'OZONE FORECASTER - FEATURES AVAILABILITY OK:\n%s' % str_info
+
+        slack_client.send_alert_message('OZONE FORECASTER SUMMARY', '#000000')
+
+        # Print info message
+        if len(str_info) > 0:
             slack_client.send_alert_message(str_info, '#00ff00')
 
+        # Print error message
+        if len(str_err) > 0:
+            slack_client.send_alert_message(str_err, '#ff0000')
+
 def predictor_process(inputs_gatherer, input_cfg_file, forecast_type, location, model_name, q, cfg, logger):
-    dp, pv, paf, uf = perform_single_forecast(inputs_gatherer, input_cfg_file, forecast_type, location, model_name, cfg, logger)
+    dp, pv, paf, uvf, usf, fp = perform_single_forecast(inputs_gatherer, input_cfg_file, forecast_type, location, model_name,
+                                                  cfg, logger)
 
     # Write on the queue
     q.put(
@@ -70,7 +83,9 @@ def predictor_process(inputs_gatherer, input_cfg_file, forecast_type, location, 
                 'predictor': model_name,
                 'predicted_value': pv,
                 'perc_available_features': paf,
-                'unavailable_features': uf
+                'unavailable_features': uvf,
+                'unsurrogable_features': usf,
+                'flag_prediction': fp
             }
         )
 
@@ -86,10 +101,8 @@ def perform_single_forecast(inputs_gatherer, input_cfg_file, forecast_type, loca
     # Perform the prediction
     forecaster.predict(input_cfg_file.replace('inputs', 'predictor').replace('json', 'pkl'))
 
-    return forecaster.day_to_predict,\
-           forecaster.predicted_value, \
-           forecaster.perc_available_features, \
-           forecaster.unavailable_features
+    return forecaster.day_to_predict, forecaster.predicted_value, forecaster.perc_available_features, \
+           forecaster.unavailable_features, forecaster.unsurrogable_features, forecaster.do_prediction
 
 def perform_forecast(day_case, forecast_type):
 
@@ -106,16 +119,17 @@ def perform_forecast(day_case, forecast_type):
     # Calculate the inputs required by all the models of the configured locations
     inputs_gatherer.build_global_input_dataset()
 
+    # Processes creation
+    procs = []
+    results = []
+    logger.info('Predictors will work in %s mode' % cfg['predictionSettings']['operationMode'])
+
     # Cycle over the locations
     for location in cfg['locations']:
 
         # Cycle over the models files
         tmp_folder = '%s%s*%s' % (cfg['folders']['models'], os.sep, forecast_type)
 
-        # Processes creation
-        procs = []
-        results = []
-        logger.info('Predictors will work in %s mode' % cfg['predictionSettings']['operationMode'])
         for input_cfg_file in glob.glob('%s%s/inputs_*.json' % (tmp_folder, os.sep)):
 
             # Check if the current folder refers to a location configured for the prediction
@@ -129,8 +143,8 @@ def perform_forecast(day_case, forecast_type):
                     procs.append(tmp_proc)
                 else:
                     logger.info('Predictors will work in sequence')
-                    dp, pv, paf, uf = perform_single_forecast(inputs_gatherer, input_cfg_file, forecast_type, location,
-                                                          model_name, cfg, logger)
+                    dp, pv, paf, uvf, usf, fp = perform_single_forecast(inputs_gatherer, input_cfg_file, forecast_type,
+                                                                  location, model_name, cfg, logger)
                     results.append({
                                         'day_to_predict': dp,
                                         'location': location,
@@ -139,33 +153,40 @@ def perform_forecast(day_case, forecast_type):
                                         'predictor': model_name,
                                         'predicted_value': pv,
                                         'perc_available_features': paf,
-                                        'unavailable_features': uf
+                                        'unavailable_features': uvf,
+                                        'unsurrogable_features': usf,
+                                        'flag_prediction': fp
                                     })
 
-        # Collect the results if teh predictors have worked in parallel mode
-        if cfg['predictionSettings']['operationMode'] == 'parallel':
-            results = []
-            for proc in procs:
-                proc.join()
 
-            # Read from the queue
-            i = 0
-            while True:
-                item = queue_results.get()
-                results.append(item)
-                i += 1
-                if i == len(procs):
-                    break
+    # Collect the results if the predictors have worked in parallel mode
+    if cfg['predictionSettings']['operationMode'] == 'parallel':
+        results = []
+        for proc in procs:
+            proc.join()
 
-        logger.info('Print the predictor results')
-        for result in results:
-            dp_desc = datetime.fromtimestamp(result['day_to_predict']).strftime('%Y-%m-%d')
+        # Read from the queue
+        i = 0
+        while True:
+            item = queue_results.get()
+            results.append(item)
+            i += 1
+            if i == len(procs):
+                break
+
+    logger.info('Print the predictors results')
+    for result in results:
+        dp_desc = datetime.fromtimestamp(result['day_to_predict']).strftime('%Y-%m-%d')
+        if result['flag_prediction'] is True:
             logger.info('[%s;%s;%s;%s] -> predicted max(O3) = %.1f, available features = %.0f%%' % (dp_desc,
                                                                                                     result['location']['code'],
                                                                                                     result['forecast_type'],
                                                                                                     result['predictor'],
                                                                                                     result['predicted_value'],
                                                                                                     result['perc_available_features']))
+        else:
+            logger.info('[%s;%s;%s;%s] -> prediction not performed' % (dp_desc, result['location']['code'],
+                                                                       result['forecast_type'], result['predictor']))
 
     # Check if an alert has to be sent
     check_alert(prediction_results=results)
