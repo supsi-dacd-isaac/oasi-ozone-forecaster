@@ -31,26 +31,36 @@ def check_alert(prediction_results):
         threshold = result['location']['alarms']['thresholds'][forecast_type]
         if result['flag_prediction'] is True:
             if result['perc_available_features'] <= threshold:
-                str_err = '%s%s_%s: model %s -> available features %.1f%%, threshold %.1f%%' % (str_err,
-                                                                                                result['location']['code'],
-                                                                                                result['forecast_type'],
-                                                                                                result['predictor'],
-                                                                                                result['perc_available_features'],
-                                                                                                threshold)
+                str_err = '%s%s_%s: model %s -> available features %.1f%%, ' \
+                          'threshold %.1f%%' % (str_err,
+                                                result['location']['code'],
+                                                result['forecast_type'],
+                                                result['predictor'],
+                                                result['perc_available_features'],
+                                                threshold)
                 str_err = '%s\nVariables that were surrogated:' % str_err
                 for uf in result['unavailable_features']:
                     str_err = '%s\n%s' % (str_err, uf)
                 str_err = '%s\n\n' % str_err
             else:
-                str_info = '%s%s_%s: model %s -> available features %.1f%%, threshold %.1f%%\n\n' % (str_info,
-                                                                                                     result['location']['code'],
-                                                                                                     result['forecast_type'],
-                                                                                                     result['predictor'],
-                                                                                                     result['perc_available_features'],
-                                                                                                     threshold)
+                str_info = '%s%s_%s: model %s -> predicted max(O3) = %.1f, prob[>%i] = %i%%, ' \
+                           'available features %.1f%%, threshold %.1f%%\n\n' % (str_info,
+                                                                                result['location']['code'],
+                                                                                result['forecast_type'],
+                                                                                result['predictor'],
+                                                                                result['predicted_value'],
+                                                                                cfg['predictionSettings']['threshold'],
+                                                                                result['prob_over_limit'],
+                                                                                result['perc_available_features'],
+                                                                                threshold)
+
+
         else:
-            str_err = '%s%s_%s: model %s -> prediction not performed' % (str_err, result['location']['code'],
-                                                                         result['forecast_type'], result['predictor'])
+            str_err = '%s%s_%s: model %s -> prediction not performed' % (str_err,
+                                                                         result['location']['code'],
+                                                                         result['forecast_type'],
+                                                                         result['predictor'])
+
             str_err = '%s\nVariables that cannot be surrogated via mean imputation:' % str_err
             for uf in result['unsurrogable_features']:
                 str_err = '%s\n%s' % (str_err, uf)

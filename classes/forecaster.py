@@ -83,16 +83,45 @@ class Forecaster:
             else:
                 self.available_features += 1
 
+    def binary_search(self, qrf, low, high, prev, threshold):
+        # Check base case
+        if high >= low:
+
+            mid = (high + low) // 2
+
+            # If we have found the interval with the threshold
+            if prev < threshold < qrf.predict(self.input_df, quantile=mid)[0]:
+                return mid-1, qrf.predict(self.input_df, quantile=mid)[0], prev
+
+            # If element is smaller than mid, then it can only
+            # be present in left subarray
+            elif qrf.predict(self.input_df, quantile=mid) > threshold:
+                return self.binary_search(qrf, low, mid - 1, qrf.predict(self.input_df, quantile=mid)[0], threshold)
+
+            # Else the element can only be present in right subarray
+            else:
+                return self.binary_search(qrf, mid + 1, high, qrf.predict(self.input_df, quantile=mid)[0], threshold)
+        else:
+            # Element is not present in the array
+            return -1, -1, -1
+
     def prob_overlimit(self, qrf):
-        qrf1_percentiles = [qrf.predict(self.input_df, quantile=q) for q in np.linspace(1.0, 99.0, 99)]
+        qrf1_percentiles = [qrf.predict(self.input_df, quantile=1.0), qrf.predict(self.input_df, quantile=99.0)]
         if max(qrf1_percentiles) < self.cfg['predictionSettings']['threshold']:
             return 0.0
         elif min(qrf1_percentiles) > self.cfg['predictionSettings']['threshold']:
             return 100.0
         else:
-            for i in range(0, len(qrf1_percentiles)):
-                if qrf1_percentiles[i] > self.cfg['predictionSettings']['threshold']:
-                    return float(100-(i+1))
+            # Binary search
+            idx, _, _ = self.binary_search(qrf, 1.0, 99.0, -1, self.cfg['predictionSettings']['threshold'])
+            if idx != -1:
+               return float(100 - idx)
+            else:
+               self.logger.warning('Binary search found no solution, try linear search')
+               qrf1_percentiles = [qrf.predict(self.input_df, quantile=q) for q in np.linspace(1.0, 99.0, 99)]
+               for i in range(0, len(qrf1_percentiles)):
+                   if qrf1_percentiles[i] > self.cfg['predictionSettings']['threshold']:
+                       return float(100-(i+1))
 
 
     def predict(self, predictor_file):
@@ -121,23 +150,6 @@ class Forecaster:
                              predictor=predictor_file.split(os.sep)[-1].split('.')[0].split('_')[-1])
             }
             dps.append(point)
-
-            # todo this part has to be checked
-            if self.cfg['predictionSettings']['distributionSamples'] > 1200:
-                samples = 1200
-            else:
-                samples = self.cfg['predictionSettings']['distributionSamples']
-
-            dist_data = res_ngb.sample(samples)
-            for i in range (0, samples):
-                point = {
-                    'time': int(self.day_to_predict+(i*60)),
-                    'measurement': self.cfg['influxDB']['measurementForecastsDist'],
-                    'fields': dict(sample=float(dist_data[i])),
-                    'tags': dict(location=self.location['code'], case=self.forecast_type,
-                                 predictor=predictor_file.split(os.sep)[-1].split('.')[0].split('_')[-1])
-                }
-                dps.append(point)
 
             # Write results on InfluxDB
             self.influxdb_client.write_points(dps, time_precision='s')
