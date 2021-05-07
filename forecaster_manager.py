@@ -71,8 +71,8 @@ def check_alert(prediction_results):
             slack_client.send_alert_message(str_err, '#ff0000')
 
 def predictor_process(inputs_gatherer, input_cfg_file, forecast_type, location, model_name, q, cfg, logger):
-    dp, pv, paf, uvf, usf, fp = perform_single_forecast(inputs_gatherer, input_cfg_file, forecast_type, location, model_name,
-                                                  cfg, logger)
+    dp, pv, paf, uvf, usf, fp, pol = perform_single_forecast(inputs_gatherer, input_cfg_file, forecast_type, location,
+                                                             model_name, cfg, logger)
 
     # Write on the queue
     q.put(
@@ -83,6 +83,7 @@ def predictor_process(inputs_gatherer, input_cfg_file, forecast_type, location, 
                 'predictor': model_name,
                 'predicted_value': pv,
                 'perc_available_features': paf,
+                'prob_over_limit': pol,
                 'unavailable_features': uvf,
                 'unsurrogable_features': usf,
                 'flag_prediction': fp
@@ -102,7 +103,8 @@ def perform_single_forecast(inputs_gatherer, input_cfg_file, forecast_type, loca
     forecaster.predict(input_cfg_file.replace('inputs', 'predictor').replace('json', 'pkl'))
 
     return forecaster.day_to_predict, forecaster.predicted_value, forecaster.perc_available_features, \
-           forecaster.unavailable_features, forecaster.unsurrogable_features, forecaster.do_prediction
+           forecaster.unavailable_features, forecaster.unsurrogable_features, forecaster.do_prediction, \
+           forecaster.prob_over_limit
 
 def perform_forecast(day_case, forecast_type):
 
@@ -143,16 +145,16 @@ def perform_forecast(day_case, forecast_type):
                     procs.append(tmp_proc)
                 else:
                     logger.info('Predictors will work in sequence')
-                    dp, pv, paf, uvf, usf, fp = perform_single_forecast(inputs_gatherer, input_cfg_file, forecast_type,
+                    dp, pv, paf, uvf, usf, fp, pol = perform_single_forecast(inputs_gatherer, input_cfg_file, forecast_type,
                                                                   location, model_name, cfg, logger)
                     results.append({
                                         'day_to_predict': dp,
                                         'location': location,
                                         'forecast_type': forecast_type,
                                         'predictor': model_name,
-                                        'predictor': model_name,
                                         'predicted_value': pv,
                                         'perc_available_features': paf,
+                                        'prob_over_limit': pol,
                                         'unavailable_features': uvf,
                                         'unsurrogable_features': usf,
                                         'flag_prediction': fp
@@ -178,12 +180,15 @@ def perform_forecast(day_case, forecast_type):
     for result in results:
         dp_desc = datetime.fromtimestamp(result['day_to_predict']).strftime('%Y-%m-%d')
         if result['flag_prediction'] is True:
-            logger.info('[%s;%s;%s;%s] -> predicted max(O3) = %.1f, available features = %.0f%%' % (dp_desc,
-                                                                                                    result['location']['code'],
-                                                                                                    result['forecast_type'],
-                                                                                                    result['predictor'],
-                                                                                                    result['predicted_value'],
-                                                                                                    result['perc_available_features']))
+            logger.info('[%s;%s;%s;%s] -> predicted max(O3) = %.1f, '
+                        'prob[>%i] = %i%% available features = %.0f%%' % (dp_desc,
+                                                                          result['location']['code'],
+                                                                          result['forecast_type'],
+                                                                          result['predictor'],
+                                                                          result['predicted_value'],
+                                                                          cfg['predictionSettings']['threshold'],
+                                                                          result['prob_over_limit'],
+                                                                          result['perc_available_features']))
         else:
             logger.info('[%s;%s;%s;%s] -> prediction not performed' % (dp_desc, result['location']['code'],
                                                                        result['forecast_type'], result['predictor']))

@@ -10,6 +10,11 @@ import time
 import ftplib
 import numpy as np
 import pandas as pd
+def warn(*args, **kwargs):
+    pass
+import warnings
+warnings.warn = warn
+
 import sklearn.metrics as metrics
 from zipfile import ZipFile
 

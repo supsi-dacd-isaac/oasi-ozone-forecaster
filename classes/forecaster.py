@@ -2,11 +2,10 @@
 import json
 import os
 import pandas as pd
+import numpy as np
 import math
 import pickle
-from datetime import datetime
 from influxdb import InfluxDBClient
-
 
 class Forecaster:
     """
@@ -45,6 +44,7 @@ class Forecaster:
         self.predicted_value = 0
         self.perc_available_features = 0
         self.do_prediction = True
+        self.prob_over_limit = 0
 
     def build_model_input_dataset(self, inputs_gatherer, input_cfg_file):
         """
@@ -83,21 +83,40 @@ class Forecaster:
             else:
                 self.available_features += 1
 
+    def prob_overlimit(self, qrf):
+        qrf1_percentiles = [qrf.predict(self.input_df, quantile=q) for q in np.linspace(1.0, 99.0, 99)]
+        if max(qrf1_percentiles) < self.cfg['predictionSettings']['threshold']:
+            return 0.0
+        elif min(qrf1_percentiles) > self.cfg['predictionSettings']['threshold']:
+            return 100.0
+        else:
+            for i in range(0, len(qrf1_percentiles)):
+                if qrf1_percentiles[i] > self.cfg['predictionSettings']['threshold']:
+                    return float(100-(i+1))
+
+
     def predict(self, predictor_file):
         if self.do_prediction is True:
-            model = pickle.load(open(predictor_file, 'rb'))
-            res = model.pred_dist(self.input_df)
+            # ngb; NGBoost
+            # qrf_nw; QRF without weights
+            # qrf_ww; QRF wit weights
+            ngb, qrf_nw, qrf_ww = pickle.load(open(predictor_file, 'rb'))
+
+            res_ngb = ngb.pred_dist(self.input_df)
+            self.prob_over_limit = self.prob_overlimit(qrf_nw)
             self.logger.info('Performed prediction: model=%s ' % predictor_file)
 
             dps = []
 
             # Saving predicted value
-            self.predicted_value = float(res.loc[0])
+            self.predicted_value = float(res_ngb.loc[0])
             self.perc_available_features = round(self.available_features*100/len(self.input_df.columns), 0)
             point = {
                 'time': self.day_to_predict,
                 'measurement': self.cfg['influxDB']['measurementForecasts'],
-                'fields': dict(PredictedValue=self.predicted_value, AvailableFeatures=float(self.perc_available_features)),
+                'fields': dict(PredictedValue=float(self.predicted_value),
+                               AvailableFeatures=float(self.perc_available_features),
+                               ProbOverLimit=float(self.prob_over_limit)),
                 'tags': dict(location=self.location['code'], case=self.forecast_type,
                              predictor=predictor_file.split(os.sep)[-1].split('.')[0].split('_')[-1])
             }
@@ -109,7 +128,7 @@ class Forecaster:
             else:
                 samples = self.cfg['predictionSettings']['distributionSamples']
 
-            dist_data = res.sample(samples)
+            dist_data = res_ngb.sample(samples)
             for i in range (0, samples):
                 point = {
                     'time': int(self.day_to_predict+(i*60)),
