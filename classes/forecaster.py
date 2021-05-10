@@ -83,27 +83,29 @@ class Forecaster:
             else:
                 self.available_features += 1
 
-    def binary_search(self, qrf, low, high, prev, threshold):
-        # Check base case
+    def binary_search(self, qrf, low, high, threshold):
         if high >= low:
 
             mid = (high + low) // 2
 
-            # If we have found the interval with the threshold
-            if prev < threshold < qrf.predict(self.input_df, quantile=mid)[0]:
-                return mid-1, qrf.predict(self.input_df, quantile=mid)[0], prev
+            # Get the middle and previous prediction values
+            p_mid = qrf.predict(self.input_df, quantile=mid)
+            p_prev = qrf.predict(self.input_df, quantile=mid-1)
 
-            # If element is smaller than mid, then it can only
-            # be present in left subarray
-            elif qrf.predict(self.input_df, quantile=mid) > threshold:
-                return self.binary_search(qrf, low, mid - 1, qrf.predict(self.input_df, quantile=mid)[0], threshold)
+            # Check if the solution has been reached
+            if p_prev < threshold < p_mid:
+                return mid, p_mid
 
-            # Else the element can only be present in right subarray
+            # If p_mid is greater than threshold, then it can only be present in left subarray
+            elif p_mid > threshold:
+                return self.binary_search(qrf, low, mid - 1, threshold)
+
+            # Else (p_mid is smaller than threshold) the element can only be present in right subarray
             else:
-                return self.binary_search(qrf, mid + 1, high, qrf.predict(self.input_df, quantile=mid)[0], threshold)
+                return self.binary_search(qrf, mid + 1, high, threshold)
         else:
             # Element is not present in the array
-            return -1, -1, -1
+            return -1, -1
 
     def prob_overlimit(self, qrf):
         qrf1_percentiles = [qrf.predict(self.input_df, quantile=1.0), qrf.predict(self.input_df, quantile=99.0)]
@@ -113,7 +115,7 @@ class Forecaster:
             return 100.0
         else:
             # Binary search
-            idx, _, _ = self.binary_search(qrf, 1.0, 99.0, -1, self.cfg['predictionSettings']['threshold'])
+            idx, _ = self.binary_search(qrf, 1.0, 99.0, self.cfg['predictionSettings']['threshold'])
             if idx != -1:
                return float(100 - idx)
             else:
