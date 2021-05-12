@@ -32,27 +32,29 @@ def check_alert(prediction_results):
         if result['flag_prediction'] is True:
             if result['perc_available_features'] <= threshold:
                 str_err = '%s%s_%s: model %s -> available features %.1f%%, ' \
-                          'threshold %.1f%%' % (str_err,
-                                                result['location']['code'],
-                                                result['forecast_type'],
-                                                result['predictor'],
-                                                result['perc_available_features'],
-                                                threshold)
+                          'threshold %.1f%%, flag best=%s' % (str_err,
+                                                              result['location']['code'],
+                                                              result['forecast_type'],
+                                                              result['predictor'],
+                                                              result['perc_available_features'],
+                                                              threshold,
+                                                              result['flag_best'])
                 str_err = '%s\nVariables that were surrogated:' % str_err
                 for uf in result['unavailable_features']:
                     str_err = '%s\n%s' % (str_err, uf)
                 str_err = '%s\n\n' % str_err
             else:
                 str_info = '%s%s_%s: model %s -> predicted max(O3) = %.1f, prob[>%i] = %i%%, ' \
-                           'available features %.1f%%, threshold %.1f%%\n\n' % (str_info,
-                                                                                result['location']['code'],
-                                                                                result['forecast_type'],
-                                                                                result['predictor'],
-                                                                                result['predicted_value'],
-                                                                                cfg['predictionSettings']['threshold'],
-                                                                                result['prob_over_limit'],
-                                                                                result['perc_available_features'],
-                                                                                threshold)
+                           'available features %.1f%%, threshold %.1f%%, flag best=%s\n\n' % (str_info,
+                                                                                              result['location']['code'],
+                                                                                              result['forecast_type'],
+                                                                                              result['predictor'],
+                                                                                              result['predicted_value'],
+                                                                                              cfg['predictionSettings']['threshold'],
+                                                                                              result['prob_over_limit'],
+                                                                                              result['perc_available_features'],
+                                                                                              threshold,
+                                                                                              result['flag_best'])
 
 
         else:
@@ -81,8 +83,8 @@ def check_alert(prediction_results):
             slack_client.send_alert_message(str_err, '#ff0000')
 
 def predictor_process(inputs_gatherer, input_cfg_file, forecast_type, location, model_name, q, cfg, logger):
-    dp, pv, paf, uvf, usf, fp, pol = perform_single_forecast(inputs_gatherer, input_cfg_file, forecast_type, location,
-                                                             model_name, cfg, logger)
+    dp, pv, paf, uvf, usf, fp, pol, fb = perform_single_forecast(inputs_gatherer, input_cfg_file, forecast_type,
+                                                                 location, model_name, cfg, logger)
 
     # Write on the queue
     q.put(
@@ -96,7 +98,8 @@ def predictor_process(inputs_gatherer, input_cfg_file, forecast_type, location, 
                 'prob_over_limit': pol,
                 'unavailable_features': uvf,
                 'unsurrogable_features': usf,
-                'flag_prediction': fp
+                'flag_prediction': fp,
+                'flag_best': fp
             }
         )
 
@@ -114,7 +117,7 @@ def perform_single_forecast(inputs_gatherer, input_cfg_file, forecast_type, loca
 
     return forecaster.day_to_predict, forecaster.predicted_value, forecaster.perc_available_features, \
            forecaster.unavailable_features, forecaster.unsurrogable_features, forecaster.do_prediction, \
-           forecaster.prob_over_limit
+           forecaster.prob_over_limit, forecaster.flag_best
 
 def perform_forecast(day_case, forecast_type):
 
@@ -155,8 +158,9 @@ def perform_forecast(day_case, forecast_type):
                     procs.append(tmp_proc)
                 else:
                     logger.info('Predictors will work in sequence')
-                    dp, pv, paf, uvf, usf, fp, pol = perform_single_forecast(inputs_gatherer, input_cfg_file, forecast_type,
-                                                                  location, model_name, cfg, logger)
+                    dp, pv, paf, uvf, usf, fp, pol, fb = perform_single_forecast(inputs_gatherer, input_cfg_file,
+                                                                                 forecast_type, location, model_name,
+                                                                                 cfg, logger)
                     results.append({
                                         'day_to_predict': dp,
                                         'location': location,
@@ -167,7 +171,8 @@ def perform_forecast(day_case, forecast_type):
                                         'prob_over_limit': pol,
                                         'unavailable_features': uvf,
                                         'unsurrogable_features': usf,
-                                        'flag_prediction': fp
+                                        'flag_prediction': fp,
+                                        'flag_best': fb
                                     })
 
 

@@ -45,6 +45,7 @@ class Forecaster:
         self.perc_available_features = 0
         self.do_prediction = True
         self.prob_over_limit = 0
+        self.flag_best = 'false'
 
     def build_model_input_dataset(self, inputs_gatherer, input_cfg_file):
         """
@@ -83,29 +84,27 @@ class Forecaster:
             else:
                 self.available_features += 1
 
-    def binary_search(self, qrf, low, high, threshold):
+    def binary_search(self, qrf, low, high, prev, threshold):
+        # Check base case
         if high >= low:
 
             mid = (high + low) // 2
 
-            # Get the middle and previous prediction values
-            p_mid = qrf.predict(self.input_df, quantile=mid)
-            p_prev = qrf.predict(self.input_df, quantile=mid-1)
+            # If we have found the interval with the threshold
+            if prev < threshold < qrf.predict(self.input_df, quantile=mid)[0]:
+                return mid-1, qrf.predict(self.input_df, quantile=mid)[0], prev
 
-            # Check if the solution has been reached
-            if p_prev < threshold < p_mid:
-                return mid, p_mid
+            # If element is smaller than mid, then it can only
+            # be present in left subarray
+            elif qrf.predict(self.input_df, quantile=mid) > threshold:
+                return self.binary_search(qrf, low, mid - 1, qrf.predict(self.input_df, quantile=mid)[0], threshold)
 
-            # If p_mid is greater than threshold, then it can only be present in left subarray
-            elif p_mid > threshold:
-                return self.binary_search(qrf, low, mid - 1, threshold)
-
-            # Else (p_mid is smaller than threshold) the element can only be present in right subarray
+            # Else the element can only be present in right subarray
             else:
-                return self.binary_search(qrf, mid + 1, high, threshold)
+                return self.binary_search(qrf, mid + 1, high, qrf.predict(self.input_df, quantile=mid)[0], threshold)
         else:
             # Element is not present in the array
-            return -1, -1
+            return -1, -1, -1
 
     def prob_overlimit(self, qrf):
         qrf1_percentiles = [qrf.predict(self.input_df, quantile=1.0), qrf.predict(self.input_df, quantile=99.0)]
@@ -115,7 +114,7 @@ class Forecaster:
             return 100.0
         else:
             # Binary search
-            idx, _ = self.binary_search(qrf, 1.0, 99.0, self.cfg['predictionSettings']['threshold'])
+            idx, _, _ = self.binary_search(qrf, 1.0, 99.0, -1, self.cfg['predictionSettings']['threshold'])
             if idx != -1:
                return float(100 - idx)
             else:
@@ -142,13 +141,20 @@ class Forecaster:
             # Saving predicted value
             self.predicted_value = float(res_ngb.loc[0])
             self.perc_available_features = round(self.available_features*100/len(self.input_df.columns), 0)
+
+            # Define best tag: i.e. the current predictor is the best one for this case
+            if self.location['bestLabels'][self.forecast_type] in predictor_file:
+                self.flag_best = 'true'
+            else:
+                self.flag_best = 'false'
+
             point = {
                 'time': self.day_to_predict,
                 'measurement': self.cfg['influxDB']['measurementForecasts'],
                 'fields': dict(PredictedValue=float(self.predicted_value),
                                AvailableFeatures=float(self.perc_available_features),
                                ProbOverLimit=float(self.prob_over_limit)),
-                'tags': dict(location=self.location['code'], case=self.forecast_type,
+                'tags': dict(location=self.location['code'], case=self.forecast_type, flag_best=self.flag_best,
                              predictor=predictor_file.split(os.sep)[-1].split('.')[0].split('_')[-1])
             }
             dps.append(point)

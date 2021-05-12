@@ -13,19 +13,23 @@
   },
   "forecastPeriod" : {
     "case": "current",
-    "startDate": "2021-05-03",
-    "endDate": "2021-05-06"
+    "startDate": "2021-05-05",
+    "endDate": "2021-05-12"
   },
   "predictionSettings": {
-      "operationMode": "parallel",
-      "distributionSamples": 1000,
-      "threshold": 180.0,
-      "startDateForMeanImputation": "2021-05-01"
+    "operationMode": "sequence",
+    "distributionSamples": 1000,
+    "threshold": 180.0,
+    "startDateForMeanImputation": "2021-05-01"
   },
   "locations": [
     {
       "code": "BIO",
       "name": "Bioggio",
+      "bestLabels": {
+          "MOR": "20210506-100f",
+          "EVE": "20210506-100f"
+        },
       "alarms":{
         "thresholds": {
           "MOR": 95.0,
@@ -36,6 +40,10 @@
     {
       "code": "CHI",
       "name": "Chiasso",
+      "bestLabels": {
+        "MOR": "20210506-100f",
+        "EVE": "20210506-100f"
+      },
       "alarms":{
         "thresholds": {
           "MOR": 95.0,
