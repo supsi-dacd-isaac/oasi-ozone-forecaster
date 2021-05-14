@@ -44,7 +44,7 @@ class Forecaster:
         self.predicted_value = 0
         self.perc_available_features = 0
         self.do_prediction = True
-        self.prob_over_limit = 0
+        self.probs_over_limits = 0
         self.flag_best = 'false'
 
     def build_model_input_dataset(self, inputs_gatherer, input_cfg_file):
@@ -84,46 +84,63 @@ class Forecaster:
             else:
                 self.available_features += 1
 
-    def binary_search(self, qrf, low, high, prev, threshold):
-        # Check base case
+    def binary_search(self, qrf, low, high, threshold):
         if high >= low:
 
             mid = (high + low) // 2
 
-            # If we have found the interval with the threshold
-            if prev < threshold < qrf.predict(self.input_df, quantile=mid)[0]:
-                return mid-1, qrf.predict(self.input_df, quantile=mid)[0], prev
+            # Get the middle and previous prediction values
+            p_mid = qrf.predict(self.input_df, quantile=mid)
+            p_prev = qrf.predict(self.input_df, quantile=mid-1)
 
-            # If element is smaller than mid, then it can only
-            # be present in left subarray
-            elif qrf.predict(self.input_df, quantile=mid) > threshold:
-                return self.binary_search(qrf, low, mid - 1, qrf.predict(self.input_df, quantile=mid)[0], threshold)
+            # Check if the solution has been reached
+            if p_prev < threshold < p_mid:
+                return mid, p_mid
 
-            # Else the element can only be present in right subarray
+            # If p_mid is greater than threshold, then it can only be present in left subarray
+            elif p_mid > threshold:
+                return self.binary_search(qrf, low, mid - 1, threshold)
+
+            # Else (p_mid is smaller than threshold) the element can only be present in right subarray
             else:
-                return self.binary_search(qrf, mid + 1, high, qrf.predict(self.input_df, quantile=mid)[0], threshold)
+                return self.binary_search(qrf, mid + 1, high, threshold)
         else:
             # Element is not present in the array
-            return -1, -1, -1
+            return -1, -1
 
-    def prob_overlimit(self, qrf):
-        qrf1_percentiles = [qrf.predict(self.input_df, quantile=1.0), qrf.predict(self.input_df, quantile=99.0)]
-        if max(qrf1_percentiles) < self.cfg['predictionSettings']['threshold']:
+    def prob_overlimit(self, qrf, qrf_percentiles_limits, threshold):
+        if max(qrf_percentiles_limits) < threshold:
             return 0.0
-        elif min(qrf1_percentiles) > self.cfg['predictionSettings']['threshold']:
+        elif min(qrf_percentiles_limits) > threshold:
             return 100.0
         else:
             # Binary search
-            idx, _, _ = self.binary_search(qrf, 1.0, 99.0, -1, self.cfg['predictionSettings']['threshold'])
+            idx, _ = self.binary_search(qrf, 1.0, 99.0, threshold)
             if idx != -1:
                return float(100 - idx)
             else:
                self.logger.warning('Binary search found no solution, try linear search')
                qrf1_percentiles = [qrf.predict(self.input_df, quantile=q) for q in np.linspace(1.0, 99.0, 99)]
                for i in range(0, len(qrf1_percentiles)):
-                   if qrf1_percentiles[i] > self.cfg['predictionSettings']['threshold']:
+                   if qrf1_percentiles[i] > threshold:
                        return float(100-(i+1))
 
+    def calc_probabilities(self, qrf):
+        qrf_percentiles_limits = [qrf.predict(self.input_df, quantile=1.0), qrf.predict(self.input_df, quantile=99.0)]
+        probs = []
+        thresholds = self.cfg['predictionSettings']['thresholds']
+        for threshold in thresholds:
+            tmp_prob = self.prob_overlimit(qrf, qrf_percentiles_limits, threshold)
+            probs.append(tmp_prob)
+
+        # Calculate the probabilities for the configured intervals
+        dict_probs = dict()
+        dict_probs['[0:%i]' % thresholds[0]] = 100 - probs[0]
+        for i in range(0, len(probs) - 1):
+            dict_probs['[%i:%i]' % (thresholds[i], thresholds[i + 1])] = (probs[i] - probs[i + 1])
+        dict_probs['[%i:inf]' % thresholds[-1]] = probs[-1]
+
+        return dict_probs
 
     def predict(self, predictor_file):
         if self.do_prediction is True:
@@ -133,7 +150,7 @@ class Forecaster:
             ngb, qrf_nw, qrf_ww = pickle.load(open(predictor_file, 'rb'))
 
             res_ngb = ngb.pred_dist(self.input_df)
-            self.prob_over_limit = self.prob_overlimit(qrf_nw)
+            self.probs_over_limits = self.calc_probabilities(qrf_nw)
             self.logger.info('Performed prediction: model=%s ' % predictor_file)
 
             dps = []
@@ -148,16 +165,26 @@ class Forecaster:
             else:
                 self.flag_best = 'false'
 
+            predictor_desc = predictor_file.split(os.sep)[-1].split('.')[0].split('_')[-1]
             point = {
                 'time': self.day_to_predict,
                 'measurement': self.cfg['influxDB']['measurementForecasts'],
                 'fields': dict(PredictedValue=float(self.predicted_value),
-                               AvailableFeatures=float(self.perc_available_features),
-                               ProbOverLimit=float(self.prob_over_limit)),
+                               AvailableFeatures=float(self.perc_available_features)),
                 'tags': dict(location=self.location['code'], case=self.forecast_type, flag_best=self.flag_best,
-                             predictor=predictor_file.split(os.sep)[-1].split('.')[0].split('_')[-1])
+                             predictor=predictor_desc)
             }
             dps.append(point)
+
+            for interval in self.probs_over_limits.keys():
+                point = {
+                    'time': self.day_to_predict,
+                    'measurement': self.cfg['influxDB']['measurementForecastsProbs'],
+                    'fields': dict(Probability=float(self.probs_over_limits[interval])),
+                    'tags': dict(location=self.location['code'], case=self.forecast_type, flag_best=self.flag_best,
+                                 predictor=predictor_desc, interval=interval)
+                }
+                dps.append(point)
 
             # Write results on InfluxDB
             self.influxdb_client.write_points(dps, time_precision='s')

@@ -13,13 +13,13 @@
   },
   "forecastPeriod" : {
     "case": "current",
-    "startDate": "2021-05-05",
-    "endDate": "2021-05-12"
+    "startDate": "2021-05-08",
+    "endDate": "2021-05-14"
   },
   "predictionSettings": {
-    "operationMode": "sequence",
+    "operationMode": "parallel",
     "distributionSamples": 1000,
-    "threshold": 180.0,
+    "thresholds": [120, 180, 240],
     "startDateForMeanImputation": "2021-05-01"
   },
   "locations": [

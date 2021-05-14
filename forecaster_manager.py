@@ -31,27 +31,28 @@ def check_alert(prediction_results):
         threshold = result['location']['alarms']['thresholds'][forecast_type]
         if result['flag_prediction'] is True:
             if result['perc_available_features'] <= threshold:
-                str_err = '%s%s_%s: model %s -> available features %.1f%%, ' \
-                          'threshold %.1f%%, flag best=%s' % (str_err,
-                                                              result['location']['code'],
-                                                              result['forecast_type'],
-                                                              result['predictor'],
-                                                              result['perc_available_features'],
-                                                              threshold,
-                                                              result['flag_best'])
-                str_err = '%s\nVariables that were surrogated:' % str_err
-                for uf in result['unavailable_features']:
-                    str_err = '%s\n%s' % (str_err, uf)
-                str_err = '%s\n\n' % str_err
-            else:
-                str_info = '%s%s_%s: model %s -> predicted max(O3) = %.1f, prob[>%i] = %i%%, ' \
+                str_err = '%s%s_%s: model %s -> predicted max(O3) = %.1f, probabilities: %s, ' \
                            'available features %.1f%%, threshold %.1f%%, flag best=%s\n\n' % (str_info,
                                                                                               result['location']['code'],
                                                                                               result['forecast_type'],
                                                                                               result['predictor'],
                                                                                               result['predicted_value'],
-                                                                                              cfg['predictionSettings']['threshold'],
-                                                                                              result['prob_over_limit'],
+                                                                                              result['probs_over_limits'],
+                                                                                              result['perc_available_features'],
+                                                                                              threshold,
+                                                                                              result['flag_best'])
+                str_err = '%s\nVariables that were surrogated:' % str_err
+                for uf in result['unavailable_features']:
+                    str_err = '%s\n%s' % (str_err, uf)
+                str_err = '%s\n\n' % str_err
+            else:
+                str_info = '%s%s_%s: model %s -> predicted max(O3) = %.1f, probabilities: %s, ' \
+                           'available features %.1f%%, threshold %.1f%%, flag best=%s\n\n' % (str_info,
+                                                                                              result['location']['code'],
+                                                                                              result['forecast_type'],
+                                                                                              result['predictor'],
+                                                                                              result['predicted_value'],
+                                                                                              result['probs_over_limits'],
                                                                                               result['perc_available_features'],
                                                                                               threshold,
                                                                                               result['flag_best'])
@@ -95,11 +96,11 @@ def predictor_process(inputs_gatherer, input_cfg_file, forecast_type, location, 
                 'predictor': model_name,
                 'predicted_value': pv,
                 'perc_available_features': paf,
-                'prob_over_limit': pol,
+                'probs_over_limits': pol,
                 'unavailable_features': uvf,
                 'unsurrogable_features': usf,
                 'flag_prediction': fp,
-                'flag_best': fp
+                'flag_best': fb
             }
         )
 
@@ -117,7 +118,7 @@ def perform_single_forecast(inputs_gatherer, input_cfg_file, forecast_type, loca
 
     return forecaster.day_to_predict, forecaster.predicted_value, forecaster.perc_available_features, \
            forecaster.unavailable_features, forecaster.unsurrogable_features, forecaster.do_prediction, \
-           forecaster.prob_over_limit, forecaster.flag_best
+           forecaster.probs_over_limits, forecaster.flag_best
 
 def perform_forecast(day_case, forecast_type):
 
@@ -168,7 +169,7 @@ def perform_forecast(day_case, forecast_type):
                                         'predictor': model_name,
                                         'predicted_value': pv,
                                         'perc_available_features': paf,
-                                        'prob_over_limit': pol,
+                                        'probs_over_limits': pol,
                                         'unavailable_features': uvf,
                                         'unsurrogable_features': usf,
                                         'flag_prediction': fp,
@@ -196,20 +197,20 @@ def perform_forecast(day_case, forecast_type):
         dp_desc = datetime.fromtimestamp(result['day_to_predict']).strftime('%Y-%m-%d')
         if result['flag_prediction'] is True:
             logger.info('[%s;%s;%s;%s] -> predicted max(O3) = %.1f, '
-                        'prob[>%i] = %i%% available features = %.0f%%' % (dp_desc,
-                                                                          result['location']['code'],
-                                                                          result['forecast_type'],
-                                                                          result['predictor'],
-                                                                          result['predicted_value'],
-                                                                          cfg['predictionSettings']['threshold'],
-                                                                          result['prob_over_limit'],
-                                                                          result['perc_available_features']))
+                        'probabilities: %s available features = %.0f%%' % (dp_desc,
+                                                                           result['location']['code'],
+                                                                           result['forecast_type'],
+                                                                           result['predictor'],
+                                                                           result['predicted_value'],
+                                                                           result['probs_over_limits'],
+                                                                           result['perc_available_features']))
         else:
             logger.info('[%s;%s;%s;%s] -> prediction not performed' % (dp_desc, result['location']['code'],
                                                                        result['forecast_type'], result['predictor']))
 
     # Check if an alert has to be sent
-    check_alert(prediction_results=results)
+    if cfg['forecastPeriod']['case'] == 'current':
+        check_alert(prediction_results=results)
 
     # todo check this part is still needed, probably yes but calc_kpis() has to be changed strongly
     # if cfg['dayToForecast'] == 'current':
