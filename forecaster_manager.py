@@ -18,12 +18,55 @@ from classes.forecaster import Forecaster
 from classes.alerts import SlackClient, EmailClient
 from classes.inputs_gatherer import InputsGatherer
 
+from classes.data_manager import DataManager
+
 queue_results = Queue()
 
 #  --------------------------------------------------------------------------- #
 # Functions
 # -----------------------------------------------------------------------------#
-def check_alert(prediction_results):
+def upload_best_results(prediction_results):
+    logger.info('Send best results to remote FTP server')
+    # Create first row (header)
+    str_results = 'DAY,STATION,CASE,PRED,PERC_AV_FEAT'
+    for k in prediction_results[0]['probs_over_limits'].keys():
+        str_results = '%s,PROB%s' % (str_results, k)
+    str_results = '%s\n' % str_results
+
+    # Create first row (measure units)
+    str_results = '%s,,,[ug/m^3],[%%]' % str_results
+    for k in prediction_results[0]['probs_over_limits'].keys():
+        str_results = '%s,[%%]' % str_results
+    str_results = '%s\n' % str_results
+
+    # Create data rows
+    dt = datetime.fromtimestamp(prediction_results[0]['day_to_predict'])
+    for result in prediction_results:
+        if result['flag_best'] == 'true':
+            # str_results = 'DAY,STATION,CASE,PRED,PERC_AV_FEAT,PROB[0:120],PROB[0:120],PROB[120:180],PROB[120:180],PROB[240:INF]'
+            str_results = '%s%s,%s,%s,%.1f,%.0f' % (str_results, dt.strftime('%Y-%m-%d'), result['location']['code'],
+                                                    forecast_type, result['predicted_value'],
+                                                    result['perc_available_features'])
+            for k in result['probs_over_limits'].keys():
+                str_results = '%s,%.0f' % (str_results, result['probs_over_limits'][k])
+            str_results = '%s\n' % str_results
+
+    # Results file creation
+    results_file = '%s_%s.csv' % (dt.strftime('%Y-%m-%d'), forecast_type)
+    fw = open('%s%s%s' % (cfg['ftp']['localFolders']['tmp'], os.sep, results_file), 'w')
+    fw.write(str_results)
+    fw.close()
+
+    # Results file uploading
+    dm = DataManager(influx_client, cfg, logger)
+    dm.open_ftp_connection()
+    dm.upload_file(results_file)
+    dm.close_ftp_connection()
+
+    # Results file deletion
+    os.unlink('%s%s%s' % (cfg['ftp']['localFolders']['tmp'], os.sep, results_file))
+
+def notify_summary(prediction_results):
     logger.info('Alert checking')
     str_err = ''
     str_info = ''
@@ -208,9 +251,14 @@ def perform_forecast(day_case, forecast_type):
             logger.info('[%s;%s;%s;%s] -> prediction not performed' % (dp_desc, result['location']['code'],
                                                                        result['forecast_type'], result['predictor']))
 
-    # Check if an alert has to be sent
+    # Check if the result summary has to be notified
     if cfg['forecastPeriod']['case'] == 'current':
-        check_alert(prediction_results=results)
+        notify_summary(prediction_results=results)
+
+    # Check if the result summary has to be notified
+    if cfg['ftp']['sendResults'] is True:
+        upload_best_results(prediction_results=results)
+
 
     # todo check this part is still needed, probably yes but calc_kpis() has to be changed strongly
     # if cfg['dayToForecast'] == 'current':

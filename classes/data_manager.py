@@ -61,6 +61,21 @@ class DataManager:
         # close the FTP connection
         self.ftp.close()
 
+    def upload_file(self, file_to_send):
+        curr_wd = os.getcwd()
+        os.chdir('%s%s%s' % (os.getcwd(), os.sep, self.cfg['ftp']['localFolders']['tmp']))
+        try:
+            self.ftp.cwd(self.cfg['ftp']['remoteFolders']['results'])
+            with open(file_to_send, 'rb') as f:
+                self.ftp.storbinary('STOR %s' % file_to_send, f)
+            os.chdir(curr_wd)
+            return True
+
+        except Exception as e:
+            self.logger.error('Exception: %s' % str(e))
+            os.chdir(curr_wd)
+            return False
+
     def download_remote_files(self):
 
         if os.path.isdir(self.cfg['ftp']['localFolders']['tmp']) is False:
