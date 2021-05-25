@@ -159,7 +159,11 @@ class InputsGatherer:
                     else:
                         self.do_daily_query(signal, measurement)
                 else:
-                    self.do_hourly_query(signal, measurement)
+                    # specific period query
+                    if 'h__' in signal:
+                        self.do_period_query(signal, measurement, 'measure')
+                    else:
+                        self.do_hourly_query(signal, measurement)
 
     def do_forecast_period_query(self, signal_data, measurement):
         (location, signal_code, chunk, func) = signal_data.split('__')
@@ -307,6 +311,41 @@ class InputsGatherer:
                 'signal=\'%s\' AND time>=\'%s\' AND time<=\'%s\'' % (measurement, location, signal_code,
                                                                      '%s:00:00Z' % dt.strftime('%Y-%m-%dT%H'),
                                                                      '%s:59:59Z' % dt.strftime('%Y-%m-%dT%H'))
+        self.logger.info('Performing query: %s' % query)
+        res = self.influxdb_client.query(query, epoch='s')
+
+        try:
+            self.input_data[signal_data] = res.raw['series'][0]['values'][0][1]
+        except Exception as e:
+            self.logger.error('Forecast not available')
+            self.logger.error('No data from query %s' % query)
+            self.input_data[signal_data] = np.nan
+
+    def do_period_query(self, signal_data, measurement, case):
+        (location, signal_code, period, func) = signal_data.split('__')
+
+        dt = self.set_forecast_day()
+
+        if self.forecast_type == 'MOR':
+            # Data starting is assigned to 04 UTC
+            dt = dt.replace(hour=4)
+        elif self.forecast_type == 'EVE':
+            # Data starting is assigned to 16 UTC
+            dt = dt.replace(hour=16)
+
+        hours_num = int(period[0:-1])
+
+        if case == 'measure':
+            dt_start = dt - timedelta(hours=hours_num)
+            dt_end = dt
+        else:
+            dt_start = dt
+            dt_end = dt + timedelta(hours=hours_num)
+
+        query = 'SELECT %s(value) FROM %s WHERE location=\'%s\' AND ' \
+                'signal=\'%s\' AND time>=\'%s\' AND time<=\'%s\'' % (func, measurement, location, signal_code,
+                                                                     '%s:00:00Z' % dt_start.strftime('%Y-%m-%dT%H'),
+                                                                     '%s:59:59Z' % dt_end.strftime('%Y-%m-%dT%H'))
         self.logger.info('Performing query: %s' % query)
         res = self.influxdb_client.query(query, epoch='s')
 
