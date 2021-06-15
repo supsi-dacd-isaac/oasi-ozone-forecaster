@@ -1,0 +1,55 @@
+{
+  "connectionsFile": "conf/conns_https.json",
+  "globalSignals": ["RHW"],
+  "local": {
+    "timeZone": "Europe/Zurich",
+    "timeFormatMeasures": "%d.%m.%Y %H:%M",
+    "timeFormatForecasts": "%Y%m%d %H:%M",
+    "timeFormatGlobal": "%Y%m%d%H%M%S",
+    "waitAfterRequest": 1
+  },
+  "folders":  {
+    "models": "models"
+  },
+  "forecastPeriod" : {
+    "case": "current",
+    "startDate": "2021-05-08",
+    "endDate": "2021-05-14"
+  },
+  "predictionSettings": {
+    "operationMode": "parallel",
+    "distributionSamples": 1000,
+    "thresholds": [120, 180, 240],
+    "startDateForMeanImputation": "2021-05-01"
+  },
+  "locations": [
+    {
+      "code": "BIO",
+      "name": "Bioggio",
+      "bestLabels": {
+          "MOR": "20210506-100f",
+          "EVE": "20210506-100f"
+        },
+      "alarms":{
+        "thresholds": {
+          "MOR": 95.0,
+          "EVE": 95.0
+        }
+      }
+    },
+    {
+      "code": "CHI",
+      "name": "Chiasso",
+      "bestLabels": {
+        "MOR": "20210506-100f",
+        "EVE": "20210506-100f"
+      },
+      "alarms":{
+        "thresholds": {
+          "MOR": 95.0,
+          "EVE": 95.0
+        }
+      }
+    }
+  ]
+}

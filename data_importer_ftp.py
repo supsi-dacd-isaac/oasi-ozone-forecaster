@@ -71,7 +71,7 @@ if __name__ == "__main__":
     try:
         influx_client = InfluxDBClient(host=cfg['influxDB']['host'], port=cfg['influxDB']['port'],
                                        password=cfg['influxDB']['password'], username=cfg['influxDB']['user'],
-                                       database=cfg['influxDB']['database'])
+                                       database=cfg['influxDB']['database'], ssl=cfg['influxDB']['ssl'])
     except Exception as e:
         logger.error('EXCEPTION: %s' % str(e))
         sys.exit(3)

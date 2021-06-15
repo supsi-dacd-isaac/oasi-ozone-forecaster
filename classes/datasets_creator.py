@@ -33,7 +33,8 @@ class DatasetsCreator:
                                             port=self.cfg['influxDB']['port'],
                                             password=self.cfg['influxDB']['password'],
                                             username=self.cfg['influxDB']['user'],
-                                            database=self.cfg['influxDB']['database'])
+                                            database=self.cfg['influxDB']['database'],
+                                            ssl=self.cfg['influxDB']['ssl'])
         self.logger.info('Connection successful')
 
     def create(self, start_day, end_day):
