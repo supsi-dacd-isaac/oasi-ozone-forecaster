@@ -105,5 +105,7 @@ OZONE_INDEXES_LIMITS = ['1: [0-60] μg/m³',   '2: [61-120] μg/m³',   '3: [121
 SIGNAL_EXCEPTIONS = ['DayWeek', 'IsWeekend', 'IsHolyday', 'RHW__d0', 'RHW__d1', 'RHW__d2', 'RHW__d3', 'RHW__d4',
                      'RHW__d5']
 
+ARTIFICIAL_FEATURES = ['KLO', 'Totale', 'MAX', 'transf', '24h', '48h', '72h', 'mean_mor', 'mean_eve', 'TOT_PREC__sum',
+                       'NOx__12h_mean', 'T_2M__12h_mean']
 
 HOLYDAYS = ['06-29', '08-01', '08-15']

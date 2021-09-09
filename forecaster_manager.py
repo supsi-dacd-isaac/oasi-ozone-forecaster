@@ -17,6 +17,7 @@ from multiprocessing import Queue, Process
 from classes.forecaster import Forecaster
 from classes.alerts import SlackClient, EmailClient
 from classes.inputs_gatherer import InputsGatherer
+from classes.artificial_features import ArtificialFeatures
 
 from classes.data_manager import DataManager
 
@@ -42,7 +43,8 @@ def upload_best_results(prediction_results):
     # Create data rows
     dt = datetime.fromtimestamp(prediction_results[0]['day_to_predict'])
     for result in prediction_results:
-        if result['flag_best'] == 'true':
+        # todo the following row is hard-coded and should be changed or made configurable
+        if result['flag_best'] == 'true' and result['location']['code'] != 'TI':
             # str_results = 'DAY,STATION,CASE,PRED,PERC_AV_FEAT,PROB[0:120],PROB[0:120],PROB[120:180],PROB[120:180],PROB[240:INF]'
             str_results = '%s%s,%s,%s,%.1f,%.0f' % (str_results, dt.strftime('%Y-%m-%d'), result['location']['code'],
                                                     forecast_type, result['predicted_value'],
@@ -170,8 +172,11 @@ def perform_forecast(day_case, forecast_type):
 
     logger.info('Perform the prediction for day \"%s\"' % cfg['dayToForecast'] )
 
+    # Create the artificial features instance
+    artificial_features = ArtificialFeatures(influxdb_client=influx_client, forecast_type=forecast_type, cfg=cfg, logger=logger)
+
     # Create the inputs gatherer instance
-    inputs_gatherer = InputsGatherer(influxdb_client=influx_client, forecast_type=forecast_type, cfg=cfg, logger=logger)
+    inputs_gatherer = InputsGatherer(influxdb_client=influx_client, forecast_type=forecast_type, cfg=cfg, logger=logger, artificial_features=artificial_features)
     # Calculate the day_case-1d O3 values and insert them in the DB
     inputs_gatherer.calc_yesterday_o3_daily_values()
 

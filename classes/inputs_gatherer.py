@@ -17,7 +17,7 @@ class InputsGatherer:
     Class handling the gathering of the inputs needed by a collection of predictors
     """
 
-    def __init__(self, influxdb_client, forecast_type, cfg, logger):
+    def __init__(self, influxdb_client, forecast_type, cfg, logger, artificial_features):
         """
         Constructor
         :param influxdb_client: InfluxDB client
@@ -37,6 +37,7 @@ class InputsGatherer:
         self.input_data = None
         self.day_to_predict = None
         self.cfg_signals = None
+        self.artificial_features = artificial_features
 
     def build_global_input_dataset(self):
         """
@@ -71,6 +72,7 @@ class InputsGatherer:
         # get the values in the DB
         i = 1
         for signal in self.cfg_signals['signals']:
+            self.logger.info('Try to add input n. %02d/%2d, %s' % (i, len(self.cfg_signals['signals']), signal))
             self.add_input_value(signal=signal)
             self.logger.info('Added input n. %02d/%2d' % (i, len(self.cfg_signals['signals'])))
             i += 1
@@ -128,8 +130,9 @@ class InputsGatherer:
         :return query
         :rtype string
         """
+
         # Signals exception (e.g. isWeekend, etc.)
-        if signal in constants.SIGNAL_EXCEPTIONS:
+        if signal in constants.SIGNAL_EXCEPTIONS or any([s in signal for s in constants.ARTIFICIAL_FEATURES]):
             self.handle_exception_signal(signal)
         else:
             tmp = signal.split('__')
@@ -201,7 +204,7 @@ class InputsGatherer:
             (location, signal_code, case, step) = signal_data.split('__')
         else:
             (location, signal_code, step) = signal_data.split('__')
-        # wirie step parameter with the proper format
+        # write step parameter with the proper format
         step = 'step%02d' % int(step[4:])
 
         dt = self.set_forecast_day()
@@ -407,6 +410,10 @@ class InputsGatherer:
                 self.logger.error('Forecast not available')
                 self.logger.error('No data from query %s' % query)
                 self.input_data[signal_data] = np.nan
+
+        elif any([s in signal_data for s in constants.ARTIFICIAL_FEATURES]):
+            res = self.artificial_features.analyze_signal(signal_data)
+            self.input_data[signal_data] = res
 
         else:
             # if EVE case the day to predict is the next one
