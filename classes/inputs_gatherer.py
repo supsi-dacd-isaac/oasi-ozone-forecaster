@@ -4,7 +4,7 @@ import glob
 import numpy as np
 import pytz
 import os
-
+import pandas as pd
 
 from influxdb import InfluxDBClient
 from datetime import date, datetime, timedelta
@@ -17,7 +17,7 @@ class InputsGatherer:
     Class handling the gathering of the inputs needed by a collection of predictors
     """
 
-    def __init__(self, influxdb_client, forecast_type, cfg, logger):
+    def __init__(self, influxdb_client, forecast_type, cfg, logger, artificial_features):
         """
         Constructor
         :param influxdb_client: InfluxDB client
@@ -37,6 +37,7 @@ class InputsGatherer:
         self.input_data = None
         self.day_to_predict = None
         self.cfg_signals = None
+        self.artificial_features = artificial_features
 
     def build_global_input_dataset(self):
         """
@@ -78,6 +79,70 @@ class InputsGatherer:
         # Check the data availability
         self.check_inputs_availability()
 
+    def build_dataset(self, signals_file):
+        """
+        Build the training dataset given a signal json file in folder "conf/dataset"
+        """
+        self.input_data = dict()
+        self.cfg_signals = self.cfg_signals = dict(signals=[])
+        self.forecast_type = self.cfg['datasetSettings']['type']
+        file_name = signals_file.split('/')[-1].split('.')[0]
+
+        # Get the signals from the json provided in the cfg file
+        self.cfg_signals = json.loads(open(signals_file).read())
+
+        # destroy repetitions but preserve the order
+        self.cfg_signals['signals'] = list(dict.fromkeys(self.cfg_signals['signals']))
+
+        # initialize the Pandas dataframe that will contain the final dataset
+        dataset = pd.DataFrame(columns=['date'] + self.cfg_signals['signals'])
+
+        # Iterate over the years
+        for year in self.cfg['datasetSettings']['years']:
+            start_day = str(year) + '-' + self.cfg['datasetSettings']['startDay']
+            end_day = str(year) + '-' + self.cfg['datasetSettings']['endDay']
+
+            curr_day = start_day
+
+            end_dt = datetime.strptime(end_day, '%Y-%m-%d')
+            while True:
+
+                self.cfg['dayToForecast'] = curr_day
+
+                # Iterate over the signals
+                i = 1
+                for signal in self.cfg_signals['signals']:
+                    self.add_input_value(signal=signal)
+                    self.logger.info('Added input n. %02d/%2d' % (i, len(self.cfg_signals['signals'])))
+                    i += 1
+
+                lcl_data = dict({'date': curr_day}, **self.input_data)
+                lcl_df = pd.DataFrame([lcl_data], columns=['date'] + self.cfg_signals['signals'])
+
+                dataset = dataset.append(lcl_df)
+
+                # add a day
+                curr_dt = datetime.strptime(curr_day, '%Y-%m-%d')
+                curr_day = datetime.strftime(curr_dt + timedelta(days=1), '%Y-%m-%d')
+
+                # Last day-1d checking
+                if curr_dt.timestamp() >= end_dt.timestamp():
+                    break
+
+        if self.cfg['datasetSettings']['saveDataset']:
+            output_file = '%s%s%s_%s_%s_%s-%s%s' % (self.cfg['datasetSettings']['outputFolder'], os.sep, file_name,
+                                           self.cfg['datasetSettings']['startDay'],
+                                           self.cfg['datasetSettings']['endDay'],
+                                           self.cfg['datasetSettings']['years'][0],
+                                           self.cfg['datasetSettings']['years'][-1], '.csv')
+            dataset.to_csv(output_file, header=True, index=False)
+        return dataset
+
+    def read_dataset(self, csv_file):
+
+        dataset = pd.read_csv(csv_file, sep=',')
+        return dataset
+
     def check_inputs_availability(self):
         dps = []
 
@@ -116,7 +181,7 @@ class InputsGatherer:
         try:
             return float(res.raw['series'][0]['values'][0][1])
         except Exception as e:
-            self.logger.error('Impossible to calculate the eman of the past values')
+            self.logger.error('Impossible to calculate the mean of the past values')
             return np.nan
 
     def add_input_value(self, signal):
@@ -128,8 +193,9 @@ class InputsGatherer:
         :return query
         :rtype string
         """
+
         # Signals exception (e.g. isWeekend, etc.)
-        if signal in constants.SIGNAL_EXCEPTIONS:
+        if signal in constants.SIGNAL_EXCEPTIONS or any([s in signal for s in constants.ARTIFICIAL_FEATURES]):
             self.handle_exception_signal(signal)
         else:
             tmp = signal.split('__')
@@ -201,7 +267,7 @@ class InputsGatherer:
             (location, signal_code, case, step) = signal_data.split('__')
         else:
             (location, signal_code, step) = signal_data.split('__')
-        # wirie step parameter with the proper format
+        # write step parameter with the proper format
         step = 'step%02d' % int(step[4:])
 
         dt = self.set_forecast_day()
@@ -407,6 +473,10 @@ class InputsGatherer:
                 self.logger.error('Forecast not available')
                 self.logger.error('No data from query %s' % query)
                 self.input_data[signal_data] = np.nan
+
+        elif any([s in signal_data for s in constants.ARTIFICIAL_FEATURES]):
+            res = self.artificial_features.analyze_signal(signal_data)
+            self.input_data[signal_data] = res
 
         else:
             # if EVE case the day to predict is the next one

@@ -51,5 +51,15 @@
         }
       }
     }
-  ]
+  ],
+  "datasetSettings": {
+    "saveDataset": true,
+    "type": "MOR",
+    "signalsFiles": ["conf/signals/dataset_CHI_MOR.json", "conf/signals/dataset_CHI_EVE.json", "conf/signals/dataset_BIO_MOR.json"],
+    "csvFiles": ["conf/csv/CHI_MOR.csv", "conf/csv/BIO_MOR.csv"],
+    "outputFolder": "output",
+    "startDay": "06-10",
+    "endDay": "06-15",
+    "years": [2015, 2018, 2019, 2021]
+  }
 }
