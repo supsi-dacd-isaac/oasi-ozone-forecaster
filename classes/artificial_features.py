@@ -48,11 +48,6 @@ class ArtificialFeatures:
                 measurement = self.cfg['influxDB']['measurementGlobal']
                 val = self.do_IFEC_query(signal, measurement)
 
-            if 'Test_Dario' in signal:
-                measurement = self.cfg['influxDB']['measurementGlobal']
-                val = self.do_IFEC_query_tmp(signal, measurement)
-
-
         else:
             tmp = signal.split('__')
 
@@ -155,127 +150,6 @@ class ArtificialFeatures:
             emission = 98340 * gamma
 
             return VOC + emission
-
-        else:
-            self.logger.error('Something wrong in IFEc features calculation')
-            return np.nan
-
-        ### For testing
-
-        # T_s = 303
-        # R = 8.314
-        # alpha = 0.0027
-        # C_L1 = 1.066
-        # C_T1 = 95000
-        # C_T2 = 230000
-        # T_m = 314
-        # C_T3 = 0.961
-        #
-        # for d in range(1, 2):
-        #     dt = self.set_forecast_day()
-        #     dt = dt.replace(year=int(2018), month=int(6), day=int(d))
-        #     dt_ = '%sT03:00:00Z' % dt.strftime('%Y-%m-%d')
-        #
-        #     Q = 23.83333333333333 * 4.6
-        #     T = 14.613194444444444 + 273.13
-        #
-        #     print(Q)
-        #     print(T)
-        #
-        #     T_ = (R*T_s*T)
-        #     # C_L = alpha * C_L1 * Q / np.sqrt(1 + alpha**2*Q**2)
-        #     C_L = alpha * C_L1 * Q / np.sqrt(1 + (alpha*alpha*Q*Q))
-        #     C_T = np.exp(C_T1 * (T - T_s) / T_) / (1 + np.exp(C_T2 * (T - T_m) / T_))
-        #     gamma2 = C_L * C_T
-        #
-        #     gamma = (alpha*C_L1*Q/np.sqrt(1+alpha*alpha*Q*Q)) * (np.exp(C_T1*(T-T_s)/(R*T_s*T))) / (1+np.exp(C_T2*(T-T_m)/(R*T_s*T)))
-        #     gamma3 = (alpha*C_L1*Q/np.sqrt(1+alpha*alpha*Q*Q)) * (np.exp(C_T1*(T-T_s)/T_)) / (1+np.exp(C_T2*(T-T_m)/T_))
-        #     emission = 98340 * gamma
-        #     print(dt_[:10] + ': ' + str(emission))
-        #     print(dt_[:10] + ': ' + str(gamma))
-        #     print(dt_[:10] + ': ' + str(gamma2))
-        #     print(dt_[:10] + ': ' + str(gamma3))
-
-
-    def do_IFEC_query_tmp(self, signal_data, measurement):
-        """Get wood emission!"""
-
-        dt = self.set_forecast_day()
-        lcl_dt = dt.strftime('%Y-%m-%d')
-        lcl_dt_plus_one_day = (dt + timedelta(days=1)).strftime('%Y-%m-%d')
-        lcl_dt_MOR = '%sT03:00:00Z' % dt.strftime('%Y-%m-%d')
-        lcl_dt_EVE = '%sT12:00:00Z' % (dt - timedelta(days=1)).strftime('%Y-%m-%d')
-        func = 'mean'
-
-        if 'NOx' in signal_data:
-            if self.forecast_type == 'MOR':
-                query_NOx = 'SELECT value FROM %s WHERE signal=\'%s\' AND time=\'%s\'' % (measurement, 'Total_NOx', lcl_dt)
-            else:
-                query_NOx = 'SELECT value FROM %s WHERE signal=\'%s\' AND time=\'%s\'' % (measurement, 'Total_NOx', lcl_dt_plus_one_day)
-
-            self.logger.info('Performing query: %s' % query_NOx)
-            NOx = self.influxdb_client.query(query_NOx, epoch='s').raw['series'][0]['values'][0][1]
-            return NOx
-
-        elif 'VOC' in signal_data:
-
-            # Load necessary constants
-            T_s = 303
-            R = 8.314
-            alpha = 0.0027
-            C_L1 = 1.066
-            C_T1 = 95000
-            C_T2 = 230000
-            T_m = 314
-            C_T3 = 0.961
-
-            # measurement_MS = self.cfg['influxDB']['measurementMeteoSuisse']
-            # # Get the 24 hours mean of forecasted irradiance and temperature
-            #
-            # if self.forecast_type == 'MOR':
-            #     steps_G = self.create_forecast_chunk_steps_string(1, 24)
-            #     steps_T = self.create_forecast_chunk_steps_string(0, 23)
-            #     query_LUG_G = 'SELECT mean("value") FROM %s WHERE location=\'%s\' AND signal=\'%s\' AND %s AND time=\'%s\'' % (measurement_MS, 'LUG', 'GLOB', steps_G, lcl_dt_MOR)
-            #     query_LUG_T = 'SELECT mean("value") FROM %s WHERE location=\'%s\' AND signal=\'%s\' AND %s AND time=\'%s\'' % (measurement_MS, 'LUG', 'T_2M', steps_T, lcl_dt_MOR)
-            # else:
-            #     steps_G = self.create_forecast_chunk_steps_string(12, 33)
-            #     steps_T = self.create_forecast_chunk_steps_string(12, 33)
-            #     query_LUG_G = 'SELECT mean("value") FROM %s WHERE location=\'%s\' AND signal=\'%s\' AND %s AND time=\'%s\'' % (measurement_MS, 'LUG', 'GLOB', steps_G, lcl_dt_EVE)
-            #     query_LUG_T = 'SELECT mean("value") FROM %s WHERE location=\'%s\' AND signal=\'%s\' AND %s AND time=\'%s\'' % (measurement_MS, 'LUG', 'T_2M', steps_T, lcl_dt_EVE)
-            # self.logger.info('Performing query: %s' % query_LUG_G)
-            # Q = self.influxdb_client.query(query_LUG_G, epoch='s').raw['series'][0]['values'][0][1]
-            # self.logger.info('Performing query: %s' % query_LUG_T)
-            # T = self.influxdb_client.query(query_LUG_T, epoch='s').raw['series'][0]['values'][0][1]
-            #
-            # # Transform into the appropriate unit of measurement
-            # Q_ = Q * 4.6
-            # T_ = T + 273.14
-
-            start_dt = '%sT01:00:00Z' % dt.strftime('%Y-%m-%d')
-            end_dt = '%sT00:59:59Z' % (dt + timedelta(days=1)).strftime('%Y-%m-%d')
-
-            # measurement = self.cfg['influxDB']['measurementOASI']
-            measurement = self.cfg['influxDB']['measurementMeteoSuisse']
-
-            query_T = 'SELECT mean("value") FROM %s WHERE location=\'%s\' AND signal=\'%s\' AND time>=\'%s\' AND ' \
-                    'time<=\'%s\'' % (measurement, 'MS-LUG', 'T', start_dt, end_dt)
-
-            query_Gl = 'SELECT mean("value") FROM %s WHERE location=\'%s\' AND signal=\'%s\' AND time>=\'%s\' AND ' \
-                    'time<=\'%s\'' % (measurement, 'MS-LUG', 'Gl', start_dt, end_dt)
-
-            self.logger.info('Performing query: %s' % query_T)
-            val_T = self.influxdb_client.query(query_T, epoch='s').raw['series'][0]['values'][0][1]
-            self.logger.info('Performing query: %s' % query_Gl)
-            val_Gl = self.influxdb_client.query(query_Gl, epoch='s').raw['series'][0]['values'][0][1]
-
-            Q_ = val_Gl * 4.6
-            T_ = val_T + 273.14
-
-            # Calculate woods emission
-            gamma = (alpha*C_L1*Q_/np.sqrt(1+alpha*alpha*Q_*Q_)) * (np.exp(C_T1*(T_-T_s)/(R*T_s*T_))) / (1+np.exp(C_T2*(T_-T_m)/(R*T_s*T_)))
-            emission = 98340 * gamma
-
-            return emission
 
         else:
             self.logger.error('Something wrong in IFEc features calculation')
@@ -563,37 +437,3 @@ class ArtificialFeatures:
 
         str_steps = '%s)' % str_steps[:-4]
         return str_steps
-
-
-
-##### Dario tests
-
-# import logging
-# import json
-#
-# cfg = json.loads(open('../conf/conns.json').read())
-#
-# logger = logging.getLogger()
-# logging.basicConfig(format='%(asctime)-15s::%(levelname)s::%(funcName)s::%(message)s', level=logging.INFO,
-#                     filename='dario.log')
-#
-# influx_client = InfluxDBClient(host=cfg['influxDB']['host'], port=cfg['influxDB']['port'],
-#                                password=cfg['influxDB']['password'], username=cfg['influxDB']['user'],
-#                                database=cfg['influxDB']['database'], ssl=True)
-#
-# A = ArtificialFeatures(influx_client, 'MOR', cfg, logger)
-# print(A.analyze_signal('CHI__NOx__12h_mean'))
-# print(A.analyze_signal('MS-LUG__CN__48h__mean'))
-# print(A.analyze_signal('CHI__P__24h__mean'))
-# print(A.analyze_signal('NOx_Totale'))
-# print(A.analyze_signal('VOC_Totale'))
-# print(A.analyze_signal('KLO-LUG'))
-# print(A.analyze_signal('P_BIO__T_2M__MAX'))
-# print(A.analyze_signal('TICIA__TD_2M__transf'))
-# print(A.analyze_signal('TICIA__GLOB__mean_mor'))
-# print(A.analyze_signal('TICIA__GLOB__mean_eve'))
-# print(A.analyze_signal('TICIA__CLCT__mean_mor'))
-# print(A.analyze_signal('TICIA__CLCT__mean_eve'))
-# print(A.analyze_signal('P_BIO__TOT_PREC__sum'))
-# print(A.analyze_signal('TICIA__T_2M__12h_mean'))
-# print(A.analyze_signal('TICIA__T_2M__12h_mean_squared'))

@@ -50,6 +50,20 @@
           "EVE": 95.0
         }
       }
+    },
+    {
+      "code": "TI",
+      "name": "Ticino",
+      "bestLabels": {
+        "MOR": "20210901-100f",
+        "EVE": "20210901-100f"
+      },
+      "alarms":{
+        "thresholds": {
+          "MOR": 95.0,
+          "EVE": 95.0
+        }
+      }
     }
   ],
   "datasetSettings": {

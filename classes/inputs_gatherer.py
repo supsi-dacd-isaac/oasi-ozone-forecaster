@@ -72,6 +72,7 @@ class InputsGatherer:
         # get the values in the DB
         i = 1
         for signal in self.cfg_signals['signals']:
+            self.logger.info('Try to add input n. %02d/%2d, %s' % (i, len(self.cfg_signals['signals']), signal))
             self.add_input_value(signal=signal)
             self.logger.info('Added input n. %02d/%2d' % (i, len(self.cfg_signals['signals'])))
             i += 1
