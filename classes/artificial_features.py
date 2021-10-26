@@ -1,14 +1,15 @@
 # import section
+from datetime import datetime, timedelta
+
 import numpy as np
 import pytz
-
 from influxdb import InfluxDBClient
-from datetime import date, datetime, timedelta
 
 
 class ArtificialFeatures:
     """
-    Class handling the forecasting of a couple location_case (e.g. BIO_MOR)
+    Class handling the forecasting of features calculated from the other measurements or forecasts (e.g. VOC,
+    Kloten-Luano pressure gradient, ...)
     """
 
     def __init__(self, influxdb_client, forecast_type, cfg, logger):
@@ -35,44 +36,141 @@ class ArtificialFeatures:
         self.cfg_signals = None
         self.input_df = None
 
+    def get_query_value_global(self, signal):
+        """
+        Perform a query on signals independent from the location where they are measured. This method is used for
+        calculating VOC and NOx variables in method do_IFEC_query
+        """
+
+        measurement = self.cfg["influxDB"]["measurementGlobal"]
+        dt = self.set_forecast_day()
+        lcl_dt = dt.strftime('%Y-%m-%d')
+        lcl_dt_plus_one_day = (dt + timedelta(days=1)).strftime('%Y-%m-%d')
+
+        if self.forecast_type == 'MOR':
+            query = 'SELECT value FROM %s WHERE signal=\'%s\' AND time=\'%s\'' % (measurement, signal, lcl_dt)
+        else:
+            query = 'SELECT value FROM %s WHERE signal=\'%s\' AND time=\'%s\'' % (
+                measurement, signal, lcl_dt_plus_one_day)
+
+        self.logger.info('Performing query: %s' % query)
+        value = self.influxdb_client.query(query, epoch='s').raw['series'][0]['values'][0][1]
+
+        return value
+
+    def get_query_value_forecast(self, measurement, signal_data, steps, func):
+        """
+        Perform a query on forecasted signals using a certain amount of steps forward in time and a data aggregating
+        function, such as mean, max, min or sum.
+        This method is used in most methods except KLO-LUG and past measurements features
+        """
+
+        (location, signal_code, aggregator) = signal_data.split('__')
+        dt = self.set_forecast_day()
+
+        if self.forecast_type == 'MOR':
+            lcl_dt = '%sT03:00:00Z' % dt.strftime('%Y-%m-%d')
+        else:
+            lcl_dt = '%sT12:00:00Z' % dt.strftime('%Y-%m-%d')
+
+        query = 'SELECT value FROM %s WHERE location=\'%s\' AND signal=\'%s\' AND %s AND time=\'%s\'' \
+                % (measurement, location, signal_code, steps, lcl_dt)
+        self.logger.info('Performing query: %s' % query)
+        return self.calc_data(query=query, signal_data=signal_data, func=func)
+
+    def get_query_value_measure(self, measurement, signal_data, start_dt, end_dt, func):
+
+        (location, signal_code, aggregator) = signal_data.split('__', 2)
+
+        query = 'SELECT value FROM %s WHERE location=\'%s\' AND signal=\'%s\' AND time>=\'%s\' AND ' \
+                'time<=\'%s\'' % (measurement, location, signal_code, start_dt, end_dt)
+        self.logger.info('Performing query: %s' % query)
+
+        return self.calc_data(query=query, signal_data=signal_data, func=func)
+
+    def steps_type_forecast(self, mor_start, mor_end, eve_start, eve_end):
+        """
+        Create a string for the forward steps in time of a forecast signal query
+        """
+
+        if self.forecast_type == 'MOR':
+            steps = self.create_forecast_chunk_steps_string(mor_start, mor_end)
+        else:
+            steps = self.create_forecast_chunk_steps_string(eve_start, eve_end)
+
+        return steps
+
+    def measurements_start_end(self, days):
+        """
+        Create start and end times for the measurement signal queries. To be used in the do_multiday_query method
+        """
+
+        dt = self.set_forecast_day()
+
+        if self.forecast_type == 'MOR':
+            start_dt = '%sT05:00:00Z' % (dt - timedelta(days=days)).strftime('%Y-%m-%d')
+            end_dt = '%sT04:00:00Z' % dt.strftime('%Y-%m-%d')
+        else:
+            start_dt = '%sT17:00:00Z' % (dt - timedelta(days=days)).strftime('%Y-%m-%d')
+            end_dt = '%sT16:00:00Z' % dt.strftime('%Y-%m-%d')
+
+        return [start_dt, end_dt]
+
     def analyze_signal(self, signal):
+        """
+        Parse the signal codes and send it to the appropriate method for value calculation
+        """
 
         val = np.nan
 
         if len(signal.split('__')) == 1:
             if 'KLO' in signal:
-                measurement = self.cfg['influxDB']['measurementMeteoSuisse']
+                # KLO-LUG, KLO-LUG_favonio
+                measurement = self.cfg['influxDB']['measurementInputsForecasts']
                 val = self.do_KLO_query(signal, measurement)
 
-            if 'Totale' in signal:
-                measurement = self.cfg['influxDB']['measurementGlobal']
-                val = self.do_IFEC_query(signal, measurement)
+            if signal == 'NOx_Totale':
+                val = self.get_query_value_global('Total_NOx')
+
+            if signal == 'VOC_Totale':
+                measurement = self.cfg['influxDB']['measurementInputsMeasurements']
+                VOC_without_woods, VOC_woods, VOC_woods_corrected = self.do_VOC_query(measurement)
+                if self.cfg['VOC']['useCorrection'] and self.cfg['VOC']['emissionType'] == 'forecasted':
+                    val = VOC_without_woods + VOC_woods_corrected
+                else:
+                    val = VOC_without_woods + VOC_woods
 
         else:
             tmp = signal.split('__')
 
             if 'T_2M' in tmp[1] and '12h_mean' in tmp[2]:
-                measurement = self.cfg['influxDB']['measurementMeteoSuisse']
+                # E.g. P_BIO__T_2M__12h_mean, P_BIO__T_2M__12h_mean_squared
+                measurement = self.cfg['influxDB']['measurementInputsForecasts']
                 val = self.do_T_2M_query(signal, measurement)
 
             if 'MAX' in tmp[2]:
-                measurement = self.cfg['influxDB']['measurementMeteoSuisse']
+                # E.g. P_BIO__T_2M__MAX
+                measurement = self.cfg['influxDB']['measurementInputsForecasts']
                 val = self.do_MAX_query(signal, measurement)
 
             if 'transf' in tmp[2]:
-                measurement = self.cfg['influxDB']['measurementMeteoSuisse']
+                # E.g. P_BIO__TD_2M__transf
+                measurement = self.cfg['influxDB']['measurementInputsForecasts']
                 val = self.do_transf_query(signal, measurement)
 
             if 'NOx__12h' in signal or '24h' in tmp[2] or '48h' in tmp[2] or '72h' in tmp[2]:
-                measurement = self.cfg['influxDB']['measurementOASI']
+                # E.g. BIO__CN__24h__mean, BIO__CN__48h__mean, BIO__CN__72h__mean
+                measurement = self.cfg['influxDB']['measurementInputsMeasurements']
                 val = self.do_multiday_query(signal, measurement)
 
             if 'mean_mor' in tmp[2] or 'mean_eve' in tmp[2]:
-                measurement = self.cfg['influxDB']['measurementMeteoSuisse']
+                # E.g. P_BIO__GLOB__mean_mor,P_BIO__GLOB__mean_eve, P_BIO__CLCT__mean_mor, P_BIO__CLCT__mean_eve
+                measurement = self.cfg['influxDB']['measurementInputsForecasts']
                 val = self.do_mor_eve_query(signal, measurement)
 
             if 'TOT_PREC' in tmp[1]:
-                measurement = self.cfg['influxDB']['measurementMeteoSuisse']
+                # E.g. P_BIO__TOT_PREC__sum
+                measurement = self.cfg['influxDB']['measurementInputsForecasts']
                 val = self.do_tot_prec_query(signal, measurement)
 
         if val == np.nan:
@@ -80,249 +178,193 @@ class ArtificialFeatures:
 
         return val
 
-    def do_IFEC_query(self, signal_data, measurement):
-        """Total_NOx is very easy, just query the already existing value in the DB; however, for Total_VOC it is
-        necessary to query the existing value, which combine traffic (roads, highways, planes), combustion, agricolture,
-        and industry, then add the daily calculated Woods emission with the below formula.
-        Do note that the signal stored in the DB does NOT account for wood emission!"""
+    def calculate_wood_emission(self, emissionType):
+        """
+        Calculate the VOC emissions from woods, using either forecasted or measured data
+        """
 
-        dt = self.set_forecast_day()
-        lcl_dt = dt.strftime('%Y-%m-%d')
-        lcl_dt_plus_one_day = (dt + timedelta(days=1)).strftime('%Y-%m-%d')
-        lcl_dt_MOR = '%sT03:00:00Z' % dt.strftime('%Y-%m-%d')
-        lcl_dt_EVE = '%sT12:00:00Z' % dt.strftime('%Y-%m-%d')
+        # Load necessary constants
+        T_s = self.cfg['VOC']['T_s']
+        R = self.cfg['VOC']['R']
+        alpha = self.cfg['VOC']['alpha']
+        C_L1 = self.cfg['VOC']['C_L1']
+        C_T1 = self.cfg['VOC']['C_T1']
+        C_T2 = self.cfg['VOC']['C_T2']
+        T_m = self.cfg['VOC']['T_m']
+        # C_T3 = self.cfg['VOC']['C_T3']
+
+        if emissionType == 'forecasted':
+            [Q, T] = self.get_Q_T_forecasted()
+        elif emissionType == 'measured':
+            [Q, T] = self.get_Q_T_measured()
+        else:
+            self.logger.error('Unrecognized VOC woods type of data to use')
+
+        # Calculate woods emission
+        gamma = (alpha * C_L1 * Q / np.sqrt(1 + alpha * alpha * Q * Q)) * (
+            np.exp(C_T1 * (T - T_s) / (R * T_s * T))) / (1 + np.exp(C_T2 * (T - T_m) / (R * T_s * T)))
+        emission = self.cfg['VOC']['KG_per_gamma'] * gamma
+        return emission
+
+    def get_Q_T_forecasted(self):
+
+        measurement_MS = self.cfg['influxDB']['measurementInputsForecasts']
         func = 'mean'
 
-        if 'NOx' in signal_data:
-            if self.forecast_type == 'MOR':
-                query_NOx = 'SELECT value FROM %s WHERE signal=\'%s\' AND time=\'%s\'' % (measurement, 'Total_NOx', lcl_dt)
-            else:
-                query_NOx = 'SELECT value FROM %s WHERE signal=\'%s\' AND time=\'%s\'' % (measurement, 'Total_NOx', lcl_dt_plus_one_day)
-
-            self.logger.info('Performing query: %s' % query_NOx)
-            NOx = self.influxdb_client.query(query_NOx, epoch='s').raw['series'][0]['values'][0][1]
-            return NOx
-
-        elif 'VOC' in signal_data:
-
-            # Load necessary constants
-            T_s = 303
-            R = 8.314
-            alpha = 0.0027
-            C_L1 = 1.066
-            C_T1 = 95000
-            C_T2 = 230000
-            T_m = 314
-            C_T3 = 0.961
-
-            # Get value without woods emission
-            if self.forecast_type == 'MOR':
-                query_VOC = 'SELECT value FROM %s WHERE signal=\'%s\' AND time=\'%s\'' % (measurement, 'Total_VOC', lcl_dt)
-            else:
-                query_VOC = 'SELECT value FROM %s WHERE signal=\'%s\' AND time=\'%s\'' % (measurement, 'Total_VOC', lcl_dt_plus_one_day)
-
-            VOC = self.influxdb_client.query(query_VOC, epoch='s').raw['series'][0]['values'][0][1]
-
-            measurement_MS = self.cfg['influxDB']['measurementMeteoSuisse']
-            # Get the 24 hours mean of forecasted irradiance and temperature
-
-            if self.forecast_type == 'MOR':
-                steps_G = self.create_forecast_chunk_steps_string(1, 24)
-                steps_T = self.create_forecast_chunk_steps_string(0, 23)
-                query_LUG_G = 'SELECT mean("value") FROM %s WHERE location=\'%s\' AND signal=\'%s\' AND %s AND time=\'%s\'' % (measurement_MS, 'LUG', 'GLOB', steps_G, lcl_dt_MOR)
-                query_LUG_T = 'SELECT mean("value") FROM %s WHERE location=\'%s\' AND signal=\'%s\' AND %s AND time=\'%s\'' % (measurement_MS, 'LUG', 'T_2M', steps_T, lcl_dt_MOR)
-            else:
-                steps_G = self.create_forecast_chunk_steps_string(12, 33)
-                steps_T = self.create_forecast_chunk_steps_string(12, 33)
-                query_LUG_G = 'SELECT mean("value") FROM %s WHERE location=\'%s\' AND signal=\'%s\' AND %s AND time=\'%s\'' % (measurement_MS, 'LUG', 'GLOB', steps_G, lcl_dt_EVE)
-                query_LUG_T = 'SELECT mean("value") FROM %s WHERE location=\'%s\' AND signal=\'%s\' AND %s AND time=\'%s\'' % (measurement_MS, 'LUG', 'T_2M', steps_T, lcl_dt_EVE)
-            self.logger.info('Performing query: %s' % query_LUG_G)
-            Q = self.influxdb_client.query(query_LUG_G, epoch='s').raw['series'][0]['values'][0][1]
-            self.logger.info('Performing query: %s' % query_LUG_T)
-            T = self.influxdb_client.query(query_LUG_T, epoch='s').raw['series'][0]['values'][0][1]
-
-            # Transform into the appropriate unit of measurement
-            Q_ = Q * 4.6
-            T_ = T + 273.14
-
-            # Calculate woods emission
-            gamma = (alpha*C_L1*Q_/np.sqrt(1+alpha*alpha*Q_*Q_)) * (np.exp(C_T1*(T_-T_s)/(R*T_s*T_))) / (1+np.exp(C_T2*(T_-T_m)/(R*T_s*T_)))
-            emission = 98340 * gamma
-
-            return VOC + emission
-
+        # Get 24 hours of forecasts
+        if self.forecast_type == 'MOR':
+            steps_G = self.create_forecast_chunk_steps_string(1, 24)
+            steps_T = self.create_forecast_chunk_steps_string(0, 23)
         else:
-            self.logger.error('Something wrong in IFEc features calculation')
-            return np.nan
+            steps_G = steps_T = self.create_forecast_chunk_steps_string(10, 33)
 
-        ### For testing
+        Q = self.get_query_value_forecast(measurement_MS, 'LUG__GLOB__', steps_G, func)
+        T_ = self.get_query_value_forecast(measurement_MS, 'LUG__T_2M__', steps_T, func)
 
-        # T_s = 303
-        # R = 8.314
-        # alpha = 0.0027
-        # C_L1 = 1.066
-        # C_T1 = 95000
-        # C_T2 = 230000
-        # T_m = 314
-        # C_T3 = 0.961
-        #
-        # for d in range(1, 2):
-        #     dt = self.set_forecast_day()
-        #     dt = dt.replace(year=int(2018), month=int(6), day=int(d))
-        #     dt_ = '%sT03:00:00Z' % dt.strftime('%Y-%m-%d')
-        #
-        #     Q = 23.83333333333333 * 4.6
-        #     T = 14.613194444444444 + 273.13
-        #
-        #     print(Q)
-        #     print(T)
-        #
-        #     T_ = (R*T_s*T)
-        #     # C_L = alpha * C_L1 * Q / np.sqrt(1 + alpha**2*Q**2)
-        #     C_L = alpha * C_L1 * Q / np.sqrt(1 + (alpha*alpha*Q*Q))
-        #     C_T = np.exp(C_T1 * (T - T_s) / T_) / (1 + np.exp(C_T2 * (T - T_m) / T_))
-        #     gamma2 = C_L * C_T
-        #
-        #     gamma = (alpha*C_L1*Q/np.sqrt(1+alpha*alpha*Q*Q)) * (np.exp(C_T1*(T-T_s)/(R*T_s*T))) / (1+np.exp(C_T2*(T-T_m)/(R*T_s*T)))
-        #     gamma3 = (alpha*C_L1*Q/np.sqrt(1+alpha*alpha*Q*Q)) * (np.exp(C_T1*(T-T_s)/T_)) / (1+np.exp(C_T2*(T-T_m)/T_))
-        #     emission = 98340 * gamma
-        #     print(dt_[:10] + ': ' + str(emission))
-        #     print(dt_[:10] + ': ' + str(gamma))
-        #     print(dt_[:10] + ': ' + str(gamma2))
-        #     print(dt_[:10] + ': ' + str(gamma3))
+        # Transform into the appropriate unit of measurement
+        if Q is not None:
+            Q_ = Q * self.cfg['VOC']['GLOB_to_PAR']
+        else:
+            # This should not happen, but if it happens we try to save the day and use measurements instead. Pray we
+            # never enter here
+            Q_ = self.get_Q_T_measured()[0]
 
+        if T_ is None:
+            T_ = self.get_Q_T_measured()[1]
+
+        return [Q_, T_]
+
+    def get_Q_T_measured(self):
+
+        dt = self.set_forecast_day()
+        func = 'mean'
+        measurement = self.cfg['influxDB']['measurementInputsMeasurements']
+        location = 'MS-LUG'
+
+        start_dt = '%sT23:05:00Z' % (dt - timedelta(days=1)).strftime('%Y-%m-%d')
+        end_dt = '%sT23:05:00Z' % dt.strftime('%Y-%m-%d')
+
+        Q = self.get_query_value_measure(measurement, location + '__Gl__', start_dt, end_dt, func)
+        T = self.get_query_value_measure(measurement, location + '__T__', start_dt, end_dt, func)
+
+        # Transform into the appropriate unit of measurement
+        Q_ = Q * self.cfg['VOC']['GLOB_to_PAR']
+        T_ = T + 273.1
+
+        return [Q_, T_]
+
+    def do_VOC_query(self, measurement):
+        """
+        Total_NOx is easy, just query the previously calculated value in the DB. However, for Total_VOC it is necessary
+        to query the existing value, which combines traffic (roads, highways, planes), combustion, agricolture,
+        and industry, then add the daily calculated woods emission with the below iso gamma formula.
+        Note that the signal stored in the DB does NOT account for wood emission!
+        """
+
+        # Get values with and without woods emission
+        VOC_without_woods = self.get_query_value_global('Total_VOC')
+        VOC_woods = self.calculate_wood_emission(self.cfg['VOC']['emissionType'])
+
+        VOC_woods_corrected = self.cfg['VOC']['correction']['slope'] * VOC_woods + self.cfg['VOC']['correction'][
+            'intercept']
+
+        return VOC_without_woods, VOC_woods, VOC_woods_corrected
 
     def do_mor_eve_query(self, signal_data, measurement):
+        """
+        mean_mor: Mean of values from 03:00 UTC to 10:00 UTC
+        mean_eve: Mean of values from 11:00 UTC to 21:00 UTC
+        Forecasted signals considered: GLOB, CLCT
+        """
+
         (location, signal_code, aggregator) = signal_data.split('__')
-        dt = self.set_forecast_day()
         func = 'mean'
 
-        if self.forecast_type == 'MOR':
-            lcl_dt = '%sT03:00:00Z' % dt.strftime('%Y-%m-%d')
-            if aggregator == 'mean_mor':
-                if signal_code == 'GLOB':
-                    steps = self.create_forecast_chunk_steps_string(1, 7)  # start steps at 1 instead of 0 because step00 is always -99999
-                else:
-                    steps = self.create_forecast_chunk_steps_string(0, 7)
-            elif aggregator == 'mean_eve':
-                steps = self.create_forecast_chunk_steps_string(7, 19)
+        if aggregator == 'mean_mor':
+            if signal_code == 'GLOB':
+                # Start at step01 because step00 is always -99999
+                steps = self.steps_type_forecast(mor_start=1, mor_end=7, eve_start=15, eve_end=22)
+            else:
+                steps = self.steps_type_forecast(mor_start=0, mor_end=7, eve_start=15, eve_end=22)
+        elif aggregator == 'mean_eve':
+            steps = self.steps_type_forecast(mor_start=8, mor_end=18, eve_start=23, eve_end=33)
         else:
-            lcl_dt = '%sT12:00:00Z' % dt.strftime('%Y-%m-%d')
-            if aggregator == 'mean_mor':
-                steps = self.create_forecast_chunk_steps_string(10, 22)
-            elif aggregator == 'mean_eve':
-                steps = self.create_forecast_chunk_steps_string(22, 23)
+            self.logger.error('Something wrong in mean_mor, mean_eve features calculation')
 
-        query = 'SELECT mean("value") FROM %s WHERE location=\'%s\' AND signal=\'%s\' AND %s AND time=\'%s\''\
-                % (measurement, location, signal_code, steps, lcl_dt)
-        self.logger.info('Performing query: %s' % query)
-        return self.calc_data(query=query, signal_data=signal_data, func=func)
+        return self.get_query_value_forecast(measurement, signal_data, steps, func)
 
     def do_MAX_query(self, signal_data, measurement):
-        (location, signal_code, aggregator) = signal_data.split('__')
-        dt = self.set_forecast_day()
+        """
+        Maximum value of all hourly forecasted temperatures
+        """
+
         func = 'max'
-        steps = self.create_forecast_chunk_steps_string(0, 33)
+        steps = self.create_forecast_chunk_steps_string(0, 40)
 
-        # the last forecast has been performed at 03:00 or at 12:00
-        if self.forecast_type == 'MOR':
-            lcl_dt = '%sT03:00:00Z' % dt.strftime('%Y-%m-%d')
-        else:
-            lcl_dt = '%sT12:00:00Z' % dt.strftime('%Y-%m-%d')
-
-        query = 'SELECT max("value") FROM %s WHERE location=\'%s\' AND signal=\'%s\' AND %s AND time=\'%s\'' \
-                % (measurement, location, signal_code, steps, lcl_dt)
-        self.logger.info('Performing query: %s' % query)
-        return self.calc_data(query=query, signal_data=signal_data, func=func)
+        return self.get_query_value_forecast(measurement, signal_data, steps, func)
 
     def do_T_2M_query(self, signal_data, measurement):
-        (location, signal_code, aggregator) = signal_data.split('__')
-        dt = self.set_forecast_day()
+        """
+        MOR: mean values of hourly forecasted temperatures from 12:00 to 00:00 of the same day
+        EVE: mean values of hourly forecasted temperatures from 10:00 to 21:00 of the following day
+        The squared value of the above means is a considered signal too
+        """
+
         func = 'mean'
+        steps = self.steps_type_forecast(mor_start=7, mor_end=19, eve_start=22, eve_end=33)
+        val = self.get_query_value_forecast(measurement, signal_data, steps, func) - 273.1
 
-        # the last forecast has been performed at 03:00 or at 12:00
-        if self.forecast_type == 'MOR':
-            lcl_dt = '%sT03:00:00Z' % dt.strftime('%Y-%m-%d')
-            steps = self.create_forecast_chunk_steps_string(9, 21)
-        else:
-            lcl_dt = '%sT12:00:00Z' % dt.strftime('%Y-%m-%d')
-            steps = self.create_forecast_chunk_steps_string(20, 33)
-
-        query = 'SELECT mean("value") FROM %s WHERE location=\'%s\' AND signal=\'%s\' AND %s AND time=\'%s\'' \
-                % (measurement, location, signal_code, steps, lcl_dt)
-        self.logger.info('Performing query: %s' % query)
-
-        val = self.calc_data(query=query, signal_data=signal_data, func=func) - 273.1
-
-        if 'squared' in aggregator:
-            return val**2
+        if 'squared' in signal_data:
+            return val ** 2
         else:
             return val
 
     def do_transf_query(self, signal_data, measurement):
-        (location, signal_code, aggregator) = signal_data.split('__')
-        dt = self.set_forecast_day()
+        """
+        Maximum value of all hourly forecasted Dew Temperatures, to which we add 20 and cube the obtained value
+        """
+
         func = 'max'
-        steps = self.create_forecast_chunk_steps_string(0, 33)
+        steps = self.create_forecast_chunk_steps_string(0, 40)
+        res = self.get_query_value_forecast(measurement, signal_data, steps, func)
 
-        # the last forecast has been performed at 03:00 or at 12:00
-        if self.forecast_type == 'MOR':
-            lcl_dt = '%sT03:00:00Z' % dt.strftime('%Y-%m-%d')
-        else:
-            lcl_dt = '%sT12:00:00Z' % dt.strftime('%Y-%m-%d')
-
-        query = 'SELECT max("value") FROM %s WHERE location=\'%s\' AND signal=\'%s\' AND %s AND time=\'%s\'' \
-                % (measurement, location, 'TD_2M', steps, lcl_dt)
-        self.logger.info('Performing query: %s' % query)
-        res = self.calc_data(query=query, signal_data=signal_data, func=func)
-        return (res+20)**3
+        return (res + 20) ** 3
 
     def do_tot_prec_query(self, signal_data, measurement):
-        (location, signal_code, aggregator) = signal_data.split('__')
-        dt = self.set_forecast_day()
-        func = 'mean'
+        """
+        Sum of the hourly forecasted precipitations for the next 24 hours
+        """
 
+        func = 'sum'
         # start steps at 1 instead of 0 because step00 is always -99999
         steps = self.create_forecast_chunk_steps_string(1, 23)
 
-        # the last forecast has been performed at 03:00 or at 12:00
-        if self.forecast_type == 'MOR':
-            lcl_dt = '%sT03:00:00Z' % dt.strftime('%Y-%m-%d')
-
-        else:
-            lcl_dt = '%sT12:00:00Z' % dt.strftime('%Y-%m-%d')
-
-        query = 'SELECT sum("value") FROM %s WHERE location=\'%s\' AND signal=\'%s\' AND %s AND time=\'%s\'' \
-                % (measurement, location, signal_code, steps, lcl_dt)
-        self.logger.info('Performing query: %s' % query)
-        return self.calc_data(query=query, signal_data=signal_data, func=func)
+        return self.get_query_value_forecast(measurement, signal_data, steps, func)
 
     def do_KLO_query(self, signal_data, measurement):
         """
-        Calculate the pressure gradient between Kloten airport and Lugano to take into account the wind presence
+        Calculate the pressure gradient between Kloten airport and Lugano to take into account the air current between
+        South and North of Switzerland
         """
 
-        dt = self.set_forecast_day()
+        func = 'mean'
+        steps = self.create_forecast_chunk_steps_string(0, 40)
+        res_LUG = self.get_query_value_forecast(measurement, 'LUG__PMSL__0', steps, func)
+        res_KLO = self.get_query_value_forecast(measurement, 'KLO__PMSL__0', steps, func)
 
-        # the last forecast has been performed at 03:00 or at 12:00
-        if self.forecast_type == 'MOR':
-            lcl_dt = '%sT03:00:00Z' % dt.strftime('%Y-%m-%d')
+        diff = (res_KLO - res_LUG) / 100.0
+
+        if 'favonio' in signal_data:
+            return 1.0 if diff >= 6.0 else 0.0
         else:
-            lcl_dt = '%sT12:00:00Z' % dt.strftime('%Y-%m-%d')
-
-        query_LUG = 'SELECT mean("value") FROM %s WHERE location=\'%s\' AND signal=\'%s\' AND time=\'%s\'' % (measurement, 'LUG', 'PMSL', lcl_dt)
-        query_KLO = 'SELECT mean("value") FROM %s WHERE location=\'%s\' AND signal=\'%s\' AND time=\'%s\'' % (measurement, 'KLO', 'PMSL', lcl_dt)
-
-        self.logger.info('Performing query: %s' % query_LUG)
-        res_LUG = self.influxdb_client.query(query_LUG, epoch='s').raw['series'][0]['values'][0][1]
-        self.logger.info('Performing query: %s' % query_KLO)
-        res_KLO = self.influxdb_client.query(query_KLO, epoch='s').raw['series'][0]['values'][0][1]
-        return (res_KLO - res_LUG)/100.0
+            return diff
 
     def do_multiday_query(self, signal_data, measurement):
         """
-        Here we calculate the mean of the last 24, 48 or 72 hourly measurements
-        Special case NOx_12h is also calculated here
+        Calculate the mean of the last 24, 48 or 72 hourly measurements for all measured signals
+        Special case NOx_12h is also calculated here:
+        MOR: mean value of NOx hourly measurements from 22:00 to 10:00 of previous day (previous afternoon)
+        EVE: mean value of NOx hourly measurements from 22:00 of previous day to 10:00 of present day (present morning)
         """
 
         (location, signal_code, aggregator) = signal_data.split('__', 2)
@@ -331,49 +373,27 @@ class ArtificialFeatures:
 
         if '12h' in aggregator:
             if self.forecast_type == 'MOR':
-                start_dt = '%sT12:00:00Z' % (dt - timedelta(days=1)).strftime('%Y-%m-%d')
-                end_dt = '%sT00:00:00Z' % dt.strftime('%Y-%m-%d')
+                start_dt = '%sT10:00:00Z' % (dt - timedelta(days=1)).strftime('%Y-%m-%d')
+                end_dt = '%sT22:00:00Z' % (dt - timedelta(days=1)).strftime('%Y-%m-%d')
             else:
-                start_dt = '%sT00:00:00Z' % dt.strftime('%Y-%m-%d')
-                end_dt = '%sT12:00:00Z' % dt.strftime('%Y-%m-%d')
+                start_dt = '%sT22:00:00Z' % (dt - timedelta(days=1)).strftime('%Y-%m-%d')
+                end_dt = '%sT10:00:00Z' % dt.strftime('%Y-%m-%d')
 
         if '24h' in aggregator:
-            if self.forecast_type == 'MOR':
-                start_dt = '%sT05:00:00Z' % (dt - timedelta(days=1)).strftime('%Y-%m-%d')
-                end_dt = '%sT04:00:00Z' % dt.strftime('%Y-%m-%d')
-            else:
-                start_dt = '%sT17:00:00Z' % (dt - timedelta(days=1)).strftime('%Y-%m-%d')
-                end_dt = '%sT16:00:00Z' % dt.strftime('%Y-%m-%d')
+            [start_dt, end_dt] = self.measurements_start_end(days=1)
 
         elif '48h' in aggregator:
-            if self.forecast_type == 'MOR':
-                start_dt = '%sT05:00:00Z' % (dt - timedelta(days=2)).strftime('%Y-%m-%d')
-                end_dt = '%sT04:00:00Z' % dt.strftime('%Y-%m-%d')
-            else:
-                start_dt = '%sT17:00:00Z' % (dt - timedelta(days=2)).strftime('%Y-%m-%d')
-                end_dt = '%sT16:00:00Z' % dt.strftime('%Y-%m-%d')
+            [start_dt, end_dt] = self.measurements_start_end(days=2)
 
         elif '72h' in aggregator:
-            if self.forecast_type == 'MOR':
-                start_dt = '%sT05:00:00Z' % (dt - timedelta(days=3)).strftime('%Y-%m-%d')
-                end_dt = '%sT04:00:00Z' % dt.strftime('%Y-%m-%d')
-            else:
-                start_dt = '%sT17:00:00Z' % (dt - timedelta(days=3)).strftime('%Y-%m-%d')
-                end_dt = '%sT16:00:00Z' % dt.strftime('%Y-%m-%d')
+            [start_dt, end_dt] = self.measurements_start_end(days=3)
 
         else:
             self.logger.error('Unexpected error with 12h, 24h, 48h, 72h artificial signal')
 
-        # Measured data from MeteoSwiss station in Lugano are in InfluxDB under measurement=meteosuisse_data, so
-        # applying a patch here (DM 20.07.21)
-        if location == 'MS-LUG':
-            measurement = self.cfg['influxDB']['measurementMeteoSuisse']
+        val = self.get_query_value_measure(measurement, location + '__' + signal_code + '__', start_dt, end_dt, func)
 
-        query = 'SELECT mean("value") FROM %s WHERE location=\'%s\' AND signal=\'%s\' AND time>=\'%s\' AND ' \
-                'time<=\'%s\'' % (measurement, location, signal_code, start_dt, end_dt)
-        self.logger.info('Performing query: %s' % query)
-
-        return self.calc_data(query=query, signal_data=signal_data, func=func)
+        return val
 
     def set_forecast_day(self):
         """
@@ -401,6 +421,7 @@ class ArtificialFeatures:
         return dt
 
     def calc_data(self, query, signal_data, func):
+
         self.logger.info('Performing query: %s' % query)
         res = self.influxdb_client.query(query, epoch='s')
 
@@ -423,6 +444,8 @@ class ArtificialFeatures:
                 return np.max(vals)
             elif func == 'mean':
                 return np.mean(vals)
+            elif func == 'sum':
+                return np.sum(vals)
         except Exception as e:
             self.logger.error('Forecast not available')
             self.logger.error('No data from query %s' % query)

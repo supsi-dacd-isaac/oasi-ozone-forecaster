@@ -22,6 +22,8 @@
       "database": "themasterplan",
       "maxLinesPerInsert": 5000,
       "waitAfterInsert": 1,
+      "measurementInputsMeasurements": "inputs_measurements",
+      "measurementInputsForecasts": "inputs_forecasts",
       "measurementOASI": "locations_data",
       "measurementARPA": "arpa_data",
       "measurementMeteoSuisse": "meteosuisse_data",

@@ -75,5 +75,50 @@
     "startDay": "06-10",
     "endDay": "06-15",
     "years": [2015, 2018, 2019, 2021]
+  },
+  "VOC": {
+    "correction": {
+      "slope": 0.6989976823658479,
+      "intercept": 6055.0538438732765
+    },
+    "useCorrection": true,
+    "emissionType": "measured",
+    "T_s": 303,
+    "R": 8.314,
+    "alpha": 0.0027,
+    "C_L1": 1.066,
+    "C_T1": 95000,
+    "C_T2": 230000,
+    "T_m": 314,
+    "C_T3": 0.961,
+    "GLOB_to_PAR": 4.6,
+    "KG_per_gamma": 98340
+  },
+  "regions": {
+    "Chiasso": {
+      "MeasureStations": ["CHI", "MEN"],
+      "ForecastStations": ["TICIA"]
+    },
+    "Bioggio": {
+      "MeasureStations": ["BIO", "LUG", "MS-LUG"],
+      "ForecastStations": ["P_BIO"]
+    },
+    "Ticino": {
+      "MeasureStations": ["CHI", "MEN", "BIO", "LUG", "MS-LUG"],
+      "ForecastStations": ["P_BIO", "TICIA"]
+    }
+  },
+  "measuredSignalsStations":{
+    "CHI": ["CN", "Gl", "NO", "NO2", "NOx", "O3", "P", "Prec", "RH", "T", "WD", "WS"],
+    "MEN": ["CN", "Gl", "NO", "NO2", "NOx", "O3", "P", "Prec", "RH", "T", "WDvect", "WSvect"],
+    "BIO": ["CN", "Gl", "NO", "NO2", "NOx", "O3", "P", "Prec", "RH", "T", "WDvect", "WSvect"],
+    "LOC": ["CN", "Gl", "NO", "NO2", "NOx", "O3", "P", "Prec", "RH", "T", "WDvect", "WSvect"],
+    "LUG": ["NO", "NO2", "NOx", "O3"],
+    "MS-LUG": ["CN", "Gl", "P", "Prec", "RH", "T", "WDvect", "WSvect"]
+  },
+  "forecastedSignalsStations":{
+    "TICIA": ["GLOB", "PS", "TOT_PREC", "RELHUM_2M", "T_2M", "TD_2M", "DD_10M", "FF_10M", "CLCT"],
+    "P_BIO": ["GLOB", "PS", "TOT_PREC", "RELHUM_2M", "T_2M", "TD_2M", "DD_10M", "FF_10M", "CLCT"],
+    "OTL": ["GLOB", "PS", "TOT_PREC", "RELHUM_2M", "T_2M", "TD_2M", "DD_10M", "FF_10M", "CLCT"]
   }
 }

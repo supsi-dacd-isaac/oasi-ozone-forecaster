@@ -607,3 +607,80 @@ class InputsGatherer:
             return 5
         else:
             return 6
+
+    def hourly_measured_signals(self, measurementStation, measuredSignal):
+        signals = []
+        for i in range(24):
+            signals.append(measurementStation + '__' + measuredSignal + '__m' + str(i))
+        return signals
+
+    def hourly_forecasted_signals(self, forecastStation, forecastedSignal):
+        signals = []
+        for i in range(34):
+            signals.append(forecastStation + '__' + forecastedSignal + '__step' + str(i))
+        return signals
+
+    def chunks_forecasted_signals(self, forecastStation, forecastedSignal):
+        signals = []
+        for i in range(1,5):
+            for modifier in ['min', 'max', 'mean']:
+                signals.append(forecastStation + '__' + forecastedSignal + '__chunk' + str(i) + '__' + modifier)
+        return signals
+
+    def global_signals(self):
+        signals = ['KLO-LUG', 'KLO-LUG_favonio', 'VOC_Totale', 'NOx_Totale', 'RHW__d0', 'RHW__d1', 'IsHolyday',
+                   'DayWeek', 'IsWeekend']
+        return signals
+
+    def artificial_features_measured_signals(self, measurementStation, measuredSignal):
+        signals = []
+        if measurementStation != 'MS-LUG':
+            signals.append(measurementStation + '__NOx__12h_mean')
+            signals.append(measurementStation + '__NO2__24h_mean')
+            signals.append(measurementStation + '__YO3__d1')
+            signals.append(measurementStation + '__YO3_index__d1')
+        for i in ['24h', '48h', '72h']:
+            signals.append(measurementStation + '__' + measuredSignal + '__' + str(i) + '__mean')
+        return signals
+
+    def artificial_features_forecasted_signals(self, forecastStation):
+        signals = []
+        signals.append(forecastStation + '__CLCT__mean_mor')
+        signals.append(forecastStation + '__CLCT__mean_eve')
+        signals.append(forecastStation + '__GLOB__mean_mor')
+        signals.append(forecastStation + '__GLOB__mean_eve')
+        signals.append(forecastStation + '__TOT_PREC__sum')
+        signals.append(forecastStation + '__T_2M__12h_mean')
+        signals.append(forecastStation + '__T_2M__12h_mean_squared')
+        signals.append(forecastStation + '__T_2M__MAX')
+        signals.append(forecastStation + '__TD_2M__MAX')
+        signals.append(forecastStation + '__TD_2M__transf')
+
+        return signals
+
+    def generate_all_signals(self):
+        """
+        Function to generate and save all known signals of a specific region (e.g. Ticino) with defined measuring and
+        forecasting stations
+        """
+
+        for region in self.cfg['regions']:
+            signal_list = []
+            for measurementStation in self.cfg["regions"][region]["MeasureStations"]:
+                for measuredSignal in self.cfg["measuredSignalsStations"][measurementStation]:
+                    signal_list.extend(self.hourly_measured_signals(measurementStation, measuredSignal))
+                    signal_list.extend(self.artificial_features_measured_signals(measurementStation, measuredSignal))
+            for forecastStation in self.cfg["regions"][region]["ForecastStations"]:
+                for forecastedSignal in self.cfg["forecastedSignalsStations"][forecastStation]:
+                    signal_list.extend(self.hourly_forecasted_signals(forecastStation, forecastedSignal))
+                    signal_list.extend(self.chunks_forecasted_signals(forecastStation, forecastedSignal))
+                    signal_list.extend(self.artificial_features_forecasted_signals(forecastStation))
+            signal_list.extend(self.global_signals())
+
+            fn = self.cfg['datasetSettings']['saveSignalsFolder'] + region + '_all_signals.json'
+            with open(fn, 'w') as f:
+                json.dump({"signals": signal_list}, f)
+
+        return
+
+

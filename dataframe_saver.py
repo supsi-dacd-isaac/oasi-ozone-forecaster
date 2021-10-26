@@ -87,12 +87,17 @@ if __name__ == "__main__":
     built_datasets = []
     read_datasets = []
 
+    # Create all the possible signals for a given region
+    # inputs_gatherer.generate_all_signals()
+
+    # Build datasets for all the signal files given
     for signal_file in cfg['datasetSettings']['signalsFiles']:
         tmp_df = inputs_gatherer.build_dataset(signals_file=signal_file)
         built_datasets.append(tmp_df)
 
-    for csv_file in cfg['datasetSettings']['csvFiles']:
-        tmp_df = inputs_gatherer.read_dataset(csv_file=csv_file)
-        read_datasets.append(tmp_df)
+    # Read datasets from provided csv files
+    # for csv_file in cfg['datasetSettings']['csvFiles']:
+    #     tmp_df = inputs_gatherer.read_dataset(csv_file=csv_file)
+    #     read_datasets.append(tmp_df)
 
     logger.info("Ending program")
