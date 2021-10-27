@@ -120,5 +120,14 @@
     "TICIA": ["GLOB", "PS", "TOT_PREC", "RELHUM_2M", "T_2M", "TD_2M", "DD_10M", "FF_10M", "CLCT"],
     "P_BIO": ["GLOB", "PS", "TOT_PREC", "RELHUM_2M", "T_2M", "TD_2M", "DD_10M", "FF_10M", "CLCT"],
     "OTL": ["GLOB", "PS", "TOT_PREC", "RELHUM_2M", "T_2M", "TD_2M", "DD_10M", "FF_10M", "CLCT"]
+  },
+  "allMeasuredSignals": ["CN", "Gl", "NO", "NO2", "NOx", "O3", "P", "Prec", "RH", "T", "WDvect", "WSvect", "WSgust",
+                        "WD", "WS", "Tdew", "YO3", "YO3_index", "Pr", "T5cm"],
+  "allForecastedSignals": ["GLOB", "PS", "TOT_PREC", "RELHUM_2M", "T_2M", "TD_2M", "DD_10M", "FF_10M", "CLCT", "PMSL",
+                          "VMAX_10M"],
+  "dataMover": {
+    "locationFrom": "LUG",
+    "locationTmp": "LUG_UTC",
+    "locationTo": "MS-LUG"
   }
 }

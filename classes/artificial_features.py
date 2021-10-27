@@ -227,9 +227,13 @@ class ArtificialFeatures:
         else:
             # This should not happen, but if it happens we try to save the day and use measurements instead. Pray we
             # never enter here
+            self.logger.error(
+                'Warning: Forecasted data for calculating VOC not found. Trying again with measured data.')
             Q_ = self.get_Q_T_measured()[0]
 
         if T_ is None:
+            self.logger.error(
+                'Warning: Forecasted data for calculating VOC not found. Trying again with measured data.')
             T_ = self.get_Q_T_measured()[1]
 
         return [Q_, T_]
@@ -258,7 +262,7 @@ class ArtificialFeatures:
         Total_NOx is easy, just query the previously calculated value in the DB. However, for Total_VOC it is necessary
         to query the existing value, which combines traffic (roads, highways, planes), combustion, agricolture,
         and industry, then add the daily calculated woods emission with the below iso gamma formula.
-        Note that the signal stored in the DB does NOT account for wood emission!
+        Note that the VOC signal stored in the DB does NOT account for wood emission!
         """
 
         # Get values with and without woods emission
