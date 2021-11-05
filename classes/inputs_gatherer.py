@@ -14,7 +14,14 @@ import constants
 
 class InputsGatherer:
     """
-    Class handling the gathering of the inputs needed by a collection of predictors
+    Class handling the gathering of the inputs needed by a collection of predictors.
+    There are 3 ways to create a dataframe:
+     - Read an existing CSV (see method dataframe_reader)
+     - Define a region composed of measurements and forecast stations, define the signals to be used by each station,
+       then create all possible signals in JSON format and finally create the dataframe by querying InfluxDB
+       (see method dataframe_builder_regions)
+     - read an existing JSON containing a set of signals and create the dataframe by querying InfluxDB (see method
+       dataframe_builder_custom)
     """
 
     def __init__(self, influxdb_client, forecast_type, cfg, logger, artificial_features):
@@ -28,6 +35,8 @@ class InputsGatherer:
         :type cfg: dict
         :param logger: Logger
         :type logger: Logger object
+        :param artificial_features: Artificial features
+        :type artificial_features: ArtificialFeatures
         """
         # set the variables
         self.influxdb_client = influxdb_client
@@ -38,6 +47,7 @@ class InputsGatherer:
         self.day_to_predict = None
         self.cfg_signals = None
         self.artificial_features = artificial_features
+        self.output_dfs = None
 
     def build_global_input_dataset(self):
         """
@@ -82,8 +92,10 @@ class InputsGatherer:
 
     def build_dataset(self, signals_file):
         """
-        Build the training dataset given a signal json file in folder "conf/dataset"
+        Build the training dataset given a signal json file in folder "conf/dataset" either from a region or from a
+        custom list
         """
+
         self.input_data = dict()
         self.cfg_signals = self.cfg_signals = dict(signals=[])
         self.forecast_type = self.cfg['datasetSettings']['type']
@@ -130,13 +142,6 @@ class InputsGatherer:
                 if curr_dt.timestamp() >= end_dt.timestamp():
                     break
 
-        if self.cfg['datasetSettings']['saveDataset']:
-            output_file = '%s%s%s_%s_%s_%s-%s%s' % (self.cfg['datasetSettings']['outputFolder'], os.sep, file_name,
-                                           self.cfg['datasetSettings']['startDay'],
-                                           self.cfg['datasetSettings']['endDay'],
-                                           self.cfg['datasetSettings']['years'][0],
-                                           self.cfg['datasetSettings']['years'][-1], '.csv')
-            dataset.to_csv(output_file, header=True, index=False)
         return dataset
 
     def read_dataset(self, csv_file):
@@ -632,13 +637,17 @@ class InputsGatherer:
                    'DayWeek', 'IsWeekend']
         return signals
 
-    def artificial_features_measured_signals(self, measurementStation, measuredSignal):
+    def artificial_features_measured_signals(self, measurementStation):
         signals = []
         if measurementStation != 'MS-LUG':
             signals.append(measurementStation + '__NOx__12h_mean')
             signals.append(measurementStation + '__NO2__24h_mean')
             signals.append(measurementStation + '__YO3__d1')
             signals.append(measurementStation + '__YO3_index__d1')
+        return signals
+
+    def past_days_means_measured_signals(self, measurementStation, measuredSignal):
+        signals = []
         for i in ['24h', '48h', '72h']:
             signals.append(measurementStation + '__' + measuredSignal + '__' + str(i) + '__mean')
         return signals
@@ -667,20 +676,68 @@ class InputsGatherer:
         for region in self.cfg['regions']:
             signal_list = []
             for measurementStation in self.cfg["regions"][region]["MeasureStations"]:
+                signal_list.extend(self.artificial_features_measured_signals(measurementStation))
                 for measuredSignal in self.cfg["measuredSignalsStations"][measurementStation]:
+                    signal_list.extend(self.past_days_means_measured_signals(measurementStation, measuredSignal))
                     signal_list.extend(self.hourly_measured_signals(measurementStation, measuredSignal))
-                    signal_list.extend(self.artificial_features_measured_signals(measurementStation, measuredSignal))
             for forecastStation in self.cfg["regions"][region]["ForecastStations"]:
+                signal_list.extend(self.artificial_features_forecasted_signals(forecastStation))
                 for forecastedSignal in self.cfg["forecastedSignalsStations"][forecastStation]:
                     signal_list.extend(self.hourly_forecasted_signals(forecastStation, forecastedSignal))
                     signal_list.extend(self.chunks_forecasted_signals(forecastStation, forecastedSignal))
-                    signal_list.extend(self.artificial_features_forecasted_signals(forecastStation))
             signal_list.extend(self.global_signals())
 
-            fn = self.cfg['datasetSettings']['saveSignalsFolder'] + region + '_all_signals.json'
+            fn = self.cfg['datasetSettings']['outputSignalFolder'] + region + '_signals.json'
             with open(fn, 'w') as f:
                 json.dump({"signals": signal_list}, f)
 
         return
 
+    def output_folder_creator(self, dataset_name):
 
+
+        folder_path = '%s%s_%s_%s_%s_%s-%s%s' % (self.cfg['datasetSettings']['outputCsvFolder'],
+                                                 self.cfg['featuresAnalyzer']['datasetCreator'], dataset_name,
+                                       self.cfg['datasetSettings']['startDay'],
+                                       self.cfg['datasetSettings']['endDay'],
+                                       self.cfg['datasetSettings']['years'][0],
+                                       self.cfg['datasetSettings']['years'][-1], os.sep)
+        if not os.path.exists(folder_path):
+            os.makedirs(folder_path)
+
+        return folder_path
+
+    def dataframe_builder_regions(self):
+        self.output_dfs = {}
+
+        self.generate_all_signals()
+
+        for region in self.cfg['regions']:
+            region_file = self.cfg['datasetSettings']['outputSignalFolder'] + region + '_signals.json'
+            dataframe = self.build_dataset(signals_file=region_file)
+            self.output_dfs[region] = {'dataset': dataframe, 'targetColumns': self.cfg['regions'][region]["targetColumn"]}
+            fp = self.output_folder_creator(region)
+            if self.cfg['datasetSettings']['saveDataset']:
+                dataframe.to_csv(fp + 'dataset.csv', header=True, index=False)
+
+    def dataframe_builder_custom(self):
+        self.output_dfs = {}
+
+        for dataset in self.cfg['datasetSettings']['customJSONSignals']:
+            name = dataset['filename'].split('.')[0]
+            fn = self.cfg['datasetSettings']["loadSignalsFolder"] + dataset['filename']
+            dataframe = self.build_dataset(signals_file=fn)
+            self.output_dfs[name] = {'dataset': dataframe, 'targetColumns': dataset['targetColumn']}
+            fp = self.output_folder_creator(name)
+            if self.cfg['datasetSettings']['saveDataset']:
+                dataframe.to_csv(fp + 'dataset.csv', header=True, index=False)
+
+    def dataframe_reader(self):
+        self.output_dfs = {}
+
+        for dataset in self.cfg['datasetSettings']['csvFiles']:
+            name = dataset['filename'].split('.')[0]
+            fn = self.cfg['datasetSettings']["loadCsvFolder"] + dataset['filename']
+            dataframe = self.read_dataset(csv_file=fn)
+            self.output_dfs[name] = {'dataset': dataframe, 'targetColumns': dataset['targetColumn']}
+            fp = self.output_folder_creator(name)

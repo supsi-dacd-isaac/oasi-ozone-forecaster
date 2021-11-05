@@ -13,9 +13,11 @@ from classes.inputs_gatherer import InputsGatherer
 from classes.artificial_features import ArtificialFeatures
 from datetime import date, datetime, timedelta
 
+path_parent = os.path.dirname(os.getcwd())
+os.chdir(path_parent)
 urllib3.disable_warnings()
 
-cfg = json.loads(open('../conf/oasi.json').read())
+cfg = json.loads(open('conf/oasi_tests.json').read())
 
 # Load the connections parameters and update the config dict with the related values
 cfg_conns = json.loads(open(cfg['connectionsFile']).read())
@@ -25,8 +27,7 @@ cfg.update(cfg_conns)
 forecast_type = 'MOR'
 
 logger = logging.getLogger()
-logging.basicConfig(format='%(asctime)-15s::%(levelname)s::%(funcName)s::%(message)s', level=logging.INFO,
-                    filename='../logs/dario.log')
+logging.basicConfig(format='%(asctime)-15s::%(levelname)s::%(funcName)s::%(message)s', level=logging.INFO)
 
 logger.info("Starting program")
 
@@ -48,10 +49,7 @@ AF = ArtificialFeatures(influx_client, forecast_type, cfg, logger)
 IG = InputsGatherer(influxdb_client=influx_client, forecast_type=forecast_type, cfg=cfg, logger=logger,
                     artificial_features=AF)
 
-# Add upper folder so the scripts can modify data at the same level of the scripts
-os.chdir('../')
-
-# Define local fake region for the only purpose of testing
+cfg["regions"] = {}
 cfg["regions"]["Testing"] = {
     "MeasureStations": ["CHI", "MEN", "BIO", "LUG", "MS-LUG", "LOC"],
     "ForecastStations": ["P_BIO", "TICIA", "OTL"]
@@ -59,13 +57,16 @@ cfg["regions"]["Testing"] = {
 
 IG.generate_all_signals()
 
-# Assert we get the expected results and we didn't broke anything
-testing_data = json.loads(open('conf/signals/Testing_all_signals.json').read())
-assert len(testing_data["signals"]) == 3349
+# Assert we get the expected results and we didn't break anything
+testing_data = json.loads(open(cfg["datasetSettings"]["outputSignalFolder"] + 'Testing_signals.json').read())
+assert len(testing_data["signals"]) == len(set(testing_data["signals"])) == 2921
 assert "LOC__CN__m0" in testing_data["signals"]
 assert "OTL__GLOB__step0" in testing_data["signals"]
+assert "VOC_Totale" in testing_data["signals"]
+assert "KLO-LUG" in testing_data["signals"]
+assert "IsWeekend" in testing_data["signals"]
 
 # Delete testing data
-os.remove('conf/signals/Testing_all_signals.json')
+os.remove(cfg['datasetSettings']['outputSignalFolder'] + 'Testing_signals.json')
 
 logger.info("Ending program")

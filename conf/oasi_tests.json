@@ -1,0 +1,134 @@
+{
+  "connectionsFile": "conf/conns_dario.json",
+  "globalSignals": ["RHW"],
+  "local": {
+    "timeZone": "Europe/Zurich",
+    "timeFormatMeasures": "%d.%m.%Y %H:%M",
+    "timeFormatForecasts": "%Y%m%d %H:%M",
+    "timeFormatGlobal": "%Y%m%d%H%M%S",
+    "waitAfterRequest": 1
+  },
+  "folders": {
+    "models": "models_dario"
+  },
+  "forecastPeriod": {
+    "case": "not_current",
+    "startDate": "2018-09-20",
+    "endDate": "2018-09-30"
+  },
+  "predictionSettings": {
+    "operationMode": "parallel",
+    "distributionSamples": 1000,
+    "thresholds": [120, 180, 240],
+    "startDateForMeanImputation": "2015-05-05"
+  },
+  "locations": [
+    {
+      "code": "CHI",
+      "name": "Chiasso",
+      "bestLabels": {
+          "MOR": "CHI_MOR_feats_100"
+        },
+      "alarms":{
+        "thresholds": {
+          "MOR": 95.0,
+          "EVE": 95.0
+        }
+      }
+    }
+  ],
+  "datasetSettings": {
+    "saveDataset": true,
+    "type": "MOR",
+    "loadSignalsFolder": "conf/signals/tests/",
+    "customJSONSignals": [
+      {"filename": "dataset_BIO_MOR.json", "targetColumn": ["BIO__YO3__d1"]},
+      {"filename": "dataset_CHI_MOR.json", "targetColumn": ["CHI__YO3__d1"]}
+    ],
+    "loadCsvFolder": "conf/csv/tests/",
+    "csvFiles": [
+      {"filename": "Sahara.csv", "targetColumn": ["BIO__YO3__d1", "CHI__YO3__d1"]},
+      {"filename": "California.csv", "targetColumn": ["BIO__YO3__d1"]},
+      {"filename": "Siberia.csv", "targetColumn": ["CHI__YO3__d1"]}
+    ],
+    "outputCsvFolder": "output/",
+    "outputSignalFolder": "conf/signals/regions/",
+    "startDay": "07-10",
+    "endDay": "07-20",
+    "years": [2019, 2021]
+  },
+  "dayToForecast": "2021-06-22",
+  "regions": {
+    "California": {
+      "MeasureStations": ["BIO"],
+      "targetColumn": ["BIO__YO3__d1"],
+      "ForecastStations": ["TICIA"]
+    },
+    "Siberia": {
+      "MeasureStations": ["CHI"],
+      "targetColumn": ["CHI__YO3__d1"],
+      "ForecastStations": ["P_BIO"]
+    },
+    "Sahara": {
+      "MeasureStations": ["BIO", "CHI"],
+      "targetColumn": ["BIO__YO3__d1", "CHI__YO3__d1"],
+      "ForecastStations": ["P_BIO"]
+    },
+    "Testing": {
+    "MeasureStations": ["CHI", "MEN", "BIO", "LUG", "MS-LUG", "LOC"],
+    "ForecastStations": ["P_BIO", "TICIA", "OTL"]
+    }
+  },
+  "measuredSignalsStations":{
+    "CHI": ["CN", "Gl", "NO", "NO2", "NOx", "O3", "P", "Prec", "RH", "T", "WD", "WS"],
+    "MEN": ["CN", "Gl", "NO", "NO2", "NOx", "O3", "P", "Prec", "RH", "T", "WDvect", "WSvect"],
+    "BIO": ["CN", "Gl", "NO", "NO2", "NOx", "O3", "P", "Prec", "RH", "T", "WDvect", "WSvect"],
+    "LOC": ["CN", "Gl", "NO", "NO2", "NOx", "O3", "P", "Prec", "RH", "T", "WDvect", "WSvect"],
+    "LUG": ["NO", "NO2", "NOx", "O3"],
+    "MS-LUG": ["CN", "Gl", "P", "Prec", "RH", "T", "WDvect", "WSvect"]
+  },
+  "forecastedSignalsStations":{
+    "TICIA": ["GLOB", "PS", "TOT_PREC", "RELHUM_2M", "T_2M", "TD_2M", "DD_10M", "FF_10M", "CLCT"],
+    "P_BIO": ["GLOB", "PS", "TOT_PREC", "RELHUM_2M", "T_2M", "TD_2M", "DD_10M", "FF_10M", "CLCT"],
+    "OTL": ["GLOB", "PS", "TOT_PREC", "RELHUM_2M", "T_2M", "TD_2M", "DD_10M", "FF_10M", "CLCT"]
+  },
+  "allMeasuredSignals": ["CN", "Gl", "NO", "NO2", "NOx", "O3", "P", "Prec", "RH", "T", "WDvect", "WSvect", "WSgust",
+                        "WD", "WS", "Tdew", "YO3", "YO3_index", "Pr", "T5cm"],
+  "allForecastedSignals": ["GLOB", "PS", "TOT_PREC", "RELHUM_2M", "T_2M", "TD_2M", "DD_10M", "FF_10M", "CLCT", "PMSL",
+                          "VMAX_10M"],
+  "dataMover": {
+    "locationFrom": "LUG",
+    "locationTmp": "LUG_UTC",
+    "locationTo": "MS-LUG"
+  },
+  "VOC": {
+    "correction": {
+      "slope": 0.6989976823658479,
+      "intercept": 6055.0538438732765
+    },
+    "useCorrection": true,
+    "emissionType": "measured",
+    "T_s": 303,
+    "R": 8.314,
+    "alpha": 0.0027,
+    "C_L1": 1.066,
+    "C_T1": 95000,
+    "C_T2": 230000,
+    "T_m": 314,
+    "C_T3": 0.961,
+    "GLOB_to_PAR": 4.6,
+    "KG_per_gamma": 98340
+  },
+  "featuresAnalyzer":{
+    "datasetCreator": "regions",
+    "numberEstimatorsNGB": 10,
+    "learningRate": 0.05,
+    "numberSelectedFeatures": 10,
+    "w1": 0.1,
+    "w2": 0.1,
+    "w3": 0.1,
+    "threshold1": 240,
+    "threshold2": 180,
+    "threshold3": 135
+  }
+}

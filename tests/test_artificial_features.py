@@ -1,18 +1,21 @@
 import json
 import logging
 import sys
+
+import pandas as pd
 import pytz
 import urllib3
+import os
 
 from influxdb import InfluxDBClient
 from classes.artificial_features import ArtificialFeatures
 
 # Add upper folder so the scripts can modify data at the same level of the scripts
-sys.path.append('..')
+path_parent = os.path.dirname(os.getcwd())
+os.chdir(path_parent)
 urllib3.disable_warnings()
 
-
-cfg = json.loads(open('../conf/oasi.json').read())
+cfg = json.loads(open('conf/oasi_tests.json').read())
 
 # Load the connections parameters and update the config dict with the related values
 cfg_conns = json.loads(open(cfg['connectionsFile']).read())
@@ -22,10 +25,9 @@ cfg.update(cfg_conns)
 forecast_type = 'MOR'
 
 logger = logging.getLogger()
-logging.basicConfig(format='%(asctime)-15s::%(levelname)s::%(funcName)s::%(message)s', level=logging.INFO,
-                    filename='../logs/dario.log')
+logging.basicConfig(format='%(asctime)-15s::%(levelname)s::%(funcName)s::%(message)s', level=logging.INFO)
 
-logger.info("Starting program")
+logger.info('Starting program')
 
 logger.info('Connection to InfluxDb server on socket [%s:%s]' % (cfg['influxDB']['host'], cfg['influxDB']['port']))
 try:
@@ -39,17 +41,17 @@ logger.info('Connection successful')
 
 AF = ArtificialFeatures(influx_client, forecast_type, cfg, logger)
 
+
 # --------------------------------------------------------------------------- #
 # Functions
 # --------------------------------------------------------------------------- #
-
-urllib3.disable_warnings()
 
 def get_results(AF, signals):
     results = []
     for sig in signals:
         results.append(AF.analyze_signal(sig))
     return results
+
 
 # --------------------------------------------------------------------------- #
 # Start testing
@@ -58,44 +60,44 @@ def get_results(AF, signals):
 # Test nr. 1: VOC_Totale
 
 # MOR, Measured VOC, 2021
-cfg["dayToForecast"] = "2021-06-20"
-cfg["VOC"]["useCorrection"] = True
-cfg["VOC"]["emissionType"] = "measured"
+cfg['dayToForecast'] = '2021-06-20'
+cfg['VOC']['useCorrection'] = True
+cfg['VOC']['emissionType'] = 'measured'
 signals = ['VOC_Totale']
 assert get_results(AF, signals) == [39708.13241934641]
 
 # MOR, Forecasted VOC, 2021, use correction
-cfg["dayToForecast"] = "2021-06-20"
-cfg["VOC"]["useCorrection"] = True
-cfg["VOC"]["emissionType"] = "forecasted"
+cfg['dayToForecast'] = '2021-06-20'
+cfg['VOC']['useCorrection'] = True
+cfg['VOC']['emissionType'] = 'forecasted'
 signals = ['VOC_Totale']
 assert get_results(AF, signals) == [41613.07999960428]
 
 # MOR, Forecasted VOC, 2021, don't use correction
-cfg["dayToForecast"] = "2021-06-20"
-cfg["VOC"]["useCorrection"] = False
-cfg["VOC"]["emissionType"] = "forecasted"
+cfg['dayToForecast'] = '2021-06-20'
+cfg['VOC']['useCorrection'] = False
+cfg['VOC']['emissionType'] = 'forecasted'
 signals = ['VOC_Totale']
 assert get_results(AF, signals) == [50360.66693265781]
 
 # MOR, Measured VOC, 2019
-cfg["dayToForecast"] = "2019-06-20"
-cfg["VOC"]["useCorrection"] = True
-cfg["VOC"]["emissionType"] = "measured"
+cfg['dayToForecast'] = '2019-06-20'
+cfg['VOC']['useCorrection'] = True
+cfg['VOC']['emissionType'] = 'measured'
 signals = ['VOC_Totale']
 assert get_results(AF, signals) == [39820.213070537204]
 
 # MOR, Forecasted VOC, 2019, use correction
-cfg["dayToForecast"] = "2019-06-20"
-cfg["VOC"]["useCorrection"] = True
-cfg["VOC"]["emissionType"] = "forecasted"
+cfg['dayToForecast'] = '2019-06-20'
+cfg['VOC']['useCorrection'] = True
+cfg['VOC']['emissionType'] = 'forecasted'
 signals = ['VOC_Totale']
 assert get_results(AF, signals) == [41766.71981682944]
 
 # MOR, Forecasted VOC, 2019, don't use correction
-cfg["dayToForecast"] = "2019-06-20"
-cfg["VOC"]["useCorrection"] = False
-cfg["VOC"]["emissionType"] = "forecasted"
+cfg['dayToForecast'] = '2019-06-20'
+cfg['VOC']['useCorrection'] = False
+cfg['VOC']['emissionType'] = 'forecasted'
 signals = ['VOC_Totale']
 assert get_results(AF, signals) == [50577.91145583987]
 
@@ -103,37 +105,63 @@ forecast_type = 'EVE'
 AF = ArtificialFeatures(influx_client, forecast_type, cfg, logger)
 
 # EVE, Forecasted VOC, 2021, use correction
-cfg["dayToForecast"] = "2021-06-20"
-cfg["VOC"]["useCorrection"] = True
-cfg["VOC"]["emissionType"] = "forecasted"
+cfg['dayToForecast'] = '2021-06-20'
+cfg['VOC']['useCorrection'] = True
+cfg['VOC']['emissionType'] = 'forecasted'
 signals = ['VOC_Totale']
 assert get_results(AF, signals) == [51081.18809719044]
 
 # MOR, Forecasted VOC, 2019, use correction
-cfg["dayToForecast"] = "2019-06-20"
-cfg["VOC"]["useCorrection"] = True
-cfg["VOC"]["emissionType"] = "forecasted"
+cfg['dayToForecast'] = '2019-06-20'
+cfg['VOC']['useCorrection'] = True
+cfg['VOC']['emissionType'] = 'forecasted'
 signals = ['VOC_Totale']
 assert get_results(AF, signals) == [36253.35103891304]
 
 # Test nr. 2 KLO-LUG forecasted gradient in 2021
+
 forecast_type = 'MOR'
 AF = ArtificialFeatures(influx_client, forecast_type, cfg, logger)
-cfg["dayToForecast"] = "2021-07-17"
+cfg['dayToForecast'] = '2021-07-17'
 signals = ['KLO-LUG', 'KLO-LUG_favonio']
 assert get_results(AF, signals) == [7.3180588235294275, 1.0]
-cfg["dayToForecast"] = "2021-07-16"
+cfg['dayToForecast'] = '2021-07-16'
 signals = ['KLO-LUG', 'KLO-LUG_favonio']
 assert get_results(AF, signals) == [5.80655882352934, 0.0]
 
+# KLO-LUG measured gradient before 2021
+
+cfg['dayToForecast'] = '2017-07-16'
+signals = ['KLO-LUG', 'KLO-LUG_favonio']
+assert get_results(AF, signals) == [3.385517241379489, 0.0]
+cfg['dayToForecast'] = '2017-07-17'
+signals = ['KLO-LUG', 'KLO-LUG_favonio']
+assert get_results(AF, signals) == [-1.142758620689733, 0.0]
+
 forecast_type = 'EVE'
 AF = ArtificialFeatures(influx_client, forecast_type, cfg, logger)
-cfg["dayToForecast"] = "2021-07-17"
+cfg['dayToForecast'] = '2021-07-16'
+signals = ['KLO-LUG', 'KLO-LUG_favonio']
+assert get_results(AF, signals) == [6.626441176470398, 1.0]
+AF = ArtificialFeatures(influx_client, forecast_type, cfg, logger)
+cfg['dayToForecast'] = '2021-07-17'
 signals = ['KLO-LUG', 'KLO-LUG_favonio']
 assert get_results(AF, signals) == [6.850470588235476, 1.0]
-cfg["dayToForecast"] = "2021-07-18"
+cfg['dayToForecast'] = '2021-07-18'
 signals = ['KLO-LUG', 'KLO-LUG_favonio']
 assert get_results(AF, signals) == [5.77594117647066, 0.0]
+
+AF = ArtificialFeatures(influx_client, forecast_type, cfg, logger)
+cfg['dayToForecast'] = '2017-07-16'
+signals = ['KLO-LUG', 'KLO-LUG_favonio']
+assert get_results(AF, signals) == [3.385517241379489, 0.0]
+AF = ArtificialFeatures(influx_client, forecast_type, cfg, logger)
+cfg['dayToForecast'] = '2017-07-17'
+signals = ['KLO-LUG', 'KLO-LUG_favonio']
+assert get_results(AF, signals) == [-1.142758620689733, 0.0]
+cfg['dayToForecast'] = '2017-07-18'
+signals = ['KLO-LUG', 'KLO-LUG_favonio']
+assert get_results(AF, signals) == [-2.998620689655013, 0.0]
 
 # Test nr. 3 Other signals
 
@@ -143,16 +171,16 @@ signals = ['P_BIO__T_2M__MAX', 'TICIA__T_2M__12h_mean', 'TICIA__T_2M__12h_mean_s
 
 forecast_type = 'MOR'
 AF = ArtificialFeatures(influx_client, forecast_type, cfg, logger)
-cfg["dayToForecast"] = "2019-08-01"
+cfg['dayToForecast'] = '2019-08-01'
 assert get_results(AF, signals) == [31.599999999999966, 29.39999999999992, 864.3599999999954, 52734.375, 37.6,
                                     265.1142857142857, 360.2909090909091, 2.3157894736842106, 82.85341974468085,
                                     24.079856115107912, 8196.797378]
 
 forecast_type = 'EVE'
 AF = ArtificialFeatures(influx_client, forecast_type, cfg, logger)
-cfg["dayToForecast"] = "2019-07-10"
+cfg['dayToForecast'] = '2019-07-10'
 assert get_results(AF, signals) == [28.899999999999977, 26.749999999999943, 715.5624999999969, 49027.89599999986, 0.0,
                                     241.075, 313.94545454545454, 2.8421052631578947, 94.70607321385475,
                                     23.371942446043168, 8395.299337]
 
-logger.info("Ending program")
+logger.info('Ending program')

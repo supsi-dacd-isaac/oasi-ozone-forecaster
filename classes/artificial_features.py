@@ -39,7 +39,7 @@ class ArtificialFeatures:
     def get_query_value_global(self, signal):
         """
         Perform a query on signals independent from the location where they are measured. This method is used for
-        calculating VOC and NOx variables in method do_IFEC_query
+        calculating VOC and NOx daily variables in method do_IFEC_query
         """
 
         measurement = self.cfg["influxDB"]["measurementGlobal"]
@@ -75,7 +75,6 @@ class ArtificialFeatures:
 
         query = 'SELECT value FROM %s WHERE location=\'%s\' AND signal=\'%s\' AND %s AND time=\'%s\'' \
                 % (measurement, location, signal_code, steps, lcl_dt)
-        self.logger.info('Performing query: %s' % query)
         return self.calc_data(query=query, signal_data=signal_data, func=func)
 
     def get_query_value_measure(self, measurement, signal_data, start_dt, end_dt, func):
@@ -84,8 +83,6 @@ class ArtificialFeatures:
 
         query = 'SELECT value FROM %s WHERE location=\'%s\' AND signal=\'%s\' AND time>=\'%s\' AND ' \
                 'time<=\'%s\'' % (measurement, location, signal_code, start_dt, end_dt)
-        self.logger.info('Performing query: %s' % query)
-
         return self.calc_data(query=query, signal_data=signal_data, func=func)
 
     def steps_type_forecast(self, mor_start, mor_end, eve_start, eve_end):
@@ -126,8 +123,7 @@ class ArtificialFeatures:
         if len(signal.split('__')) == 1:
             if 'KLO' in signal:
                 # KLO-LUG, KLO-LUG_favonio
-                measurement = self.cfg['influxDB']['measurementInputsForecasts']
-                val = self.do_KLO_query(signal, measurement)
+                val = self.do_KLO_query(signal)
 
             if signal == 'NOx_Totale':
                 val = self.get_query_value_global('Total_NOx')
@@ -227,13 +223,13 @@ class ArtificialFeatures:
         else:
             # This should not happen, but if it happens we try to save the day and use measurements instead. Pray we
             # never enter here
-            self.logger.error(
-                'Warning: Forecasted data for calculating VOC not found. Trying again with measured data.')
+            self.logger.warning(
+                'Forecasted data for calculating VOC not found. Trying again with measured data.')
             Q_ = self.get_Q_T_measured()[0]
 
         if T_ is None:
-            self.logger.error(
-                'Warning: Forecasted data for calculating VOC not found. Trying again with measured data.')
+            self.logger.warning(
+                'Forecasted data for calculating VOC not found. Trying again with measured data.')
             T_ = self.get_Q_T_measured()[1]
 
         return [Q_, T_]
@@ -345,18 +341,29 @@ class ArtificialFeatures:
 
         return self.get_query_value_forecast(measurement, signal_data, steps, func)
 
-    def do_KLO_query(self, signal_data, measurement):
+    def do_KLO_query(self, signal_data):
         """
         Calculate the pressure gradient between Kloten airport and Lugano to take into account the air current between
         South and North of Switzerland
         """
 
         func = 'mean'
-        steps = self.create_forecast_chunk_steps_string(0, 40)
-        res_LUG = self.get_query_value_forecast(measurement, 'LUG__PMSL__0', steps, func)
-        res_KLO = self.get_query_value_forecast(measurement, 'KLO__PMSL__0', steps, func)
+        dt = self.set_forecast_day()
 
-        diff = (res_KLO - res_LUG) / 100.0
+        if dt < pytz.timezone("UTC").localize(datetime(2021, 4, 1)):
+            measurement = self.cfg['influxDB']['measurementInputsMeasurements']
+            start_dt = '%sT23:05:00Z' % (dt - timedelta(days=1)).strftime('%Y-%m-%d')
+            end_dt = '%sT23:05:00Z' % dt.strftime('%Y-%m-%d')
+            res_LUG = self.get_query_value_measure(measurement, 'LUG__P_red__', start_dt, end_dt, func)
+            res_KLO = self.get_query_value_measure(measurement, 'KLO__P_red__', start_dt, end_dt, func)
+            diff = res_KLO - res_LUG
+
+        else:
+            measurement = self.cfg['influxDB']['measurementInputsForecasts']
+            steps = self.create_forecast_chunk_steps_string(0, 40)
+            res_LUG = self.get_query_value_forecast(measurement, 'LUG__PMSL__0', steps, func)
+            res_KLO = self.get_query_value_forecast(measurement, 'KLO__PMSL__0', steps, func)
+            diff = (res_KLO - res_LUG) / 100.0
 
         if 'favonio' in signal_data:
             return 1.0 if diff >= 6.0 else 0.0
