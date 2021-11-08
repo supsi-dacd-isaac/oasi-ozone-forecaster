@@ -9,12 +9,15 @@ import pandas as pd
 
 from influxdb import InfluxDBClient
 from datetime import date, datetime, timedelta
+
+dir_path = os.path.dirname(os.path.realpath(__file__))
+path_parent = os.path.dirname(dir_path)
+sys.path.insert(0, path_parent)
+
 from classes.inputs_gatherer import InputsGatherer
 from classes.artificial_features import ArtificialFeatures
 from datetime import date, datetime, timedelta
 
-path_parent = os.path.dirname(os.getcwd())
-os.chdir(path_parent)
 urllib3.disable_warnings()
 
 cfg = json.loads(open('conf/oasi_tests.json').read())

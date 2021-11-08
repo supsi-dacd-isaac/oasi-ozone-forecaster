@@ -6,13 +6,15 @@ import pandas as pd
 import pytz
 import urllib3
 import os
-
 from influxdb import InfluxDBClient
+
+dir_path = os.path.dirname(os.path.realpath(__file__))
+path_parent = os.path.dirname(dir_path)
+sys.path.insert(0, path_parent)
+
 from classes.artificial_features import ArtificialFeatures
 
 # Add upper folder so the scripts can modify data at the same level of the scripts
-path_parent = os.path.dirname(os.getcwd())
-os.chdir(path_parent)
 urllib3.disable_warnings()
 
 cfg = json.loads(open('conf/oasi_tests.json').read())
