@@ -96,7 +96,7 @@ if __name__ == "__main__":
     print(list(FA.dataFrames.keys()))
 
     for key, df in FA.dataFrames.items():
-        x_data, y_data = FA.dataset_splitter(df)
+        x_data, y_data = FA.dataset_splitter(key, df)
         features = x_data.columns.values
         x_data = np.array(x_data)
         y_data = np.array(y_data)
