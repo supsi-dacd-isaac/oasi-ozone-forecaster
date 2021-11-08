@@ -1,5 +1,5 @@
 {
-  "connectionsFile": "conf/conns_dario.json",
+  "connectionsFile": "conf/conns.json",
   "globalSignals": ["RHW"],
   "local": {
     "timeZone": "Europe/Zurich",

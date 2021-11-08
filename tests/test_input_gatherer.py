@@ -6,6 +6,7 @@ import urllib3
 import os
 import numpy as np
 import pandas as pd
+import argparse
 
 from influxdb import InfluxDBClient
 from datetime import date, datetime, timedelta
@@ -20,56 +21,72 @@ from datetime import date, datetime, timedelta
 
 urllib3.disable_warnings()
 
-cfg = json.loads(open('conf/oasi_tests.json').read())
+if __name__ == "__main__":
+    # --------------------------------------------------------------------------- #
+    # Configuration file
+    # --------------------------------------------------------------------------- #
+    arg_parser = argparse.ArgumentParser()
+    arg_parser.add_argument("-c", help="configuration file")
+    arg_parser.add_argument("-t", help="type (MOR | EVE)")
+    arg_parser.add_argument("-l", help="log file (optional, if empty log redirected on stdout)")
+    args = arg_parser.parse_args()
 
-# Load the connections parameters and update the config dict with the related values
-cfg_conns = json.loads(open(cfg['connectionsFile']).read())
-cfg.update(cfg_conns)
+    # Load the main parameters
+    config_file = args.c
+    if os.path.isfile(config_file) is False:
+        print('\nATTENTION! Unable to open configuration file %s\n' % config_file)
+        sys.exit(1)
 
-# Define the forecast type
-forecast_type = 'MOR'
+    cfg = json.loads(open(args.c).read())
 
-logger = logging.getLogger()
-logging.basicConfig(format='%(asctime)-15s::%(levelname)s::%(funcName)s::%(message)s', level=logging.INFO)
+    # Load the connections parameters and update the config dict with the related values
+    cfg_conns = json.loads(open(cfg['connectionsFile']).read())
+    cfg.update(cfg_conns)
 
-logger.info("Starting program")
+    # Define the forecast type
+    forecast_type = args.t
 
-logger.info('Connection to InfluxDb server on socket [%s:%s]' % (cfg['influxDB']['host'], cfg['influxDB']['port']))
-try:
-    influx_client = InfluxDBClient(host=cfg['influxDB']['host'], port=cfg['influxDB']['port'],
-                                   password=cfg['influxDB']['password'], username=cfg['influxDB']['user'],
-                                   database=cfg['influxDB']['database'], ssl=cfg['influxDB']['ssl'])
-except Exception as e:
-    logger.error('EXCEPTION: %s' % str(e))
-    sys.exit(3)
-logger.info('Connection successful')
+    logger = logging.getLogger()
+    logging.basicConfig(format='%(asctime)-15s::%(levelname)s::%(funcName)s::%(message)s', level=logging.INFO)
 
-cfg["dayToForecast"] = "2021-06-20"
-cfg["VOC"]["useCorrection"] = True
+    logger.info("Starting program")
 
-AF = ArtificialFeatures(influx_client, forecast_type, cfg, logger)
+    logger.info('Connection to InfluxDb server on socket [%s:%s]' % (cfg['influxDB']['host'], cfg['influxDB']['port']))
+    try:
+        influx_client = InfluxDBClient(host=cfg['influxDB']['host'], port=cfg['influxDB']['port'],
+                                       password=cfg['influxDB']['password'], username=cfg['influxDB']['user'],
+                                       database=cfg['influxDB']['database'], ssl=cfg['influxDB']['ssl'])
+    except Exception as e:
+        logger.error('EXCEPTION: %s' % str(e))
+        sys.exit(3)
+    logger.info('Connection successful')
 
-IG = InputsGatherer(influxdb_client=influx_client, forecast_type=forecast_type, cfg=cfg, logger=logger,
-                    artificial_features=AF)
+    cfg["dayToForecast"] = "2021-06-20"
+    cfg["VOC"]["useCorrection"] = True
 
-cfg["regions"] = {}
-cfg["regions"]["Testing"] = {
-    "MeasureStations": ["CHI", "MEN", "BIO", "LUG", "MS-LUG", "LOC"],
-    "ForecastStations": ["P_BIO", "TICIA", "OTL"]
-}
+    AF = ArtificialFeatures(influx_client, forecast_type, cfg, logger)
 
-IG.generate_all_signals()
+    IG = InputsGatherer(influxdb_client=influx_client, forecast_type=forecast_type, cfg=cfg, logger=logger,
+                        artificial_features=AF)
 
-# Assert we get the expected results and we didn't break anything
-testing_data = json.loads(open(cfg["datasetSettings"]["outputSignalFolder"] + 'Testing_signals.json').read())
-assert len(testing_data["signals"]) == len(set(testing_data["signals"])) == 2921
-assert "LOC__CN__m0" in testing_data["signals"]
-assert "OTL__GLOB__step0" in testing_data["signals"]
-assert "VOC_Totale" in testing_data["signals"]
-assert "KLO-LUG" in testing_data["signals"]
-assert "IsWeekend" in testing_data["signals"]
+    cfg["regions"] = {}
+    cfg["regions"]["Testing"] = {
+        "MeasureStations": ["CHI", "MEN", "BIO", "LUG", "MS-LUG", "LOC"],
+        "ForecastStations": ["P_BIO", "TICIA", "OTL"]
+    }
 
-# Delete testing data
-os.remove(cfg['datasetSettings']['outputSignalFolder'] + 'Testing_signals.json')
+    IG.generate_all_signals()
 
-logger.info("Ending program")
+    # Assert we get the expected results and we didn't break anything
+    testing_data = json.loads(open(cfg["datasetSettings"]["outputSignalFolder"] + 'Testing_signals.json').read())
+    assert len(testing_data["signals"]) == len(set(testing_data["signals"])) == 2921
+    assert "LOC__CN__m0" in testing_data["signals"]
+    assert "OTL__GLOB__step0" in testing_data["signals"]
+    assert "VOC_Totale" in testing_data["signals"]
+    assert "KLO-LUG" in testing_data["signals"]
+    assert "IsWeekend" in testing_data["signals"]
+
+    # Delete testing data
+    os.remove(cfg['datasetSettings']['outputSignalFolder'] + 'Testing_signals.json')
+
+    logger.info("Ending program")

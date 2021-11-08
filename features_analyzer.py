@@ -3,6 +3,8 @@ import logging
 import os
 import sys
 import shutil
+import argparse
+
 
 import numpy as np
 import urllib3
@@ -14,68 +16,84 @@ from classes.inputs_gatherer import InputsGatherer
 
 urllib3.disable_warnings()
 
-cfg = json.loads(open('conf/oasi_dario.json').read())
+if __name__ == "__main__":
+    # --------------------------------------------------------------------------- #
+    # Configuration file
+    # --------------------------------------------------------------------------- #
+    arg_parser = argparse.ArgumentParser()
+    arg_parser.add_argument("-c", help="configuration file")
+    arg_parser.add_argument("-t", help="type (MOR | EVE)")
+    arg_parser.add_argument("-l", help="log file (optional, if empty log redirected on stdout)")
+    args = arg_parser.parse_args()
 
-# Load the connections parameters and update the config dict with the related values
-cfg_conns = json.loads(open(cfg['connectionsFile']).read())
-cfg.update(cfg_conns)
+    # Load the main parameters
+    config_file = args.c
+    if os.path.isfile(config_file) is False:
+        print('\nATTENTION! Unable to open configuration file %s\n' % config_file)
+        sys.exit(1)
 
-# Define the forecast type
-forecast_type = 'MOR'
+    cfg = json.loads(open(args.c).read())
 
-logger = logging.getLogger()
-logging.basicConfig(format='%(asctime)-15s::%(levelname)s::%(funcName)s::%(message)s', level=logging.INFO)
+    # Load the connections parameters and update the config dict with the related values
+    cfg_conns = json.loads(open(cfg['connectionsFile']).read())
+    cfg.update(cfg_conns)
 
-logger.info('Starting program')
+    # Define the forecast type
+    forecast_type = args.t
 
-logger.info('Connection to InfluxDb server on socket [%s:%s]' % (cfg['influxDB']['host'], cfg['influxDB']['port']))
-try:
-    influx_client = InfluxDBClient(host=cfg['influxDB']['host'], port=cfg['influxDB']['port'],
-                                   password=cfg['influxDB']['password'], username=cfg['influxDB']['user'],
-                                   database=cfg['influxDB']['database'], ssl=cfg['influxDB']['ssl'])
-except Exception as e:
-    logger.error('EXCEPTION: %s' % str(e))
-    sys.exit(3)
-logger.info('Connection successful')
+    logger = logging.getLogger()
+    logging.basicConfig(format='%(asctime)-15s::%(levelname)s::%(funcName)s::%(message)s', level=logging.INFO)
 
-AF = ArtificialFeatures(influx_client, forecast_type, cfg, logger)
-IG = InputsGatherer(influx_client, forecast_type, cfg, logger, AF)
-FA = FeaturesAnalyzer(IG, forecast_type, cfg, logger)
+    logger.info('Starting program')
 
-# --------------------------------------------------------------------------- #
-# Functions
-# --------------------------------------------------------------------------- #
+    logger.info('Connection to InfluxDb server on socket [%s:%s]' % (cfg['influxDB']['host'], cfg['influxDB']['port']))
+    try:
+        influx_client = InfluxDBClient(host=cfg['influxDB']['host'], port=cfg['influxDB']['port'],
+                                       password=cfg['influxDB']['password'], username=cfg['influxDB']['user'],
+                                       database=cfg['influxDB']['database'], ssl=cfg['influxDB']['ssl'])
+    except Exception as e:
+        logger.error('EXCEPTION: %s' % str(e))
+        sys.exit(3)
+    logger.info('Connection successful')
 
-# --------------------------------------------------------------------------- #
-# Start testing
-# --------------------------------------------------------------------------- #
+    AF = ArtificialFeatures(influx_client, forecast_type, cfg, logger)
+    IG = InputsGatherer(influx_client, forecast_type, cfg, logger, AF)
+    FA = FeaturesAnalyzer(IG, forecast_type, cfg, logger)
 
-# Test using custom signals files
+    # --------------------------------------------------------------------------- #
+    # Functions
+    # --------------------------------------------------------------------------- #
 
-AF = ArtificialFeatures(influx_client, forecast_type, cfg, logger)
-IG = InputsGatherer(influx_client, forecast_type, cfg, logger, AF)
-FA = FeaturesAnalyzer(IG, forecast_type, cfg, logger)
+    # --------------------------------------------------------------------------- #
+    # Start testing
+    # --------------------------------------------------------------------------- #
 
-for dataset in cfg['datasetSettings']['customJSONSignals']:
-    assert os.path.isfile(cfg['datasetSettings']['loadSignalsFolder'] + dataset['filename'])
+    # Test using custom signals files
 
-FA.dataset_creator()
+    AF = ArtificialFeatures(influx_client, forecast_type, cfg, logger)
+    IG = InputsGatherer(influx_client, forecast_type, cfg, logger, AF)
+    FA = FeaturesAnalyzer(IG, forecast_type, cfg, logger)
 
-for dataset in cfg['datasetSettings']['customJSONSignals']:
-    name = dataset['filename'].split('.')[0]
-    folder_path = IG.output_folder_creator(name)
-    file_path = '%s%s' % (folder_path, 'dataset.csv')
-    assert os.path.isfile(file_path)
+    for dataset in cfg['datasetSettings']['customJSONSignals']:
+        assert os.path.isfile(cfg['datasetSettings']['loadSignalsFolder'] + dataset['filename'])
 
-print(list(FA.dataFrames.keys()))
+    FA.dataset_creator()
 
-for key, df in FA.dataFrames.items():
-    x_data, y_data = FA.dataset_splitter(key, df)
-    features = x_data.columns.values
-    x_data = np.array(x_data)
-    y_data = np.array(y_data)
+    for dataset in cfg['datasetSettings']['customJSONSignals']:
+        name = dataset['filename'].split('.')[0]
+        folder_path = IG.output_folder_creator(name)
+        file_path = '%s%s' % (folder_path, 'dataset.csv')
+        assert os.path.isfile(file_path)
 
-    new_features_custom, importance_custom = FA.perform_feature_selection(x_data, y_data, features)
-    print(importance_custom)
+    print(list(FA.dataFrames.keys()))
 
-logger.info('Ending program')
+    for key, df in FA.dataFrames.items():
+        x_data, y_data = FA.dataset_splitter(key, df)
+        features = x_data.columns.values
+        x_data = np.array(x_data)
+        y_data = np.array(y_data)
+
+        new_features_custom, importance_custom = FA.perform_feature_selection(x_data, y_data, features)
+        print(importance_custom)
+
+    logger.info('Ending program')
