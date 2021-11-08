@@ -5,6 +5,7 @@ import sys
 import shutil
 
 import numpy as np
+import pandas as pd
 import urllib3
 from influxdb import InfluxDBClient
 
@@ -24,7 +25,7 @@ cfg_conns = json.loads(open(cfg['connectionsFile']).read())
 cfg.update(cfg_conns)
 
 # Define the forecast type
-forecast_type = 'EVE'
+forecast_type = 'MOR'
 
 logger = logging.getLogger()
 logging.basicConfig(format='%(asctime)-15s::%(levelname)s::%(funcName)s::%(message)s', level=logging.INFO)
@@ -55,41 +56,44 @@ FA = FeaturesAnalyzer(IG, forecast_type, cfg, logger)
 
 cfg['datasetSettings']['startDay'] = '07-10'
 cfg['datasetSettings']['endDay'] = '07-20'
-cfg['datasetSettings']['years'] = [2021]
+cfg['datasetSettings']['years'] = [2019, 2021]
 
-# Use regions
+# Test using regions
 
-# cfg['featuresAnalyzer']['datasetCreator'] = 'regions'
-# cfg['measuredSignalsStations']['BIO'] = []
-# cfg['measuredSignalsStations']['CHI'] = []
-# cfg['forecastedSignalsStations']['P_BIO'] = []
-# cfg['forecastedSignalsStations']['TICIA'] = []
-# FA.dataset_creator()
-#
-# for region in cfg['regions']:
-#     fn = cfg['datasetSettings']['outputSignalFolder'] + region + '_signals.json'
-#     assert os.path.isfile(fn)
-#     assert os.path.isfile(cfg['datasetSettings']['outputCsvFolder'] + region + '_signals_07-10_07-20_2021-2021.csv')
-#     for sig in region['targetColumn']:
-#         assert sig in json.loads(open(fn).read())['signals']
-#
-# print(list(FA.dataFrames.keys()))
-#
-# for key, df in FA.dataFrames.items():
-#     x_data, y_data = FA.dataset_splitter(df)
-#     features = x_data.columns.values
-#     x_data = np.array(x_data)
-#     y_data = np.array(y_data)
-#
-#     new_features, importance = FA.perform_feature_selection(x_data, y_data, features)
-#     print(new_features)
-#
-# for region in cfg['regions']:
-#     assert os.remove(cfg['datasetSettings']['outputSignalFolder'] + region + '_signals.json')
-#     assert os.remove(cfg['datasetSettings']['outputCsvFolder'] + region + '_signals_07-10_07-20_2021-2021.csv')
+cfg['featuresAnalyzer']['datasetCreator'] = 'regions'
+cfg['measuredSignalsStations']['BIO'] = []
+cfg['measuredSignalsStations']['CHI'] = []
+cfg['forecastedSignalsStations']['P_BIO'] = []
+cfg['forecastedSignalsStations']['TICIA'] = []
+FA.dataset_creator()
+
+for region in cfg['regions']:
+    fn = cfg['datasetSettings']['outputSignalFolder'] + region + '_signals.json'
+    assert os.path.isfile(fn)
+    for sig in cfg['regions'][region]['targetColumn']:
+        assert sig in json.loads(open(fn).read())['signals']
+
+print(list(FA.dataFrames.keys()))
+
+for key, df in FA.dataFrames.items():
+    x_data, y_data = FA.dataset_splitter(df)
+    features = x_data.columns.values
+    x_data = np.array(x_data)
+    y_data = np.array(y_data)
+
+    new_features, importance = FA.perform_feature_selection(x_data, y_data, features)
+    print(new_features)
+
+for region in cfg['regions']:
+    folder_path = IG.output_folder_creator(region)
+    os.remove(cfg['datasetSettings']['outputSignalFolder'] + region + '_signals.json')
+    try:
+        shutil.rmtree(folder_path)
+    except OSError as e:
+        print("Error: %s - %s." % (e.filename, e.strerror))
 
 
-# Use custom signals files
+# Test using custom signals files
 
 AF = ArtificialFeatures(influx_client, forecast_type, cfg, logger)
 IG = InputsGatherer(influx_client, forecast_type, cfg, logger, AF)
@@ -157,12 +161,16 @@ for key, df in FA.dataFrames.items():
     print(importance_reader)
 
 for dataset in cfg['datasetSettings']['csvFiles']:
-    os.remove(cfg['datasetSettings']['loadCsvFolder'] + dataset['filename'])
+    fn = cfg['datasetSettings']['loadCsvFolder'] + dataset['filename']
     name = dataset['filename'].split('.')[0]
+    df = pd.read_csv(fn)
+    assert len(df) == 22
+    os.remove(fn)
     folder_path = IG.output_folder_creator(name)
     try:
         shutil.rmtree(folder_path)
     except OSError as e:
         print("Error: %s - %s." % (e.filename, e.strerror))
+
 
 logger.info('Ending program')

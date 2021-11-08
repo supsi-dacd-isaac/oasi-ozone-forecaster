@@ -40,39 +40,36 @@
   "datasetSettings": {
     "saveDataset": true,
     "type": "MOR",
-    "loadSignalsFolder": "conf/signals/tests/",
+    "loadSignalsFolder": "conf/signals/",
     "customJSONSignals": [
-      {"filename": "dataset_BIO_MOR.json", "targetColumn": ["BIO__YO3__d1"]},
-      {"filename": "dataset_CHI_MOR.json", "targetColumn": ["CHI__YO3__d1"]}
+      {"filename": "best_features_CHI_MOR.json", "targetColumn": ["CHI__YO3__d1"]}
     ],
     "loadCsvFolder": "conf/csv/tests/",
     "csvFiles": [
-      {"filename": "Sahara.csv", "targetColumn": ["BIO__YO3__d1", "CHI__YO3__d1"]},
-      {"filename": "California.csv", "targetColumn": ["BIO__YO3__d1"]},
-      {"filename": "Siberia.csv", "targetColumn": ["CHI__YO3__d1"]}
+      {"filename": "CHI_MOR.csv", "targetColumn": ["CHI__YO3__d1"]}
     ],
     "outputCsvFolder": "output/",
     "outputSignalFolder": "conf/signals/regions/",
-    "startDay": "07-10",
-    "endDay": "07-20",
-    "years": [2019, 2021]
+    "startDay": "05-01",
+    "endDay": "09-30",
+    "years": [2015, 2020]
   },
   "dayToForecast": "2021-06-22",
   "regions": {
-    "California": {
-      "MeasureStations": ["BIO"],
-      "targetColumn": ["BIO__YO3__d1"],
+    "Chiasso": {
+      "MeasureStations": ["CHI", "MEN"],
+      "targetColumn": ["CHI__YO3__d1"],
       "ForecastStations": ["TICIA"]
     },
-    "Siberia": {
-      "MeasureStations": ["CHI"],
-      "targetColumn": ["CHI__YO3__d1"],
+    "Bioggio": {
+      "MeasureStations": ["BIO", "LUG", "MS-LUG"],
+      "targetColumn": ["BIO__YO3__d1"],
       "ForecastStations": ["P_BIO"]
     },
-    "Sahara": {
-      "MeasureStations": ["BIO", "CHI"],
-      "targetColumn": ["BIO__YO3__d1", "CHI__YO3__d1"],
-      "ForecastStations": ["P_BIO"]
+    "Ticino": {
+      "MeasureStations": ["CHI", "MEN", "BIO", "LUG", "MS-LUG"],
+      "targetColumn": ["CHI__YO3__d1", "BIO__YO3__d1"],
+      "ForecastStations": ["P_BIO", "TICIA"]
     }
   },
   "measuredSignalsStations":{
@@ -116,10 +113,10 @@
     "KG_per_gamma": 98340
   },
   "featuresAnalyzer":{
-    "datasetCreator": "regions",
-    "numberEstimatorsNGB": 10,
+    "datasetCreator": "customJSON",
+    "numberEstimatorsNGB": 500,
     "learningRate": 0.05,
-    "numberSelectedFeatures": 10,
+    "numberSelectedFeatures": 30,
     "w1": 0.1,
     "w2": 0.1,
     "w3": 0.1,
