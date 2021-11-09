@@ -5,21 +5,22 @@ import sys
 import shutil
 import argparse
 
-
 import numpy as np
 import pandas as pd
 import urllib3
 from influxdb import InfluxDBClient
 
-dir_path = os.path.dirname(os.path.realpath(__file__))
-path_parent = os.path.dirname(dir_path)
-sys.path.insert(0, path_parent)
+# dir_path = os.path.dirname(os.path.realpath(__file__))
+# path_parent = os.path.dirname(dir_path)
+# sys.path.insert(0, path_parent)
 
 from classes.artificial_features import ArtificialFeatures
 from classes.features_analyzer import FeaturesAnalyzer
 from classes.inputs_gatherer import InputsGatherer
 
 # Add upper folder so the scripts can modify data at the same level of the scripts
+path_parent = os.path.dirname(os.getcwd())
+os.chdir(path_parent)
 urllib3.disable_warnings()
 
 if __name__ == "__main__":
@@ -71,20 +72,18 @@ if __name__ == "__main__":
     # --------------------------------------------------------------------------- #
 
     # --------------------------------------------------------------------------- #
-    # Start testing
+    # Test using regions
     # --------------------------------------------------------------------------- #
 
     cfg['datasetSettings']['startDay'] = '07-10'
     cfg['datasetSettings']['endDay'] = '07-20'
-    cfg['datasetSettings']['years'] = [2019, 2021]
-
-    # Test using regions
-
+    cfg['datasetSettings']['years'] = [2019]
     cfg['featuresAnalyzer']['datasetCreator'] = 'regions'
     cfg['measuredSignalsStations']['BIO'] = []
     cfg['measuredSignalsStations']['CHI'] = []
     cfg['forecastedSignalsStations']['P_BIO'] = []
     cfg['forecastedSignalsStations']['TICIA'] = []
+
     FA.dataset_creator()
 
     for region in cfg['regions']:
@@ -96,10 +95,8 @@ if __name__ == "__main__":
     print(list(FA.dataFrames.keys()))
 
     for key, df in FA.dataFrames.items():
-        x_data, y_data = FA.dataset_splitter(key, df)
-        features = x_data.columns.values
-        x_data = np.array(x_data)
-        y_data = np.array(y_data)
+        print(key)
+        x_data, y_data, features = FA.dataset_splitter(key, df)
 
         new_features, importance = FA.perform_feature_selection(x_data, y_data, features)
         print(new_features)
@@ -112,8 +109,9 @@ if __name__ == "__main__":
         except OSError as e:
             print("Error: %s - %s." % (e.filename, e.strerror))
 
-
+    # --------------------------------------------------------------------------- #
     # Test using custom signals files
+    # --------------------------------------------------------------------------- #
 
     AF = ArtificialFeatures(influx_client, forecast_type, cfg, logger)
     IG = InputsGatherer(influx_client, forecast_type, cfg, logger, AF)
@@ -139,10 +137,7 @@ if __name__ == "__main__":
     print(list(FA.dataFrames.keys()))
 
     for key, df in FA.dataFrames.items():
-        x_data, y_data = FA.dataset_splitter(key, df)
-        features = x_data.columns.values
-        x_data = np.array(x_data)
-        y_data = np.array(y_data)
+        x_data, y_data, features = FA.dataset_splitter(key, df)
 
         new_features_custom, importance_custom = FA.perform_feature_selection(x_data, y_data, features)
         print(importance_custom)
@@ -155,8 +150,9 @@ if __name__ == "__main__":
         except OSError as e:
             print("Error: %s - %s." % (e.filename, e.strerror))
 
-
-    # Read CSV files
+    # --------------------------------------------------------------------------- #
+    # Test reading CSV files
+    # --------------------------------------------------------------------------- #
 
     AF = ArtificialFeatures(influx_client, forecast_type, cfg, logger)
     IG = InputsGatherer(influx_client, forecast_type, cfg, logger, AF)
@@ -172,10 +168,7 @@ if __name__ == "__main__":
     print(list(FA.dataFrames.keys()))
 
     for key, df in FA.dataFrames.items():
-        x_data, y_data = FA.dataset_splitter(key, df)
-        features = x_data.columns.values
-        x_data = np.array(x_data)
-        y_data = np.array(y_data)
+        x_data, y_data, features = FA.dataset_splitter(key, df)
 
         new_features_reader, importance_reader = FA.perform_feature_selection(x_data, y_data, features)
         print(importance_reader)
@@ -192,5 +185,82 @@ if __name__ == "__main__":
         except OSError as e:
             print("Error: %s - %s." % (e.filename, e.strerror))
 
+    # --------------------------------------------------------------------------- #
+    # Test transition over 2020 at MOR
+    # --------------------------------------------------------------------------- #
+
+    forecast_type = 'MOR'
+
+    AF = ArtificialFeatures(influx_client, forecast_type, cfg, logger)
+    IG = InputsGatherer(influx_client, forecast_type, cfg, logger, AF)
+    FA = FeaturesAnalyzer(IG, forecast_type, cfg, logger)
+
+    cfg['datasetSettings']['startDay'] = '08-13'
+    cfg['datasetSettings']['endDay'] = '08-23'
+    cfg['datasetSettings']['years'] = [2019, 2020, 2021]
+    cfg['featuresAnalyzer']['datasetCreator'] = 'customJSON'
+
+    for dataset in cfg['datasetSettings']['customJSONSignals']:
+        assert os.path.isfile(cfg['datasetSettings']['loadSignalsFolder'] + dataset['filename'])
+
+    FA.dataset_creator()
+
+    for dataset in cfg['datasetSettings']['customJSONSignals']:
+        name = dataset['filename'].split('.')[0]
+        folder_path = IG.output_folder_creator(name)
+        file_path = '%s%s' % (folder_path, 'dataset.csv')
+        assert os.path.isfile(file_path)
+
+    for key, df in FA.dataFrames.items():
+        x_data, y_data, features = FA.dataset_splitter(key, df)
+
+        assert len(x_data) == 26
+
+    for dataset in cfg['datasetSettings']['customJSONSignals']:
+        name = dataset['filename'].split('.')[0]
+        folder_path = IG.output_folder_creator(name)
+        try:
+            shutil.rmtree(folder_path)
+        except OSError as e:
+            print("Error: %s - %s." % (e.filename, e.strerror))
+
+    # --------------------------------------------------------------------------- #
+    # Test transition over 2020 at EVE
+    # --------------------------------------------------------------------------- #
+
+    forecast_type = 'EVE'
+
+    AF = ArtificialFeatures(influx_client, forecast_type, cfg, logger)
+    IG = InputsGatherer(influx_client, forecast_type, cfg, logger, AF)
+    FA = FeaturesAnalyzer(IG, forecast_type, cfg, logger)
+
+    cfg['datasetSettings']['startDay'] = '08-13'
+    cfg['datasetSettings']['endDay'] = '08-23'
+    cfg['datasetSettings']['years'] = [2019, 2020, 2021]
+    cfg['featuresAnalyzer']['datasetCreator'] = 'customJSON'
+
+    for dataset in cfg['datasetSettings']['customJSONSignals']:
+        assert os.path.isfile(cfg['datasetSettings']['loadSignalsFolder'] + dataset['filename'])
+
+    FA.dataset_creator()
+
+    for dataset in cfg['datasetSettings']['customJSONSignals']:
+        name = dataset['filename'].split('.')[0]
+        folder_path = IG.output_folder_creator(name)
+        file_path = '%s%s' % (folder_path, 'dataset.csv')
+        assert os.path.isfile(file_path)
+
+    for key, df in FA.dataFrames.items():
+        x_data, y_data, features = FA.dataset_splitter(key, df)
+
+        assert len(x_data) == 23
+
+    for dataset in cfg['datasetSettings']['customJSONSignals']:
+        name = dataset['filename'].split('.')[0]
+        folder_path = IG.output_folder_creator(name)
+        try:
+            shutil.rmtree(folder_path)
+        except OSError as e:
+            print("Error: %s - %s." % (e.filename, e.strerror))
 
     logger.info('Ending program')

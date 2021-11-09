@@ -115,6 +115,11 @@ class InputsGatherer:
             start_day = str(year) + '-' + self.cfg['datasetSettings']['startDay']
             end_day = str(year) + '-' + self.cfg['datasetSettings']['endDay']
 
+            # In 2020 we lost part of the forecasted signal, so we're forced to discard most days until the 17th August
+            start_dt = datetime.strptime(start_day, '%Y-%m-%d')
+            if year == 2020 and start_dt < datetime.strptime('2020-08-17', '%Y-%m-%d'):
+                start_day = '2020-08-17'
+
             curr_day = start_day
 
             end_dt = datetime.strptime(end_day, '%Y-%m-%d')

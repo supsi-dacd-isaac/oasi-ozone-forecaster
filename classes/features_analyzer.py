@@ -85,7 +85,11 @@ class FeaturesAnalyzer:
         if len(data['targetColumns']) > 1:
             x_data = x_data.drop(columns=[target_column])
 
-        return x_data, y_data
+        features = x_data.columns.values
+        x_data = np.array(x_data, dtype='float64')
+        y_data = np.array(y_data, dtype='float64')
+
+        return x_data, y_data, features
 
     def perform_feature_selection(self, x_data, y_data, features):
 
@@ -102,7 +106,7 @@ class FeaturesAnalyzer:
         NGB_model = NGBRegressor(learning_rate=l_rate, Base=default_tree_learner, Dist=Normal, Score=MLE,
                                  n_estimators=n_est, random_state=500)
         weights = np.array(
-            [w1 if x >= threshold1 else w2 if x >= threshold2 else w3 if x >= threshold3 else 0.1 for x in y_data])
+            [w1 if x >= threshold1 else w2 if x >= threshold2 else w3 if x >= threshold3 else 0.1 for x in y_data], dtype='float64')
         ngb = NGB_model.fit(x_data, y_data.ravel(), sample_weight=weights)
         explainer = shap.TreeExplainer(ngb, x_data, model_output=0)
         shap_values = explainer.shap_values(x_data, check_additivity=False)
