@@ -231,6 +231,7 @@ class InputsGatherer:
                 if '__d0' in signal or '__d1' in signal or '__d2' in signal or \
                    '__d3' in signal or '__d4' in signal or '__d5' in signal:
                     # check if there are chunks
+                    # check if there are chunks
                     if '__chunk' in signal:
                         self.do_chunk_query(signal, measurement)
                     else:
@@ -723,7 +724,7 @@ class InputsGatherer:
             self.output_dfs[region] = {'dataset': dataframe, 'targetColumns': self.cfg['regions'][region]["targetColumn"]}
             fp = self.output_folder_creator(region)
             if self.cfg['datasetSettings']['saveDataset']:
-                dataframe.to_csv(fp + 'dataset.csv', header=True, index=False)
+                dataframe.to_csv(fp + fp.split(os.sep)[1] + '_dataset.csv', header=True, index=False)
 
     def dataframe_builder_custom(self):
         self.output_dfs = {}
@@ -735,7 +736,7 @@ class InputsGatherer:
             self.output_dfs[name] = {'dataset': dataframe, 'targetColumns': dataset['targetColumn']}
             fp = self.output_folder_creator(name)
             if self.cfg['datasetSettings']['saveDataset']:
-                dataframe.to_csv(fp + 'dataset.csv', header=True, index=False)
+                dataframe.to_csv(fp + fp.split(os.sep)[1] + '_dataset.csv', header=True, index=False)
 
     def dataframe_reader(self):
         self.output_dfs = {}

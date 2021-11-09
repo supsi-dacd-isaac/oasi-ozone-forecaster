@@ -5,7 +5,6 @@ import sys
 import shutil
 import argparse
 
-
 import numpy as np
 import urllib3
 from influxdb import InfluxDBClient
@@ -56,19 +55,13 @@ if __name__ == "__main__":
         sys.exit(3)
     logger.info('Connection successful')
 
-    AF = ArtificialFeatures(influx_client, forecast_type, cfg, logger)
-    IG = InputsGatherer(influx_client, forecast_type, cfg, logger, AF)
-    FA = FeaturesAnalyzer(IG, forecast_type, cfg, logger)
-
     # --------------------------------------------------------------------------- #
     # Functions
     # --------------------------------------------------------------------------- #
 
     # --------------------------------------------------------------------------- #
-    # Start testing
+    # Start calculations
     # --------------------------------------------------------------------------- #
-
-    # Test using custom signals files
 
     AF = ArtificialFeatures(influx_client, forecast_type, cfg, logger)
     IG = InputsGatherer(influx_client, forecast_type, cfg, logger, AF)
@@ -79,19 +72,8 @@ if __name__ == "__main__":
 
     FA.dataset_creator()
 
-    for dataset in cfg['datasetSettings']['customJSONSignals']:
-        name = dataset['filename'].split('.')[0]
-        folder_path = IG.output_folder_creator(name)
-        file_path = '%s%s' % (folder_path, 'dataset.csv')
-        assert os.path.isfile(file_path)
-
-    print(list(FA.dataFrames.keys()))
-
     for key, df in FA.dataFrames.items():
-        x_data, y_data = FA.dataset_splitter(key, df)
-        features = x_data.columns.values
-        x_data = np.array(x_data)
-        y_data = np.array(y_data)
+        x_data, y_data, features = FA.dataset_splitter(key, df)
 
         new_features_custom, importance_custom = FA.perform_feature_selection(x_data, y_data, features)
         print(importance_custom)

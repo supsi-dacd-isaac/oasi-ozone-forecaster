@@ -1,7 +1,10 @@
+import os
+
 import numpy as np
 import pandas as pd
 import shap
-import os
+import json
+
 from ngboost import NGBRegressor
 from ngboost.distns import Normal
 from ngboost.learners import default_tree_learner
@@ -46,7 +49,8 @@ class FeaturesAnalyzer:
         elif self.cfg["featuresAnalyzer"]["datasetCreator"] == 'CSVreader':
             self.inputs_gatherer.dataframe_reader()
         else:
-            self.logger.error('Option for dataset_creator is not valid. Available options are "customJSON", "regions" or "CSVreader"')
+            self.logger.error(
+                'Option for dataset_creator is not valid. Available options are "customJSON", "regions" or "CSVreader"')
 
         self.dataFrames = self.inputs_gatherer.output_dfs
 
@@ -85,6 +89,9 @@ class FeaturesAnalyzer:
         if len(data['targetColumns']) > 1:
             x_data = x_data.drop(columns=[target_column])
 
+        # if not x_data[x_data.isnull().any(axis=1)]:
+        #     print('NaN data found!')
+
         features = x_data.columns.values
         x_data = np.array(x_data, dtype='float64')
         y_data = np.array(y_data, dtype='float64')
@@ -99,14 +106,15 @@ class FeaturesAnalyzer:
         w1 = self.cfg['featuresAnalyzer']['w1']
         w2 = self.cfg['featuresAnalyzer']['w2']
         w3 = self.cfg['featuresAnalyzer']['w3']
-        threshold1 = self.cfg['featuresAnalyzer']['threshold1'] #240
-        threshold2 = self.cfg['featuresAnalyzer']['threshold2'] #180
-        threshold3 = self.cfg['featuresAnalyzer']['threshold3'] #135
+        threshold1 = self.cfg['featuresAnalyzer']['threshold1']  # 240
+        threshold2 = self.cfg['featuresAnalyzer']['threshold2']  # 180
+        threshold3 = self.cfg['featuresAnalyzer']['threshold3']  # 135
 
         NGB_model = NGBRegressor(learning_rate=l_rate, Base=default_tree_learner, Dist=Normal, Score=MLE,
                                  n_estimators=n_est, random_state=500)
         weights = np.array(
-            [w1 if x >= threshold1 else w2 if x >= threshold2 else w3 if x >= threshold3 else 0.1 for x in y_data], dtype='float64')
+            [w1 if x >= threshold1 else w2 if x >= threshold2 else w3 if x >= threshold3 else 0.1 for x in y_data],
+            dtype='float64')
         ngb = NGB_model.fit(x_data, y_data.ravel(), sample_weight=weights)
         explainer = shap.TreeExplainer(ngb, x_data, model_output=0)
         shap_values = explainer.shap_values(x_data, check_additivity=False)
@@ -115,16 +123,21 @@ class FeaturesAnalyzer:
         important_features.sort_values(by=['feature_importance'], ascending=False, inplace=True)
         new_features = list(important_features['feature'][:n_feat])
 
-        self.save_csv(important_features)
+        self.save_csv(important_features, new_features)
 
         return new_features, important_features
 
-    def save_csv(self, important_features):
-        folder_path = self.inputs_gatherer.output_folder_creator(self.current_name)
+    def save_csv(self, important_features, new_features):
+        fp = self.inputs_gatherer.output_folder_creator(self.current_name)
 
-        if not os.path.exists(folder_path):
+        if not os.path.exists(fp):
             self.logger.error("Saving folder not found")
 
-        output_df = pd.DataFrame(range(1, len(important_features)+1), columns=['rank'])
+        output_df = pd.DataFrame(range(1, len(important_features) + 1), columns=['rank'])
         output_df = pd.concat([output_df, important_features], axis=1)
-        output_df.to_csv(folder_path + 'features_importance.csv', index=False, header=True)
+        output_df.to_csv(fp + fp.split(os.sep)[1] + '_features_importance.csv', index=False, header=True)
+
+        fn = fp + fp.split(os.sep)[1] + '_signals.json'
+        with open(fn, 'w') as f:
+            json.dump({"signals": new_features}, f)
+

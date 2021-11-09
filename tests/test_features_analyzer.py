@@ -127,12 +127,15 @@ if __name__ == "__main__":
 
     FA.dataset_creator()
 
+    filenames_csv = []
+
     for dataset in cfg['datasetSettings']['customJSONSignals']:
         name = dataset['filename'].split('.')[0]
         folder_path = IG.output_folder_creator(name)
-        file_path = '%s%s' % (folder_path, 'dataset.csv')
+        file_path = folder_path + folder_path.split(os.sep)[1] + '_dataset.csv'
+        filenames_csv.append(file_path.split(os.sep)[-1])
         assert os.path.isfile(file_path)
-        os.system('cp %s %s' % (file_path, 'conf/csv/tests/' + name + '.csv'))
+        os.system('cp %s %s' % (file_path, 'conf/csv/tests/' + file_path.split(os.sep)[-1]))
 
     print(list(FA.dataFrames.keys()))
 
@@ -159,8 +162,8 @@ if __name__ == "__main__":
     FA = FeaturesAnalyzer(IG, forecast_type, cfg, logger)
 
     cfg['datasetSettings']['csvFiles'] = [
-        {'filename': 'dataset_BIO_MOR.csv', 'targetColumn': ['BIO__YO3__d1']},
-        {'filename': 'dataset_CHI_MOR.csv', 'targetColumn': ['CHI__YO3__d1']}]
+        {'filename': filenames_csv[0], 'targetColumn': ['BIO__YO3__d1']},
+        {'filename': filenames_csv[1], 'targetColumn': ['CHI__YO3__d1']}]
     cfg['featuresAnalyzer']['datasetCreator'] = 'CSVreader'
 
     FA.dataset_creator()
@@ -208,7 +211,7 @@ if __name__ == "__main__":
     for dataset in cfg['datasetSettings']['customJSONSignals']:
         name = dataset['filename'].split('.')[0]
         folder_path = IG.output_folder_creator(name)
-        file_path = '%s%s' % (folder_path, 'dataset.csv')
+        file_path = folder_path + folder_path.split(os.sep)[1] + '_dataset.csv'
         assert os.path.isfile(file_path)
 
     for key, df in FA.dataFrames.items():
@@ -247,7 +250,7 @@ if __name__ == "__main__":
     for dataset in cfg['datasetSettings']['customJSONSignals']:
         name = dataset['filename'].split('.')[0]
         folder_path = IG.output_folder_creator(name)
-        file_path = '%s%s' % (folder_path, 'dataset.csv')
+        file_path = folder_path + folder_path.split(os.sep)[1] + '_dataset.csv'
         assert os.path.isfile(file_path)
 
     for key, df in FA.dataFrames.items():

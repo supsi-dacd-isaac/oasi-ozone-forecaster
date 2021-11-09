@@ -50,9 +50,9 @@
     ],
     "outputCsvFolder": "output/",
     "outputSignalFolder": "conf/signals/regions/",
-    "startDay": "05-01",
-    "endDay": "09-30",
-    "years": [2015, 2020]
+    "startDay": "05-15",
+    "endDay": "06-25",
+    "years": [2015, 2021]
   },
   "dayToForecast": "2021-06-22",
   "regions": {
