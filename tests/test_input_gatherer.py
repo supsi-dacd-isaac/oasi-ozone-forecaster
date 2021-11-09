@@ -19,8 +19,9 @@ from classes.inputs_gatherer import InputsGatherer
 from classes.artificial_features import ArtificialFeatures
 from datetime import date, datetime, timedelta
 
-path_parent = os.path.dirname(os.getcwd())
-os.chdir(path_parent)
+# Add upper folder so the scripts can modify data at the same level of the scripts
+# path_parent = os.path.dirname(os.getcwd())
+# os.chdir(path_parent)
 urllib3.disable_warnings()
 
 if __name__ == "__main__":

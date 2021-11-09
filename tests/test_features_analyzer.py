@@ -10,17 +10,17 @@ import pandas as pd
 import urllib3
 from influxdb import InfluxDBClient
 
-# dir_path = os.path.dirname(os.path.realpath(__file__))
-# path_parent = os.path.dirname(dir_path)
-# sys.path.insert(0, path_parent)
+dir_path = os.path.dirname(os.path.realpath(__file__))
+path_parent = os.path.dirname(dir_path)
+sys.path.insert(0, path_parent)
 
 from classes.artificial_features import ArtificialFeatures
 from classes.features_analyzer import FeaturesAnalyzer
 from classes.inputs_gatherer import InputsGatherer
 
 # Add upper folder so the scripts can modify data at the same level of the scripts
-path_parent = os.path.dirname(os.getcwd())
-os.chdir(path_parent)
+# path_parent = os.path.dirname(os.getcwd())
+# os.chdir(path_parent)
 urllib3.disable_warnings()
 
 if __name__ == "__main__":
