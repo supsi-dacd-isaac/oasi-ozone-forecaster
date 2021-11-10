@@ -55,7 +55,9 @@
     "outputSignalFolder": "conf/signals/regions/",
     "startDay": "07-10",
     "endDay": "07-20",
-    "years": [2019]
+    "years": [2019],
+    "sleepTimeBetweenQueries": 0.0
+
   },
   "dayToForecast": "2021-06-22",
   "regions": {

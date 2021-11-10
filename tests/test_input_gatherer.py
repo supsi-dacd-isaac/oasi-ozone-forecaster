@@ -82,7 +82,8 @@ if __name__ == "__main__":
 
     # Assert we get the expected results and we didn't break anything
     testing_data = json.loads(open(cfg["datasetSettings"]["outputSignalFolder"] + 'Testing_signals.json').read())
-    assert len(testing_data["signals"]) == len(set(testing_data["signals"])) == 2921
+    print(len(testing_data["signals"]))
+    assert len(testing_data["signals"]) == len(set(testing_data["signals"])) == 2917
     assert "LOC__CN__m0" in testing_data["signals"]
     assert "OTL__GLOB__step0" in testing_data["signals"]
     assert "VOC_Totale" in testing_data["signals"]

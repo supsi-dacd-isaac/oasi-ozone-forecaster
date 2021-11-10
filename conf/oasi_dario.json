@@ -39,37 +39,32 @@
   ],
   "datasetSettings": {
     "saveDataset": true,
-    "type": "MOR",
     "loadSignalsFolder": "conf/signals/",
     "customJSONSignals": [
       {"filename": "best_features_CHI_MOR.json", "targetColumn": ["CHI__YO3__d1"]}
     ],
-    "loadCsvFolder": "conf/csv/tests/",
+    "loadCsvFolder": "conf/csv/",
     "csvFiles": [
       {"filename": "CHI_MOR.csv", "targetColumn": ["CHI__YO3__d1"]}
     ],
     "outputCsvFolder": "output/",
     "outputSignalFolder": "conf/signals/regions/",
     "startDay": "05-15",
-    "endDay": "06-25",
-    "years": [2015, 2021]
+    "endDay": "09-30",
+    "years": [2015, 2016, 2017, 2018, 2019, 2020, 2021],
+    "sleepTimeBetweenQueries": 0.0
   },
   "dayToForecast": "2021-06-22",
   "regions": {
-    "Chiasso": {
-      "MeasureStations": ["CHI", "MEN"],
-      "targetColumn": ["CHI__YO3__d1"],
-      "ForecastStations": ["TICIA"]
-    },
     "Bioggio": {
       "MeasureStations": ["BIO", "LUG", "MS-LUG"],
       "targetColumn": ["BIO__YO3__d1"],
       "ForecastStations": ["P_BIO"]
     },
-    "Ticino": {
-      "MeasureStations": ["CHI", "MEN", "BIO", "LUG", "MS-LUG"],
-      "targetColumn": ["CHI__YO3__d1", "BIO__YO3__d1"],
-      "ForecastStations": ["P_BIO", "TICIA"]
+    "Chiasso": {
+      "MeasureStations": ["CHI", "MEN"],
+      "targetColumn": ["CHI__YO3__d1"],
+      "ForecastStations": ["TICIA"]
     }
   },
   "measuredSignalsStations":{
@@ -100,7 +95,7 @@
       "intercept": 6055.0538438732765
     },
     "useCorrection": true,
-    "emissionType": "measured",
+    "emissionType": "forecasted",
     "T_s": 303,
     "R": 8.314,
     "alpha": 0.0027,
@@ -113,10 +108,10 @@
     "KG_per_gamma": 98340
   },
   "featuresAnalyzer":{
-    "datasetCreator": "customJSON",
-    "numberEstimatorsNGB": 500,
+    "datasetCreator": "regions",
+    "numberEstimatorsNGB": 501,
     "learningRate": 0.05,
-    "numberSelectedFeatures": 30,
+    "numberSelectedFeatures": 100,
     "w1": 0.1,
     "w2": 0.1,
     "w3": 0.1,

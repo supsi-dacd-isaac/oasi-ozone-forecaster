@@ -8,6 +8,7 @@ import pandas as pd
 
 from influxdb import InfluxDBClient
 from datetime import date, datetime, timedelta
+from time import sleep
 
 import constants
 
@@ -78,7 +79,6 @@ class InputsGatherer:
 
         self.cfg_signals['signals'] = list(set(self.cfg_signals['signals']))
 
-
         # get the values in the DB
         i = 1
         for signal in self.cfg_signals['signals']:
@@ -98,8 +98,7 @@ class InputsGatherer:
 
         self.input_data = dict()
         self.cfg_signals = self.cfg_signals = dict(signals=[])
-        self.forecast_type = self.cfg['datasetSettings']['type']
-        file_name = signals_file.split('/')[-1].split('.')[0]
+        file_name = signals_file.split(os.sep)[-1].split('.')[0]
 
         # Get the signals from the json provided in the cfg file
         self.cfg_signals = json.loads(open(signals_file).read())
@@ -114,15 +113,18 @@ class InputsGatherer:
         for year in self.cfg['datasetSettings']['years']:
             start_day = str(year) + '-' + self.cfg['datasetSettings']['startDay']
             end_day = str(year) + '-' + self.cfg['datasetSettings']['endDay']
+            start_dt = datetime.strptime(start_day, '%Y-%m-%d')
+            end_dt = datetime.strptime(end_day, '%Y-%m-%d')
 
             # In 2020 we lost part of the forecasted signal, so we're forced to discard most days until the 17th August
-            start_dt = datetime.strptime(start_day, '%Y-%m-%d')
             if year == 2020 and start_dt < datetime.strptime('2020-08-17', '%Y-%m-%d'):
                 start_day = '2020-08-17'
 
+            if year == 2020 and end_dt < datetime.strptime('2020-08-17', '%Y-%m-%d'):
+                continue
+
             curr_day = start_day
 
-            end_dt = datetime.strptime(end_day, '%Y-%m-%d')
             while True:
 
                 self.cfg['dayToForecast'] = curr_day
@@ -132,6 +134,7 @@ class InputsGatherer:
                 for signal in self.cfg_signals['signals']:
                     self.add_input_value(signal=signal)
                     self.logger.info('Added input n. %02d/%2d' % (i, len(self.cfg_signals['signals'])))
+                    sleep(self.cfg['datasetSettings']['sleepTimeBetweenQueries'])
                     i += 1
 
                 lcl_data = dict({'date': curr_day}, **self.input_data)
@@ -213,7 +216,8 @@ class InputsGatherer:
 
             # Forecasts data
             if tmp[0] in constants.METEO_FORECAST_STATIONS:
-                measurement = self.cfg['influxDB']['measurementMeteoSuisse']
+                # measurement = self.cfg['influxDB']['measurementMeteoSuisse']
+                measurement = self.cfg['influxDB']['measurementInputsForecasts']
 
                 if '__step' in signal:
                     self.do_forecast_step_query(signal, measurement)
@@ -223,13 +227,14 @@ class InputsGatherer:
 
             # Measurement data
             else:
-                if tmp[0][0:2] == 'MS':
-                    measurement = self.cfg['influxDB']['measurementMeteoSuisse']
-                else:
-                    measurement = self.cfg['influxDB']['measurementOASI']
+                # if tmp[0][0:2] == 'MS':
+                #     measurement = self.cfg['influxDB']['measurementMeteoSuisse']
+                # else:
+                #     measurement = self.cfg['influxDB']['measurementOASI']
+                measurement = self.cfg['influxDB']['measurementInputsMeasurements']
 
                 if '__d0' in signal or '__d1' in signal or '__d2' in signal or \
-                   '__d3' in signal or '__d4' in signal or '__d5' in signal:
+                        '__d3' in signal or '__d4' in signal or '__d5' in signal:
                     # check if there are chunks
                     # check if there are chunks
                     if '__chunk' in signal:
@@ -267,7 +272,7 @@ class InputsGatherer:
         start = constants.CHUNKS_FORECASTS[case][chunk]['start']
         end = constants.CHUNKS_FORECASTS[case][chunk]['end']
         str_steps = '('
-        for i in range(start, end+1):
+        for i in range(start, end + 1):
             str_steps += 'step=\'step%02d\' OR ' % i
 
         str_steps = '%s)' % str_steps[:-4]
@@ -320,7 +325,7 @@ class InputsGatherer:
 
         if chunk == 'chunk1':
             start_dt = dt - timedelta(int(day[-1]))
-            end_dt = dt - timedelta(int(day[-1])-1)
+            end_dt = dt - timedelta(int(day[-1]) - 1)
             start_tm = '23:00:00'
             end_tm = '04:59:00'
 
@@ -397,7 +402,11 @@ class InputsGatherer:
         except Exception as e:
             self.logger.error('Forecast not available')
             self.logger.error('No data from query %s' % query)
-            self.input_data[signal_data] = np.nan
+            # Nocturnal irradiance in BIO is missing rather than 0, so fixing it here (DM 09.11.21)
+            if location == 'BIO' and signal_code == 'Gl':
+                self.input_data[signal_data] = 0.0
+            else:
+                self.input_data[signal_data] = np.nan
 
     def do_period_query(self, signal_data, measurement, case):
         (location, signal_code, period, func) = signal_data.split('__')
@@ -518,7 +527,6 @@ class InputsGatherer:
                 else:
                     self.input_data[signal_data] = 0.0
 
-
     def set_forecast_day(self):
         """
         Set the day related to the forecast
@@ -579,19 +587,19 @@ class InputsGatherer:
             daily_idx = self.get_index(np.max(vals))
 
             point = {
-                        'time': utc_ts,
-                        'measurement': self.cfg['influxDB']['measurementOASI'],
-                        'fields': dict(value=float(daily_max)),
-                        'tags': dict(signal='YO3', location=series['tags']['location'])
-                    }
+                'time': utc_ts,
+                'measurement': self.cfg['influxDB']['measurementOASI'],
+                'fields': dict(value=float(daily_max)),
+                'tags': dict(signal='YO3', location=series['tags']['location'])
+            }
             dps.append(point)
 
             point = {
-                        'time': utc_ts,
-                        'measurement': self.cfg['influxDB']['measurementOASI'],
-                        'fields': dict(value=float(daily_idx)),
-                        'tags': dict(signal='YO3_index', location=series['tags']['location'])
-                    }
+                'time': utc_ts,
+                'measurement': self.cfg['influxDB']['measurementOASI'],
+                'fields': dict(value=float(daily_idx)),
+                'tags': dict(signal='YO3_index', location=series['tags']['location'])
+            }
             dps.append(point)
 
         self.logger.info('Sent %i points to InfluxDB server' % len(dps))
@@ -633,14 +641,15 @@ class InputsGatherer:
 
     def chunks_forecasted_signals(self, forecastStation, forecastedSignal):
         signals = []
-        for i in range(1,5):
+        for i in range(1, 5):
             for modifier in ['min', 'max', 'mean']:
                 signals.append(forecastStation + '__' + forecastedSignal + '__chunk' + str(i) + '__' + modifier)
         return signals
 
     def global_signals(self):
-        signals = ['KLO-LUG', 'KLO-LUG_favonio', 'VOC_Totale', 'NOx_Totale', 'RHW__d0', 'RHW__d1', 'IsHolyday',
-                   'DayWeek', 'IsWeekend']
+        # RHW is not considered in this analysis since it was never considered and we have a hole in the data in august
+        # 2019. Signal codes: ['RHW__d0', 'RHW__d1']
+        signals = ['KLO-LUG', 'KLO-LUG_favonio', 'VOC_Totale', 'NOx_Totale', 'IsHolyday', 'DayWeek', 'IsWeekend']
         return signals
 
     def artificial_features_measured_signals(self, measurementStation):
@@ -648,8 +657,9 @@ class InputsGatherer:
         if measurementStation != 'MS-LUG':
             signals.append(measurementStation + '__NOx__12h_mean')
             signals.append(measurementStation + '__NO2__24h_mean')
-            signals.append(measurementStation + '__YO3__d1')
-            signals.append(measurementStation + '__YO3_index__d1')
+            if measurementStation != 'LUG':
+                signals.append(measurementStation + '__YO3__d1')
+                signals.append(measurementStation + '__YO3_index__d1')
         return signals
 
     def past_days_means_measured_signals(self, measurementStation, measuredSignal):
@@ -701,13 +711,13 @@ class InputsGatherer:
 
     def output_folder_creator(self, dataset_name):
 
-
-        folder_path = '%s%s_%s_%s_%s_%s-%s%s' % (self.cfg['datasetSettings']['outputCsvFolder'],
-                                                 self.cfg['featuresAnalyzer']['datasetCreator'], dataset_name,
-                                       self.cfg['datasetSettings']['startDay'],
-                                       self.cfg['datasetSettings']['endDay'],
-                                       self.cfg['datasetSettings']['years'][0],
-                                       self.cfg['datasetSettings']['years'][-1], os.sep)
+        folder_path = '%s%s_%s_%s_%s_%s_%s-%s%s' % (self.cfg['datasetSettings']['outputCsvFolder'],
+                                                    self.cfg['featuresAnalyzer']['datasetCreator'], dataset_name,
+                                                    self.forecast_type,
+                                                    self.cfg['datasetSettings']['startDay'],
+                                                    self.cfg['datasetSettings']['endDay'],
+                                                    self.cfg['datasetSettings']['years'][0],
+                                                    self.cfg['datasetSettings']['years'][-1], os.sep)
         if not os.path.exists(folder_path):
             os.makedirs(folder_path)
 
@@ -721,7 +731,8 @@ class InputsGatherer:
         for region in self.cfg['regions']:
             region_file = self.cfg['datasetSettings']['outputSignalFolder'] + region + '_signals.json'
             dataframe = self.build_dataset(signals_file=region_file)
-            self.output_dfs[region] = {'dataset': dataframe, 'targetColumns': self.cfg['regions'][region]["targetColumn"]}
+            self.output_dfs[region] = {'dataset': dataframe,
+                                       'targetColumns': self.cfg['regions'][region]["targetColumn"]}
             fp = self.output_folder_creator(region)
             if self.cfg['datasetSettings']['saveDataset']:
                 dataframe.to_csv(fp + fp.split(os.sep)[1] + '_dataset.csv', header=True, index=False)

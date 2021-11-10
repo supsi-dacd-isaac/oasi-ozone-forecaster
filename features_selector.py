@@ -70,6 +70,9 @@ if __name__ == "__main__":
     for dataset in cfg['datasetSettings']['customJSONSignals']:
         assert os.path.isfile(cfg['datasetSettings']['loadSignalsFolder'] + dataset['filename'])
 
+    import time
+    start_time = time.time()
+
     FA.dataset_creator()
 
     for key, df in FA.dataFrames.items():
@@ -77,5 +80,7 @@ if __name__ == "__main__":
 
         new_features_custom, importance_custom = FA.perform_feature_selection(x_data, y_data, features)
         print(importance_custom)
+
+    logger.info("--- %s seconds elapsed ---" % (time.time() - start_time))
 
     logger.info('Ending program')

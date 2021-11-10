@@ -37,6 +37,7 @@ class FeaturesAnalyzer:
         self.dataFrames = None
         self.output_folder_name = None
         self.current_name = None
+        self.nan_features = None
 
     def dataset_creator(self):
         """This method builds the datasets according to the instructions in the config file in the datasetSettings
@@ -61,11 +62,11 @@ class FeaturesAnalyzer:
         df = data['dataset']
 
         if len(data['targetColumns']) == 0:
-            self.logger.error('Target column was not specified. Feature selection can not be performed')
+            self.logger.error('Target column was not specified. Feature selection cannot be performed')
         if len(data['targetColumns']) == 1:
             target_column = data['targetColumns'][0]
         else:
-            target_column = 'Target'
+            target_column = 'Max_O3_all_regions'
             df[target_column] = df.loc[:, data['targetColumns']].max(axis=1)
 
         y_data = pd.DataFrame()
@@ -78,19 +79,30 @@ class FeaturesAnalyzer:
 
         for year in df_years:
             lcl_df = df.loc[df['date'].str[:4] == year, :].reset_index(drop=True)
-            lcl_y_data = lcl_df.loc[days_ahead:, target_column]
-            lcl_x_data = lcl_df.iloc[:-days_ahead, 1:]
+            lcl_y_data = lcl_df.loc[days_ahead:, ['date', target_column]]
+            lcl_x_data = lcl_df.iloc[:-days_ahead, :]
             y_data = pd.concat([y_data, lcl_y_data], axis=0).reset_index(drop=True)
             x_data = pd.concat([x_data, lcl_x_data], axis=0).reset_index(drop=True)
 
         assert (len(x_data) == len(y_data))
 
-        # remove target column previously created, although it could make a nice feature
-        if len(data['targetColumns']) > 1:
-            x_data = x_data.drop(columns=[target_column])
+        # Post processing of the downloaded/read data
+        nan_rows = x_data.loc[x_data.isnull().any(axis=1), 'date']
+        self.nan_features = x_data.loc[:, x_data.isnull().any()].columns.values
 
-        # if not x_data[x_data.isnull().any(axis=1)]:
-        #     print('NaN data found!')
+        if len(nan_rows) > 0:
+            self.logger.warning(
+                "Some NaN were found in the dataset at the following %s dates, which will be removed from the current "
+                "dataset:" % str(len(nan_rows)))
+            for row in nan_rows:
+                self.logger.warning(row)
+
+        x_data = x_data.drop(nan_rows.index, axis=0)
+        x_data = x_data.iloc[:, 1:]
+        y_data = y_data.drop(nan_rows.index, axis=0)
+        y_data = y_data.iloc[:, 1:]
+
+        assert (len(x_data) == len(y_data))
 
         features = x_data.columns.values
         x_data = np.array(x_data, dtype='float64')
@@ -120,8 +132,17 @@ class FeaturesAnalyzer:
         shap_values = explainer.shap_values(x_data, check_additivity=False)
         important_features = pd.DataFrame(list(zip(features, np.abs(shap_values).mean(0))),
                                           columns=['feature', 'feature_importance'])
-        important_features.sort_values(by=['feature_importance'], ascending=False, inplace=True)
+        important_features = important_features.sort_values(by=['feature_importance'], ascending=False).reset_index(
+            drop=True)
         new_features = list(important_features['feature'][:n_feat])
+
+        important_nan_features = [f for f in self.nan_features if f in new_features]
+        if len(important_nan_features) > 0:
+            self.logger.warning(
+                "The following %s features with missing data were found to be important and thus they should be filled in:" % str(
+                    len(important_nan_features)))
+            for f in important_nan_features:
+                self.logger.warning(f)
 
         self.save_csv(important_features, new_features)
 
@@ -140,4 +161,3 @@ class FeaturesAnalyzer:
         fn = fp + fp.split(os.sep)[1] + '_signals.json'
         with open(fn, 'w') as f:
             json.dump({"signals": new_features}, f)
-
