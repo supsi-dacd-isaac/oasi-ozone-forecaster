@@ -35,6 +35,7 @@ class ArtificialFeatures:
         self.day_to_predict = None
         self.cfg_signals = None
         self.input_df = None
+        self.VOC_forecasted_status = None
 
     def get_query_value_global(self, signal):
         """
@@ -131,7 +132,9 @@ class ArtificialFeatures:
             if signal == 'VOC_Totale':
                 measurement = self.cfg['influxDB']['measurementInputsMeasurements']
                 VOC_without_woods, VOC_woods, VOC_woods_corrected = self.do_VOC_query(measurement)
-                if self.cfg['VOC']['useCorrection'] and self.cfg['VOC']['emissionType'] == 'forecasted':
+                if self.cfg['VOC']['useCorrection'] and self.cfg['VOC'][
+                    'emissionType'] == 'forecasted' and self.VOC_forecasted_status:
+                    self.logger.info('Correcting forecasted VOC woods emissions')
                     val = VOC_without_woods + VOC_woods_corrected
                 else:
                     val = VOC_without_woods + VOC_woods
@@ -204,6 +207,8 @@ class ArtificialFeatures:
 
     def get_Q_T_forecasted(self):
 
+        self.VOC_forecasted_status = True
+
         measurement_MS = self.cfg['influxDB']['measurementInputsForecasts']
         func = 'mean'
 
@@ -218,23 +223,18 @@ class ArtificialFeatures:
         T_ = self.get_query_value_forecast(measurement_MS, 'LUG__T_2M__', steps_T, func)
 
         # Transform into the appropriate unit of measurement
-        if Q is not None:
+        if (Q is not None) and (T_ is not None):
             Q_ = Q * self.cfg['VOC']['GLOB_to_PAR']
         else:
-            # This should not happen, but if it happens we try to save the day and use measurements instead. Pray we
-            # never enter here
-            self.logger.warning(
-                'Forecasted data for calculating VOC not found. Using measured data instead.')
-            Q_ = self.get_Q_T_measured()[0]
-
-        if T_ is None:
-            self.logger.warning(
-                'Forecasted data for calculating VOC not found. Using measured data instead.')
-            T_ = self.get_Q_T_measured()[1]
+            # Forecasts not available. Use measurements instead
+            self.logger.warning('Forecasted data for calculating VOC not found. Using measured data instead.')
+            Q_, T_ = self.get_Q_T_measured()
 
         return [Q_, T_]
 
     def get_Q_T_measured(self):
+
+        self.VOC_forecasted_status = False
 
         dt = self.set_forecast_day()
         func = 'mean'
