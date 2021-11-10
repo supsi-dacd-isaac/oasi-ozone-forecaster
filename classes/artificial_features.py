@@ -224,12 +224,12 @@ class ArtificialFeatures:
             # This should not happen, but if it happens we try to save the day and use measurements instead. Pray we
             # never enter here
             self.logger.warning(
-                'Forecasted data for calculating VOC not found. Trying again with measured data.')
+                'Forecasted data for calculating VOC not found. Using measured data instead.')
             Q_ = self.get_Q_T_measured()[0]
 
         if T_ is None:
             self.logger.warning(
-                'Forecasted data for calculating VOC not found. Trying again with measured data.')
+                'Forecasted data for calculating VOC not found. Using measured data instead.')
             T_ = self.get_Q_T_measured()[1]
 
         return [Q_, T_]
@@ -390,7 +390,7 @@ class ArtificialFeatures:
                 start_dt = '%sT22:00:00Z' % (dt - timedelta(days=1)).strftime('%Y-%m-%d')
                 end_dt = '%sT10:00:00Z' % dt.strftime('%Y-%m-%d')
 
-        if '24h' in aggregator:
+        elif '24h' in aggregator:
             [start_dt, end_dt] = self.measurements_start_end(days=1)
 
         elif '48h' in aggregator:

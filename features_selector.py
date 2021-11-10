@@ -40,8 +40,17 @@ if __name__ == "__main__":
     # Define the forecast type
     forecast_type = args.t
 
+    # --------------------------------------------------------------------------- #
+    # Set logging object
+    # --------------------------------------------------------------------------- #
+    if not args.l:
+        log_file = None
+    else:
+        log_file = args.l
+        
     logger = logging.getLogger()
-    logging.basicConfig(format='%(asctime)-15s::%(levelname)s::%(funcName)s::%(message)s', level=logging.INFO)
+    logging.basicConfig(format='%(asctime)-15s::%(levelname)s::%(funcName)s::%(message)s', level=logging.INFO,
+                        filename=log_file)
 
     logger.info('Starting program')
 
@@ -71,6 +80,7 @@ if __name__ == "__main__":
         assert os.path.isfile(cfg['datasetSettings']['loadSignalsFolder'] + dataset['filename'])
 
     import time
+
     start_time = time.time()
 
     FA.dataset_creator()
