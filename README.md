@@ -39,7 +39,7 @@ venv/bin/python3 features_selector.py -c conf/oasi_datasets.json -t EVE -l logs/
   - `saveDataset`: if `true` save the downloaded dataset in the `outputCsvFolder`
   - `loadSignalsFolder`: path to the folder where the features JSON files are stores
   - `customJSONSignals`: list of dictionaries of the following shape
-    ```javascript
+    ```yaml
 	{
 	"filename": JSON file containing the features. Ex: "CHI_MOR.json".
 	"targetColumn": list of one or more columns of the dataset, containing the O3 values of the previous day. If more than one coulmn is provided, the maximum of the daily values will constitute the response vector Y. Ex: ["CHI__YO3__d1", "BIO__YO3__d1"].
@@ -47,7 +47,7 @@ venv/bin/python3 features_selector.py -c conf/oasi_datasets.json -t EVE -l logs/
 	```
   - `loadCsvFolder`: path to the folder containind the CSV dataset files
   - `csvFiles`: list of dictionaries of the following shape
-    ```javascript
+    ```yaml
 	{
 	"filename": CSV file containing the dataset. Ex: "CHI_MOR.csv".
 	"targetColumn": list of one or more columns of the dataset, containing the O3 values of the previous day. If more than one coulmn is provided, the maximum of the daily values will constitute the response vector Y. Ex: ["CHI__YO3__d1", "BIO__YO3__d1"].
@@ -60,7 +60,7 @@ venv/bin/python3 features_selector.py -c conf/oasi_datasets.json -t EVE -l logs/
   - `years`: list of years for which the data are downloaded, between `startDay` and `endDay`. Ex: [2015, 2016, 2017, 2018, 2019, 2020, 2021]
   - `sleepTimeBetweenQueries`: Sleeping time in seconds between each query to InfluxDB
   - `regions`: A region is a dictionary composed by measure stations, forecast stations and a list of one or more target columns. Ex:
-    ```javascript
+    ```yaml
 	"Bioggio": 
 	{
       "MeasureStations": ["BIO", "LUG", "MS-LUG"],
