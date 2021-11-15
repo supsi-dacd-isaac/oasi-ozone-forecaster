@@ -41,8 +41,8 @@ venv/bin/python3 features_selector.py -c conf/oasi_datasets.json -t EVE -l logs/
   - `customJSONSignals`: list of dictionaries of the following shape
     ```yaml
 	{
-		"filename": "best_features_CHI_MOR.json", 
-		"targetColumn": ["CHI__YO3__d1"]}
+	"filename": JSON file containing the features, 
+	"targetColumn": list of one or more columns of the dataset, containing the O3 values of the previous day. Ex: `["CHI__YO3__d1"]`}
 	} 
   - `loadCsvFolder`
   - `csvFiles`
