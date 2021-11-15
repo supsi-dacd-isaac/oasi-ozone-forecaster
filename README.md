@@ -24,14 +24,14 @@ venv/bin/python3 features_selector.py -c conf/oasi_datasets.json -t EVE -l logs/
 
 ## JSON sections and parameters:
 
-- connectionsFile: JSON file with InfluxDB connection coordinates
-- forecastPeriod
-  - case: if current, use today's date, else use startDate and endDate
-  - startDate: Start of forecasting period
-  - endDate: End of forecasting period
-- predictionSettings
-  - operationMode
-  - distributionSamples
-  - thresholds
-  - startDateForMeanImputation
-- test
+- `connectionsFile`: JSON file with InfluxDB connection coordinates
+- `forecastPeriod`
+  - `case`: if current, use today's date, else use startDate and endDate
+  - `startDate`: Start of forecasting period
+  - `endDate`: End of forecasting period
+- `predictionSettings`
+  - `operationMode`
+  - `distributionSamples`
+  - `thresholds`
+  - `startDateForMeanImputation`
+- `test`
