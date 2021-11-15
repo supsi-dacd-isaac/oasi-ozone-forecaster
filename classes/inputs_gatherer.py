@@ -90,7 +90,7 @@ class InputsGatherer:
         # Check the data availability
         self.check_inputs_availability()
 
-    def build_dataset(self, signals_file):
+    def build_dataset(self, name, signals_file):
         """
         Build the training dataset given a signal json file in folder "conf/dataset" either from a region or from a
         custom list
@@ -98,7 +98,8 @@ class InputsGatherer:
 
         self.input_data = dict()
         self.cfg_signals = self.cfg_signals = dict(signals=[])
-        file_name = signals_file.split(os.sep)[-1].split('.')[0]
+        fp = self.output_folder_creator(name)
+        file_name = fp + fp.split(os.sep)[1] + '_dataset.csv'
 
         # Get the signals from the json provided in the cfg file
         self.cfg_signals = json.loads(open(signals_file).read())
@@ -108,6 +109,9 @@ class InputsGatherer:
 
         # initialize the Pandas dataframe that will contain the final dataset
         dataset = pd.DataFrame(columns=['date'] + self.cfg_signals['signals'])
+
+        # Boolean flag to determine whether we should override an existing output dataset csv or not
+        flag_starting_dataset = True
 
         # Iterate over the years
         for year in self.cfg['datasetSettings']['years']:
@@ -139,6 +143,13 @@ class InputsGatherer:
 
                 lcl_data = dict({'date': curr_day}, **self.input_data)
                 lcl_df = pd.DataFrame([lcl_data], columns=['date'] + self.cfg_signals['signals'])
+
+                if self.cfg['datasetSettings']['saveDataset']:
+                    if flag_starting_dataset:
+                        lcl_df.to_csv(file_name, mode='w', header=True, index=False)
+                        flag_starting_dataset = False
+                    else:
+                        lcl_df.to_csv(file_name, mode='a', header=False, index=False)
 
                 dataset = dataset.append(lcl_df)
 
@@ -730,12 +741,12 @@ class InputsGatherer:
 
         for region in self.cfg['regions']:
             region_file = self.cfg['datasetSettings']['outputSignalFolder'] + region + '_signals.json'
-            dataframe = self.build_dataset(signals_file=region_file)
+            dataframe = self.build_dataset(name=region, signals_file=region_file)
             self.output_dfs[region] = {'dataset': dataframe,
                                        'targetColumns': self.cfg['regions'][region]["targetColumn"]}
-            fp = self.output_folder_creator(region)
-            if self.cfg['datasetSettings']['saveDataset']:
-                dataframe.to_csv(fp + fp.split(os.sep)[1] + '_dataset.csv', header=True, index=False)
+            # fp = self.output_folder_creator(region)
+            # if self.cfg['datasetSettings']['saveDataset']:
+            #     dataframe.to_csv(fp + fp.split(os.sep)[1] + '_dataset.csv', header=True, index=False)
 
     def dataframe_builder_custom(self):
         self.output_dfs = {}
@@ -743,11 +754,11 @@ class InputsGatherer:
         for dataset in self.cfg['datasetSettings']['customJSONSignals']:
             name = dataset['filename'].split('.')[0]
             fn = self.cfg['datasetSettings']["loadSignalsFolder"] + dataset['filename']
-            dataframe = self.build_dataset(signals_file=fn)
+            dataframe = self.build_dataset(name=name, signals_file=fn)
             self.output_dfs[name] = {'dataset': dataframe, 'targetColumns': dataset['targetColumn']}
-            fp = self.output_folder_creator(name)
-            if self.cfg['datasetSettings']['saveDataset']:
-                dataframe.to_csv(fp + fp.split(os.sep)[1] + '_dataset.csv', header=True, index=False)
+            # fp = self.output_folder_creator(name)
+            # if self.cfg['datasetSettings']['saveDataset']:
+            #     dataframe.to_csv(fp + fp.split(os.sep)[1] + '_dataset.csv', header=True, index=False)
 
     def dataframe_reader(self):
         self.output_dfs = {}
@@ -757,4 +768,4 @@ class InputsGatherer:
             fn = self.cfg['datasetSettings']["loadCsvFolder"] + dataset['filename']
             dataframe = self.read_dataset(csv_file=fn)
             self.output_dfs[name] = {'dataset': dataframe, 'targetColumns': dataset['targetColumn']}
-            fp = self.output_folder_creator(name)
+            # fp = self.output_folder_creator(name)

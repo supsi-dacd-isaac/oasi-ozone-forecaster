@@ -108,6 +108,7 @@
     "KG_per_gamma": 98340
   },
   "featuresAnalyzer":{
+    "performFeatureSelection": true,
     "datasetCreator": "regions",
     "numberEstimatorsNGB": 501,
     "learningRate": 0.05,

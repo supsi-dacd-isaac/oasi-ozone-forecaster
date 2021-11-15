@@ -92,6 +92,7 @@ if __name__ == "__main__":
     cfg['measuredSignalsStations']['CHI'] = []
     cfg['forecastedSignalsStations']['P_BIO'] = []
     cfg['forecastedSignalsStations']['TICIA'] = []
+    cfg['featuresAnalyzer']['performFeatureSelection'] = True
 
     FA.dataset_creator()
 
@@ -101,14 +102,14 @@ if __name__ == "__main__":
         for sig in cfg['regions'][region]['targetColumn']:
             assert sig in json.loads(open(fn).read())['signals']
 
-    print(list(FA.dataFrames.keys()))
+    logger.info(list(FA.dataFrames.keys()))
 
     for key, df in FA.dataFrames.items():
-        print(key)
+        logger.info(key)
         x_data, y_data, features = FA.dataset_splitter(key, df)
 
         new_features, importance = FA.perform_feature_selection(x_data, y_data, features)
-        print(new_features)
+        logger.info(new_features)
 
     for region in cfg['regions']:
         folder_path = IG.output_folder_creator(region)
@@ -116,7 +117,7 @@ if __name__ == "__main__":
         try:
             shutil.rmtree(folder_path)
         except OSError as e:
-            print("Error: %s - %s." % (e.filename, e.strerror))
+            logger.error("%s - %s." % (e.filename, e.strerror))
 
     # --------------------------------------------------------------------------- #
     # Test using custom signals files
@@ -130,6 +131,7 @@ if __name__ == "__main__":
     cfg['datasetSettings']['endDay'] = '07-20'
     cfg['datasetSettings']['years'] = [2019, 2021]
     cfg['featuresAnalyzer']['datasetCreator'] = 'customJSON'
+    cfg['featuresAnalyzer']['performFeatureSelection'] = True
 
     for dataset in cfg['datasetSettings']['customJSONSignals']:
         assert os.path.isfile(cfg['datasetSettings']['loadSignalsFolder'] + dataset['filename'])
@@ -146,13 +148,13 @@ if __name__ == "__main__":
         assert os.path.isfile(file_path)
         os.system('cp %s %s' % (file_path, 'conf/csv/tests/' + file_path.split(os.sep)[-1]))
 
-    print(list(FA.dataFrames.keys()))
+    logger.info(list(FA.dataFrames.keys()))
 
     for key, df in FA.dataFrames.items():
         x_data, y_data, features = FA.dataset_splitter(key, df)
 
         new_features_custom, importance_custom = FA.perform_feature_selection(x_data, y_data, features)
-        print(importance_custom)
+        logger.info(importance_custom)
 
     for dataset in cfg['datasetSettings']['customJSONSignals']:
         name = dataset['filename'].split('.')[0]
@@ -160,7 +162,7 @@ if __name__ == "__main__":
         try:
             shutil.rmtree(folder_path)
         except OSError as e:
-            print("Error: %s - %s." % (e.filename, e.strerror))
+            logger.error("%s - %s." % (e.filename, e.strerror))
 
     # --------------------------------------------------------------------------- #
     # Test reading CSV files
@@ -174,16 +176,17 @@ if __name__ == "__main__":
         {'filename': filenames_csv[0], 'targetColumn': ['BIO__YO3__d1']},
         {'filename': filenames_csv[1], 'targetColumn': ['CHI__YO3__d1']}]
     cfg['featuresAnalyzer']['datasetCreator'] = 'CSVreader'
+    cfg['featuresAnalyzer']['performFeatureSelection'] = True
 
     FA.dataset_creator()
 
-    print(list(FA.dataFrames.keys()))
+    logger.info(list(FA.dataFrames.keys()))
 
     for key, df in FA.dataFrames.items():
         x_data, y_data, features = FA.dataset_splitter(key, df)
 
         new_features_reader, importance_reader = FA.perform_feature_selection(x_data, y_data, features)
-        print(importance_reader)
+        logger.info(importance_reader)
 
     for dataset in cfg['datasetSettings']['csvFiles']:
         fn = cfg['datasetSettings']['loadCsvFolder'] + dataset['filename']
@@ -195,7 +198,7 @@ if __name__ == "__main__":
         try:
             shutil.rmtree(folder_path)
         except OSError as e:
-            print("Error: %s - %s." % (e.filename, e.strerror))
+            logger.error("%s - %s." % (e.filename, e.strerror))
 
     # --------------------------------------------------------------------------- #
     # Test transition over 2020 at MOR
@@ -211,6 +214,7 @@ if __name__ == "__main__":
     cfg['datasetSettings']['endDay'] = '08-23'
     cfg['datasetSettings']['years'] = [2019, 2020, 2021]
     cfg['featuresAnalyzer']['datasetCreator'] = 'customJSON'
+    cfg['featuresAnalyzer']['performFeatureSelection'] = True
 
     for dataset in cfg['datasetSettings']['customJSONSignals']:
         assert os.path.isfile(cfg['datasetSettings']['loadSignalsFolder'] + dataset['filename'])
@@ -234,7 +238,7 @@ if __name__ == "__main__":
         try:
             shutil.rmtree(folder_path)
         except OSError as e:
-            print("Error: %s - %s." % (e.filename, e.strerror))
+            logger.error("%s - %s." % (e.filename, e.strerror))
 
     # --------------------------------------------------------------------------- #
     # Test transition over 2020 at EVE
@@ -273,6 +277,6 @@ if __name__ == "__main__":
         try:
             shutil.rmtree(folder_path)
         except OSError as e:
-            print("Error: %s - %s." % (e.filename, e.strerror))
+            logger.error("%s - %s." % (e.filename, e.strerror))
 
     logger.info('Ending program')

@@ -4,6 +4,7 @@ import os
 import sys
 import shutil
 import argparse
+import time
 
 import numpy as np
 import urllib3
@@ -47,7 +48,7 @@ if __name__ == "__main__":
         log_file = None
     else:
         log_file = args.l
-        
+
     logger = logging.getLogger()
     logging.basicConfig(format='%(asctime)-15s::%(levelname)s::%(funcName)s::%(message)s', level=logging.INFO,
                         filename=log_file)
@@ -79,18 +80,18 @@ if __name__ == "__main__":
     for dataset in cfg['datasetSettings']['customJSONSignals']:
         assert os.path.isfile(cfg['datasetSettings']['loadSignalsFolder'] + dataset['filename'])
 
-    import time
-
     start_time = time.time()
-
     FA.dataset_creator()
+    logger.info("--- %s seconds elapsed for dataset creation ---" % (time.time() - start_time))
 
-    for key, df in FA.dataFrames.items():
-        x_data, y_data, features = FA.dataset_splitter(key, df)
+    if cfg['featuresAnalyzer']['performFeatureSelection']:
+        start_time = time.time()
+        for key, df in FA.dataFrames.items():
+            x_data, y_data, features = FA.dataset_splitter(key, df)
 
-        new_features_custom, importance_custom = FA.perform_feature_selection(x_data, y_data, features)
-        print(importance_custom)
+            new_features_custom, importance_custom = FA.perform_feature_selection(x_data, y_data, features)
+            logger.info(importance_custom)
 
-    logger.info("--- %s seconds elapsed ---" % (time.time() - start_time))
+        logger.info("--- %s seconds elapsed for feature selection ---" % (time.time() - start_time))
 
     logger.info('Ending program')
