@@ -29,9 +29,29 @@ venv/bin/python3 features_selector.py -c conf/oasi_datasets.json -t EVE -l logs/
   - `case`: if current, use today's date, else use startDate and endDate
   - `startDate`: Start of forecasting period
   - `endDate`: End of forecasting period
+- `dayToForecast`: 
 - `predictionSettings`
   - `operationMode`
   - `distributionSamples`
   - `thresholds`
   - `startDateForMeanImputation`
-- `test`
+- `datasetSettings`
+  - `saveDataset`: if `true` save the downloaded dataset in the `outputCsvFolder`
+  - `loadSignalsFolder`: path to the folder where the features JSON files are stores
+  - `customJSONSignals`: list of dictionaries of the following shape
+    ```yaml
+	{
+		"filename": "best_features_CHI_MOR.json", 
+		"targetColumn": ["CHI__YO3__d1"]}
+	} 
+  - `loadCsvFolder`
+  - `csvFiles`
+  - `outputCsvFolder`
+  - `outputSignalFolder`
+  - `startDay`
+  - `endDay`
+  - `years`
+  - `sleepTimeBetweenQueries`
+  - ``
+  - ``
+  - ``
