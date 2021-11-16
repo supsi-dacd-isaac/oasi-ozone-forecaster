@@ -1,28 +1,18 @@
 # oasi-ozone-forecaster
 
-## CURL examples to download forecasts results from ISAAC database:
-```
-curl -G 'http://$HOST:$PORT/query?u=$USER&p=$PWD&pretty=true' --data-urlencode "db=$DB" --data-urlencode "q=SELECT * FROM o3_forecasts_results WHERE flag_best='true' and time>='2021-05-13' and time<='2021-05-14' GROUP BY location, case"
-curl -G 'http://$HOST:$PORT/query?u=$USER&p=$PWD&pretty=true' --data-urlencode "db=$DB" --data-urlencode "q=SELECT * FROM o3_forecasts_probabilities WHERE flag_best='true' and time>='2021-05-13' and time<='2021-05-14' GROUP BY location, case, interval"
-```
 
-## Execute unit tests:
+## Main scripts:
 
-```
-export PYTHONPATH=/home/isaac-user02/run/python/oasi-ozone-forecaster
-venv/bin/python3 tests/test_input_gatherer.py -c conf/oasi_tests.json -t MOR -l logs/tests.log
-venv/bin/python3 tests/test_features_analyzer.py -c conf/oasi_tests.json -t MOR -l logs/tests.log
-venv/bin/python3 tests/test_artificial_features.py -c conf/oasi_tests.json -t MOR -l logs/tests.log
-```
-
-## Create dataset and optionally perform feature selection:
+### `features_selector.py`: Create dataset and (optionally) perform feature selection:
 ```
 venv/bin/python3 features_selector.py -c conf/oasi_datasets.json -t MOR -l logs/datasets.log
 venv/bin/python3 features_selector.py -c conf/oasi_datasets.json -t EVE -l logs/datasets.log
 ```
 
+For the enabling/disabling of the feature selection the flag `performFeatureSelection` has to be set (see below).
 
-## JSON sections and parameters:
+
+## Main sections and parameters of JSON configuration file:
 
 - `connectionsFile`: JSON file with InfluxDB connection coordinates
 - `forecastPeriod`
@@ -90,3 +80,21 @@ venv/bin/python3 features_selector.py -c conf/oasi_datasets.json -t EVE -l logs/
     - `w1`: weight of O3 observations above 240 ug/m^3
     - `w2`: weight of O3 observations between 180 and 240 ug/m^3
     - `w3`: weight of O3 observations between 135 and 180 ug/m^3
+
+
+## Utilities:
+
+### CURL examples to download forecasts results from ISAAC database:
+```
+curl -G 'http://$HOST:$PORT/query?u=$USER&p=$PWD&pretty=true' --data-urlencode "db=$DB" --data-urlencode "q=SELECT * FROM o3_forecasts_results WHERE flag_best='true' and time>='2021-05-13' and time<='2021-05-14' GROUP BY location, case"
+curl -G 'http://$HOST:$PORT/query?u=$USER&p=$PWD&pretty=true' --data-urlencode "db=$DB" --data-urlencode "q=SELECT * FROM o3_forecasts_probabilities WHERE flag_best='true' and time>='2021-05-13' and time<='2021-05-14' GROUP BY location, case, interval"
+```
+
+### Execute unit tests:
+
+```
+export PYTHONPATH=/home/isaac-user02/run/python/oasi-ozone-forecaster
+venv/bin/python3 tests/test_input_gatherer.py -c conf/oasi_tests.json -t MOR -l logs/tests.log
+venv/bin/python3 tests/test_features_analyzer.py -c conf/oasi_tests.json -t MOR -l logs/tests.log
+venv/bin/python3 tests/test_artificial_features.py -c conf/oasi_tests.json -t MOR -l logs/tests.log
+```
