@@ -19,8 +19,8 @@ from classes.features_analyzer import FeaturesAnalyzer
 from classes.inputs_gatherer import InputsGatherer
 
 # Add upper folder so the scripts can modify data at the same level of the scripts
-# path_parent = os.path.dirname(os.getcwd())
-# os.chdir(path_parent)
+path_parent = os.path.dirname(os.getcwd())
+os.chdir(path_parent)
 urllib3.disable_warnings()
 
 if __name__ == "__main__":
@@ -95,6 +95,7 @@ if __name__ == "__main__":
     cfg['featuresAnalyzer']['performFeatureSelection'] = True
 
     FA.dataset_creator()
+    FA.dataset_reader()
 
     for region in cfg['regions']:
         fn = cfg['datasetSettings']['outputSignalFolder'] + region + '_signals.json'
@@ -137,6 +138,7 @@ if __name__ == "__main__":
         assert os.path.isfile(cfg['datasetSettings']['loadSignalsFolder'] + dataset['filename'])
 
     FA.dataset_creator()
+    FA.dataset_reader()
 
     filenames_csv = []
 
@@ -179,6 +181,7 @@ if __name__ == "__main__":
     cfg['featuresAnalyzer']['performFeatureSelection'] = True
 
     FA.dataset_creator()
+    FA.dataset_reader()
 
     logger.info(list(FA.dataFrames.keys()))
 
@@ -220,6 +223,7 @@ if __name__ == "__main__":
         assert os.path.isfile(cfg['datasetSettings']['loadSignalsFolder'] + dataset['filename'])
 
     FA.dataset_creator()
+    FA.dataset_reader()
 
     for dataset in cfg['datasetSettings']['customJSONSignals']:
         name = dataset['filename'].split('.')[0]
@@ -259,6 +263,7 @@ if __name__ == "__main__":
         assert os.path.isfile(cfg['datasetSettings']['loadSignalsFolder'] + dataset['filename'])
 
     FA.dataset_creator()
+    FA.dataset_reader()
 
     for dataset in cfg['datasetSettings']['customJSONSignals']:
         name = dataset['filename'].split('.')[0]

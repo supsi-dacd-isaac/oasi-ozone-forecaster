@@ -99,7 +99,8 @@ class InputsGatherer:
         self.input_data = dict()
         self.cfg_signals = self.cfg_signals = dict(signals=[])
         fp = self.output_folder_creator(name)
-        file_name = fp + fp.split(os.sep)[1] + '_dataset.csv'
+        file_name_df = fp + fp.split(os.sep)[1] + '_dataset.csv'
+        file_name_tc = fp + fp.split(os.sep)[1] + '_target_columns.csv'
 
         # Get the signals from the json provided in the cfg file
         self.cfg_signals = json.loads(open(signals_file).read())
@@ -146,10 +147,10 @@ class InputsGatherer:
 
                 if self.cfg['datasetSettings']['saveDataset']:
                     if flag_starting_dataset:
-                        lcl_df.to_csv(file_name, mode='w', header=True, index=False)
+                        lcl_df.to_csv(file_name_df, mode='w', header=True, index=False)
                         flag_starting_dataset = False
                     else:
-                        lcl_df.to_csv(file_name, mode='a', header=False, index=False)
+                        lcl_df.to_csv(file_name_df, mode='a', header=False, index=False)
 
                 dataset = dataset.append(lcl_df)
 
@@ -735,30 +736,43 @@ class InputsGatherer:
         return folder_path
 
     def dataframe_builder_regions(self):
-        self.output_dfs = {}
+        # self.output_dfs = {}
 
         self.generate_all_signals()
 
         for region in self.cfg['regions']:
             region_file = self.cfg['datasetSettings']['outputSignalFolder'] + region + '_signals.json'
             dataframe = self.build_dataset(name=region, signals_file=region_file)
-            self.output_dfs[region] = {'dataset': dataframe,
-                                       'targetColumns': self.cfg['regions'][region]["targetColumn"]}
+            # self.output_dfs[region] = {'dataset': dataframe,
+            #                            'targetColumns': self.cfg['regions'][region]["targetColumn"]}
             # fp = self.output_folder_creator(region)
             # if self.cfg['datasetSettings']['saveDataset']:
             #     dataframe.to_csv(fp + fp.split(os.sep)[1] + '_dataset.csv', header=True, index=False)
 
     def dataframe_builder_custom(self):
-        self.output_dfs = {}
+        # self.output_dfs = {}
 
         for dataset in self.cfg['datasetSettings']['customJSONSignals']:
             name = dataset['filename'].split('.')[0]
             fn = self.cfg['datasetSettings']["loadSignalsFolder"] + dataset['filename']
             dataframe = self.build_dataset(name=name, signals_file=fn)
-            self.output_dfs[name] = {'dataset': dataframe, 'targetColumns': dataset['targetColumn']}
+            # self.output_dfs[name] = {'dataset': dataframe, 'targetColumns': dataset['targetColumn']}
             # fp = self.output_folder_creator(name)
             # if self.cfg['datasetSettings']['saveDataset']:
             #     dataframe.to_csv(fp + fp.split(os.sep)[1] + '_dataset.csv', header=True, index=False)
+
+    def dataframe_builder_readCSV(self):
+        # self.output_dfs = {}
+
+        for dataset in self.cfg['datasetSettings']['csvFiles']:
+            name = dataset['filename'].split('.')[0]
+            fp = self.output_folder_creator(name)
+            file_name_df = fp + fp.split(os.sep)[1] + '_dataset.csv'
+            fn = self.cfg['datasetSettings']["loadCsvFolder"] + dataset['filename']
+            os.system('cp %s %s' % (fn, file_name_df))
+
+            # self.output_dfs[name] = {'dataset': self.read_dataset(csv_file=fn), 'targetColumns': dataset['targetColumn']}
+            # fp = self.output_folder_creator(name)
 
     def dataframe_reader(self):
         self.output_dfs = {}
@@ -767,5 +781,6 @@ class InputsGatherer:
             name = dataset['filename'].split('.')[0]
             fn = self.cfg['datasetSettings']["loadCsvFolder"] + dataset['filename']
             dataframe = self.read_dataset(csv_file=fn)
+
             self.output_dfs[name] = {'dataset': dataframe, 'targetColumns': dataset['targetColumn']}
             # fp = self.output_folder_creator(name)

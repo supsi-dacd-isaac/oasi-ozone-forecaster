@@ -48,12 +48,47 @@ class FeaturesAnalyzer:
         elif self.cfg["featuresAnalyzer"]["datasetCreator"] == 'regions':
             self.inputs_gatherer.dataframe_builder_regions()
         elif self.cfg["featuresAnalyzer"]["datasetCreator"] == 'CSVreader':
-            self.inputs_gatherer.dataframe_reader()
+            self.inputs_gatherer.dataframe_builder_readCSV()
         else:
             self.logger.error(
                 'Option for dataset_creator is not valid. Available options are "customJSON", "regions" or "CSVreader"')
 
-        self.dataFrames = self.inputs_gatherer.output_dfs
+    def update_datasets(self, name, output_dfs, target_columns):
+        folder_path = self.inputs_gatherer.output_folder_creator(name)
+        file_path_df = folder_path + folder_path.split(os.sep)[1] + '_dataset.csv'
+        if not os.path.isfile(file_path_df):
+            self.logger.error('File %s does not exist' % file_path_df)
+        output_dfs[name] = {'dataset': pd.read_csv(file_path_df), 'targetColumns': target_columns}
+        return output_dfs
+
+    def dataset_reader(self):
+        """dataset_reader should always follow a call of dataset_creator, otherwise the existence of the files to be
+        read is not guaranteed"""
+
+        output_dfs = {}
+
+        if self.cfg["featuresAnalyzer"]["datasetCreator"] == 'customJSON':
+            for dataset in self.cfg['datasetSettings']['customJSONSignals']:
+                name = dataset['filename'].split('.')[0]
+                target_columns = dataset['targetColumn']
+                output_dfs = self.update_datasets(name, output_dfs, target_columns)
+
+        elif self.cfg["featuresAnalyzer"]["datasetCreator"] == 'regions':
+            for region in self.cfg['regions']:
+                name = region
+                target_columns = self.cfg['regions'][region]['targetColumn']
+                output_dfs = self.update_datasets(name, output_dfs, target_columns)
+
+        elif self.cfg["featuresAnalyzer"]["datasetCreator"] == 'CSVreader':
+            for dataset in self.cfg['datasetSettings']['csvFiles']:
+                name = dataset['filename'].split('.')[0]
+                target_columns = dataset['targetColumn']
+                output_dfs = self.update_datasets(name, output_dfs, target_columns)
+        else:
+            self.logger.error(
+                'Option for dataset_creator is not valid. Available options are "customJSON", "regions" or "CSVreader"')
+
+        self.dataFrames = output_dfs
 
     def dataset_splitter(self, name, data):
         """Split a dataFrame in design matrix X and response vector Y"""
