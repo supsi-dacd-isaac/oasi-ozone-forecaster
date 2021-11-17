@@ -1,14 +1,14 @@
 # import section
-import json
 import glob
-import numpy as np
-import pytz
+import json
 import os
-import pandas as pd
-
-from influxdb import InfluxDBClient
-from datetime import date, datetime, timedelta
+from datetime import datetime, timedelta
 from time import sleep
+
+import numpy as np
+import pandas as pd
+import pytz
+from influxdb import InfluxDBClient
 
 import constants
 
@@ -48,7 +48,6 @@ class InputsGatherer:
         self.day_to_predict = None
         self.cfg_signals = None
         self.artificial_features = artificial_features
-        self.output_dfs = None
 
     def build_global_input_dataset(self):
         """
@@ -736,33 +735,21 @@ class InputsGatherer:
         return folder_path
 
     def dataframe_builder_regions(self):
-        # self.output_dfs = {}
 
         self.generate_all_signals()
 
         for region in self.cfg['regions']:
             region_file = self.cfg['datasetSettings']['outputSignalFolder'] + region + '_signals.json'
-            dataframe = self.build_dataset(name=region, signals_file=region_file)
-            # self.output_dfs[region] = {'dataset': dataframe,
-            #                            'targetColumns': self.cfg['regions'][region]["targetColumn"]}
-            # fp = self.output_folder_creator(region)
-            # if self.cfg['datasetSettings']['saveDataset']:
-            #     dataframe.to_csv(fp + fp.split(os.sep)[1] + '_dataset.csv', header=True, index=False)
+            self.build_dataset(name=region, signals_file=region_file)
 
     def dataframe_builder_custom(self):
-        # self.output_dfs = {}
 
         for dataset in self.cfg['datasetSettings']['customJSONSignals']:
             name = dataset['filename'].split('.')[0]
             fn = self.cfg['datasetSettings']["loadSignalsFolder"] + dataset['filename']
-            dataframe = self.build_dataset(name=name, signals_file=fn)
-            # self.output_dfs[name] = {'dataset': dataframe, 'targetColumns': dataset['targetColumn']}
-            # fp = self.output_folder_creator(name)
-            # if self.cfg['datasetSettings']['saveDataset']:
-            #     dataframe.to_csv(fp + fp.split(os.sep)[1] + '_dataset.csv', header=True, index=False)
+            self.build_dataset(name=name, signals_file=fn)
 
     def dataframe_builder_readCSV(self):
-        # self.output_dfs = {}
 
         for dataset in self.cfg['datasetSettings']['csvFiles']:
             name = dataset['filename'].split('.')[0]
@@ -770,17 +757,3 @@ class InputsGatherer:
             file_name_df = fp + fp.split(os.sep)[1] + '_dataset.csv'
             fn = self.cfg['datasetSettings']["loadCsvFolder"] + dataset['filename']
             os.system('cp %s %s' % (fn, file_name_df))
-
-            # self.output_dfs[name] = {'dataset': self.read_dataset(csv_file=fn), 'targetColumns': dataset['targetColumn']}
-            # fp = self.output_folder_creator(name)
-
-    def dataframe_reader(self):
-        self.output_dfs = {}
-
-        for dataset in self.cfg['datasetSettings']['csvFiles']:
-            name = dataset['filename'].split('.')[0]
-            fn = self.cfg['datasetSettings']["loadCsvFolder"] + dataset['filename']
-            dataframe = self.read_dataset(csv_file=fn)
-
-            self.output_dfs[name] = {'dataset': dataframe, 'targetColumns': dataset['targetColumn']}
-            # fp = self.output_folder_creator(name)
