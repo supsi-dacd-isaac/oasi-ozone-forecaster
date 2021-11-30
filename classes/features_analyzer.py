@@ -133,19 +133,21 @@ class FeaturesAnalyzer:
                 self.logger.warning(row)
 
         x_data = x_data.drop(nan_rows.index, axis=0)
-        x_data = x_data.iloc[:, 1:]
+        x_data_no_date = x_data.iloc[:, 1:]
         y_data = y_data.drop(nan_rows.index, axis=0)
-        y_data = y_data.iloc[:, 1:]
+        y_data_no_date = y_data.iloc[:, 1:]
 
-        assert (len(x_data) == len(y_data))
+        assert (len(x_data_no_date) == len(y_data_no_date))
 
         features = x_data.columns.values
-        x_data = np.array(x_data, dtype='float64')
-        y_data = np.array(y_data, dtype='float64')
+        x_data_np = np.array(x_data_no_date, dtype='float64')
+        y_data_np = np.array(y_data_no_date, dtype='float64')
 
-        return x_data, y_data, features
+        return x_data_np, y_data_np, features, x_data, y_data
 
-    def perform_feature_selection(self, x_data, y_data, features):
+    def important_features(self, x_data, y_data, features):
+
+        assert x_data.shape[1] == len(features)
 
         n_est = self.cfg['featuresAnalyzer']['numberEstimatorsNGB']
         l_rate = self.cfg['featuresAnalyzer']['learningRate']
@@ -170,6 +172,12 @@ class FeaturesAnalyzer:
         important_features = important_features.sort_values(by=['feature_importance'], ascending=False).reset_index(
             drop=True)
         new_features = list(important_features['feature'][:n_feat])
+
+        return new_features, important_features
+
+    def perform_feature_selection(self, x_data, y_data, features):
+
+        new_features, important_features = self.important_features(x_data, y_data, features[1:])
 
         important_nan_features = [f for f in self.nan_features if f in new_features]
         if len(important_nan_features) > 0:

@@ -88,7 +88,7 @@ if __name__ == "__main__":
         start_time = time.time()
         FA.dataset_reader()
         for key, df in FA.dataFrames.items():
-            x_data, y_data, features = FA.dataset_splitter(key, df)
+            x_data, y_data, features = FA.dataset_splitter(key, df)[:3]
 
             new_features_custom, importance_custom = FA.perform_feature_selection(x_data, y_data, features)
             logger.info(importance_custom)

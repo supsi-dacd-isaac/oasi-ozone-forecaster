@@ -16,9 +16,6 @@ sys.path.insert(0, path_parent)
 
 from classes.artificial_features import ArtificialFeatures
 
-# Add upper folder so the scripts can modify data at the same level of the scripts
-# path_parent = os.path.dirname(os.getcwd())
-# os.chdir(path_parent)
 urllib3.disable_warnings()
 
 if __name__ == "__main__":

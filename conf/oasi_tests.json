@@ -116,7 +116,7 @@
     "GLOB_to_PAR": 4.6,
     "KG_per_gamma": 98340
   },
-  "featuresAnalyzer":{
+  "featuresAnalyzer": {
     "performFeatureSelection": true,
     "datasetCreator": "regions",
     "numberEstimatorsNGB": 10,
@@ -128,5 +128,17 @@
     "threshold1": 240,
     "threshold2": 180,
     "threshold3": 135
+  },
+  "gridSearcher": {
+    "w1_start": 1.0,
+    "w1_end": 2.0,
+    "w1_step": 1.0,
+    "w2_start": 1.0,
+    "w2_end": 2.0,
+    "w2_step": 1.0,
+    "w3_start": 1.0,
+    "w3_end": 2.0,
+    "w3_step": 1.0,
+    "typeGridSearch": "test"
   }
 }

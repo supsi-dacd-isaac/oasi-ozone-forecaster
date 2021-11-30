@@ -18,9 +18,6 @@ from classes.artificial_features import ArtificialFeatures
 from classes.features_analyzer import FeaturesAnalyzer
 from classes.inputs_gatherer import InputsGatherer
 
-# Add upper folder so the scripts can modify data at the same level of the scripts
-# path_parent = os.path.dirname(os.getcwd())
-# os.chdir(path_parent)
 urllib3.disable_warnings()
 
 if __name__ == "__main__":
@@ -107,7 +104,7 @@ if __name__ == "__main__":
 
     for key, df in FA.dataFrames.items():
         logger.info(key)
-        x_data, y_data, features = FA.dataset_splitter(key, df)
+        x_data, y_data, features = FA.dataset_splitter(key, df)[:3]
 
         new_features, importance = FA.perform_feature_selection(x_data, y_data, features)
         logger.info(new_features)
@@ -153,10 +150,9 @@ if __name__ == "__main__":
     logger.info(list(FA.dataFrames.keys()))
 
     for key, df in FA.dataFrames.items():
-        x_data, y_data, features = FA.dataset_splitter(key, df)
+        x_data, y_data, features = FA.dataset_splitter(key, df)[:3]
 
         new_features_custom, importance_custom = FA.perform_feature_selection(x_data, y_data, features)
-        logger.info(importance_custom)
 
     for dataset in cfg['datasetSettings']['customJSONSignals']:
         name = dataset['filename'].split('.')[0]
@@ -186,7 +182,7 @@ if __name__ == "__main__":
     logger.info(list(FA.dataFrames.keys()))
 
     for key, df in FA.dataFrames.items():
-        x_data, y_data, features = FA.dataset_splitter(key, df)
+        x_data, y_data, features = FA.dataset_splitter(key, df)[:3]
 
         new_features_reader, importance_reader = FA.perform_feature_selection(x_data, y_data, features)
         logger.info(importance_reader)
@@ -232,7 +228,7 @@ if __name__ == "__main__":
         assert os.path.isfile(file_path)
 
     for key, df in FA.dataFrames.items():
-        x_data, y_data, features = FA.dataset_splitter(key, df)
+        x_data, y_data, features = FA.dataset_splitter(key, df)[:3]
 
         assert len(x_data) == 26
 
@@ -272,7 +268,7 @@ if __name__ == "__main__":
         assert os.path.isfile(file_path)
 
     for key, df in FA.dataFrames.items():
-        x_data, y_data, features = FA.dataset_splitter(key, df)
+        x_data, y_data, features = FA.dataset_splitter(key, df)[:3]
 
         assert len(x_data) == 23
 

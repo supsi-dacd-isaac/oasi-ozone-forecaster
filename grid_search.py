@@ -1,23 +1,20 @@
 import json
 import logging
-import sys
-import pytz
-import urllib3
 import os
-import numpy as np
-import pandas as pd
+import sys
+import shutil
 import argparse
+import time
 
+import numpy as np
+import urllib3
 from influxdb import InfluxDBClient
-from datetime import date, datetime, timedelta
 
-dir_path = os.path.dirname(os.path.realpath(__file__))
-path_parent = os.path.dirname(dir_path)
-sys.path.insert(0, path_parent)
-
-from classes.inputs_gatherer import InputsGatherer
 from classes.artificial_features import ArtificialFeatures
-from datetime import date, datetime, timedelta
+from classes.features_analyzer import FeaturesAnalyzer
+from classes.inputs_gatherer import InputsGatherer
+from classes.model_trainer import ModelTrainer
+from classes.grid_searcher import GridSearcher
 
 urllib3.disable_warnings()
 
@@ -58,7 +55,7 @@ if __name__ == "__main__":
     logging.basicConfig(format='%(asctime)-15s::%(levelname)s::%(funcName)s::%(message)s', level=logging.INFO,
                         filename=log_file)
 
-    logger.info("Starting program")
+    logger.info('Starting program')
 
     logger.info('Connection to InfluxDb server on socket [%s:%s]' % (cfg['influxDB']['host'], cfg['influxDB']['port']))
     try:
@@ -70,32 +67,30 @@ if __name__ == "__main__":
         sys.exit(3)
     logger.info('Connection successful')
 
-    cfg["dayToForecast"] = "2021-06-20"
-    cfg["VOC"]["useCorrection"] = True
+    # --------------------------------------------------------------------------- #
+    # Functions
+    # --------------------------------------------------------------------------- #
+
+    # --------------------------------------------------------------------------- #
+    # Start calculations
+    # --------------------------------------------------------------------------- #
 
     AF = ArtificialFeatures(influx_client, forecast_type, cfg, logger)
+    IG = InputsGatherer(influx_client, forecast_type, cfg, logger, AF)
+    FA = FeaturesAnalyzer(IG, forecast_type, cfg, logger)
+    MT = ModelTrainer(FA, IG, forecast_type, cfg, logger)
+    GS = GridSearcher(FA, IG, MT, forecast_type, cfg, logger)
 
-    IG = InputsGatherer(influxdb_client=influx_client, forecast_type=forecast_type, cfg=cfg, logger=logger,
-                        artificial_features=AF)
+    for dataset in cfg['datasetSettings']['customJSONSignals']:
+        assert os.path.isfile(cfg['datasetSettings']['loadSignalsFolder'] + dataset['filename'])
 
-    cfg["regions"] = {}
-    cfg["regions"]["Testing"] = {
-        "MeasureStations": ["CHI", "MEN", "BIO", "LUG", "MS-LUG", "LOC"],
-        "ForecastStations": ["P_BIO", "TICIA", "OTL"]
-    }
+    start_time = time.time()
 
-    IG.generate_all_signals()
+    FA.dataset_creator()
+    FA.dataset_reader()
 
-    # Assert we get the expected results and we didn't break anything
-    testing_data = json.loads(open(cfg["datasetSettings"]["outputSignalFolder"] + 'Testing_signals.json').read())
-    assert len(testing_data["signals"]) == len(set(testing_data["signals"])) == 2917
-    assert "LOC__CN__m0" in testing_data["signals"]
-    assert "OTL__GLOB__step0" in testing_data["signals"]
-    assert "VOC_Totale" in testing_data["signals"]
-    assert "KLO-LUG" in testing_data["signals"]
-    assert "IsWeekend" in testing_data["signals"]
+    GS.search_weights()
 
-    # Delete testing data
-    os.remove(cfg['datasetSettings']['outputSignalFolder'] + 'Testing_signals.json')
+    logger.info("--- %s seconds elapsed for grid searching ---" % (time.time() - start_time))
 
-    logger.info("Ending program")
+    logger.info('Ending program')

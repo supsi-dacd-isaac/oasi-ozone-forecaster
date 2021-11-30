@@ -109,7 +109,7 @@
   },
   "featuresAnalyzer":{
     "performFeatureSelection": true,
-    "datasetCreator": "regions",
+    "datasetCreator": "CSVReader",
     "numberEstimatorsNGB": 501,
     "learningRate": 0.05,
     "numberSelectedFeatures": 100,
@@ -119,5 +119,17 @@
     "threshold1": 240,
     "threshold2": 180,
     "threshold3": 135
+  },
+  "gridSearcher": {
+    "w1_start": 2.0,
+    "w1_end": 20.0,
+    "w1_step": 2.0,
+    "w2_start": 2.0,
+    "w2_end": 20.0,
+    "w2_step": 2.0,
+    "w3_start": 1.0,
+    "w3_end": 2.0,
+    "w3_step": 1.0,
+    "typeGridSearch": "multiple"
   }
 }
