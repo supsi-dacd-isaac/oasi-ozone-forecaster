@@ -38,7 +38,7 @@ if __name__ == "__main__":
     os.system('venv/bin/python3 tests/test_artificial_features.py -c conf/oasi_tests.json -t MOR -l logs/tests.log')
     os.system('venv/bin/python3 tests/test_features_analyzer.py -c conf/oasi_tests.json -t MOR -l logs/tests.log')
     os.system('venv/bin/python3 tests/test_input_gatherer.py -c conf/oasi_tests.json -t MOR -l logs/tests.log')
-    os.system('venv/bin/python3 tests/test_grid_search_1.py -c conf/oasi_tests.json -t MOR -l logs/tests.log')
+    os.system('venv/bin/python3 tests/test_grid_search.py -c conf/oasi_tests.json -t MOR -l logs/tests.log')
     os.system('venv/bin/python3 tests/test_model_trainer.py -c conf/oasi_tests.json -t MOR -l logs/tests.log')
 
     logger.info("--- %s seconds elapsed to execute all tests ---" % (time.time() - start_time))
