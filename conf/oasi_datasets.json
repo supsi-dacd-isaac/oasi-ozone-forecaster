@@ -45,7 +45,8 @@
     ],
     "loadCsvFolder": "conf/csv/",
     "csvFiles": [
-      {"filename": "CHI_MOR.csv", "targetColumn": ["CHI__YO3__d1"]}
+      {"filename": "regions_Chiasso_MOR_05-15_09-30_2015-2021_dataset.csv", "targetColumn": ["CHI__YO3__d1"]},
+      {"filename": "regions_Bioggio_MOR_05-15_09-30_2015-2021_dataset.csv", "targetColumn": ["BIO__YO3__d1"]}
     ],
     "outputCsvFolder": "output/",
     "outputSignalFolder": "conf/signals/regions/",
@@ -109,7 +110,7 @@
   },
   "featuresAnalyzer":{
     "performFeatureSelection": true,
-    "datasetCreator": "CSVReader",
+    "datasetCreator": "CSVreader",
     "numberEstimatorsNGB": 501,
     "learningRate": 0.05,
     "numberSelectedFeatures": 100,

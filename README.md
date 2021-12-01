@@ -97,4 +97,12 @@ export PYTHONPATH=/home/isaac-user02/run/python/oasi-ozone-forecaster
 venv/bin/python3 tests/test_input_gatherer.py -c conf/oasi_tests.json -t MOR -l logs/tests.log
 venv/bin/python3 tests/test_features_analyzer.py -c conf/oasi_tests.json -t MOR -l logs/tests.log
 venv/bin/python3 tests/test_artificial_features.py -c conf/oasi_tests.json -t MOR -l logs/tests.log
+venv/bin/python3 tests/test_grid_search.py -c conf/oasi_tests.json -t MOR -l logs/tests.log'
+venv/bin/python3 tests/test_model_trainer.py -c conf/oasi_tests.json -t MOR -l logs/tests.log'
+```
+
+or alternatively you can run 
+
+```
+venv/bin/python3 perform_all_tests.py -l logs/tests.log'
 ```

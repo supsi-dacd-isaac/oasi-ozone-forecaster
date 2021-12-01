@@ -160,7 +160,7 @@ class FeaturesAnalyzer:
         threshold3 = self.cfg['featuresAnalyzer']['threshold3']  # 135
 
         NGB_model = NGBRegressor(learning_rate=l_rate, Base=default_tree_learner, Dist=Normal, Score=MLE,
-                                 n_estimators=n_est, random_state=500, verbose=True)
+                                 n_estimators=n_est, random_state=500, verbose=False)
         weights = np.array(
             [w1 if x >= threshold1 else w2 if x >= threshold2 else w3 if x >= threshold3 else 0.1 for x in y_data],
             dtype='float64')
