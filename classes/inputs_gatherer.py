@@ -712,6 +712,7 @@ class InputsGatherer:
                     signal_list.extend(self.chunks_forecasted_signals(forecastStation, forecastedSignal))
             signal_list.extend(self.global_signals())
 
+            os.makedirs(self.cfg['datasetSettings']['outputSignalFolder'])
             fn = self.cfg['datasetSettings']['outputSignalFolder'] + region + '_signals.json'
             with open(fn, 'w') as f:
                 json.dump({"signals": signal_list}, f)
