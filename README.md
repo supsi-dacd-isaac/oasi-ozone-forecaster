@@ -113,5 +113,6 @@ venv/bin/python3 perform_all_tests.py -l logs/tests.log
 2. Move the thusly created dataset to some powerful machine (e.g. Shiva or Bombolo) and perform a computationally intensive grid search with the script `grid_search` over a configured set of weights.
    Be sure to have set the parameteres in the `gridSearcher` section of the config file, in particular `cfg["featuresAnalyzer"]["datasetCreator"]` should be set to `CSVreader`, the previously created dataset should be placed in the right `conf/csv/` folder and the file names should appear in the `cfg['datasetSettings']['csvFiles']` section.
    It is possible the machine will be angered by the presence of the package `skgarden`, which is very outdated. In this case you should comment the offending lines of code, which are not needed anyway for the grid search.
-3. Observe the output of the grid search and manually select the best combination of weights. Do update the config file accordingly.
-4. On a machine able to run the whole code, use the script `final_model_creator` with the previously created dataset and the previously selected weights to create the final models, which can be used to perform the daily forecast.
+3. Note that ona  clean installation the package `skgarden` needs to be manually modified so that `sample_weights` is included in the `fit` method of at least 2 classes.
+4. Observe the output of the grid search and manually select the best combination of weights. Do update the config file accordingly.
+5. On a machine able to run the whole code, use the script `final_model_creator` with the previously created dataset and the previously selected weights to create the final models, which can be used to perform the daily forecast.
