@@ -48,7 +48,7 @@ class FeaturesAnalyzer:
         elif self.cfg["featuresAnalyzer"]["datasetCreator"] == 'regions':
             self.inputs_gatherer.dataframe_builder_regions()
         elif self.cfg["featuresAnalyzer"]["datasetCreator"] == 'CSVreader':
-            self.inputs_gatherer.dataframe_builder_readCSV()
+            pass
         else:
             self.logger.error(
                 'Option for dataset_creator is not valid. Available options are "customJSON", "regions" or "CSVreader"')
@@ -80,6 +80,15 @@ class FeaturesAnalyzer:
                 output_dfs = self.update_datasets(name, output_dfs, target_columns)
 
         elif self.cfg["featuresAnalyzer"]["datasetCreator"] == 'CSVreader':
+            for dataset in self.cfg['datasetSettings']['csvFiles']:
+                name = dataset['filename'].split('.')[0]
+                fp = self.inputs_gatherer.output_folder_creator(name)
+                file_name_df = fp + fp.split(os.sep)[1] + '_dataset.csv'
+                fn = self.cfg['datasetSettings']["loadCsvFolder"] + dataset['filename']
+                if not fn.endswith('.csv'):
+                    fn = fn + '.csv'
+                os.system('cp %s %s' % (fn, file_name_df))
+
             for dataset in self.cfg['datasetSettings']['csvFiles']:
                 name = dataset['filename'].split('.')[0]
                 target_columns = dataset['targetColumn']

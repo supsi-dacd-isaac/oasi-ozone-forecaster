@@ -748,14 +748,3 @@ class InputsGatherer:
             name = dataset['filename'].split('.')[0]
             fn = self.cfg['datasetSettings']["loadSignalsFolder"] + dataset['filename']
             self.build_dataset(name=name, signals_file=fn)
-
-    def dataframe_builder_readCSV(self):
-
-        for dataset in self.cfg['datasetSettings']['csvFiles']:
-            name = dataset['filename'].split('.')[0]
-            fp = self.output_folder_creator(name)
-            file_name_df = fp + fp.split(os.sep)[1] + '_dataset.csv'
-            fn = self.cfg['datasetSettings']["loadCsvFolder"] + dataset['filename']
-            if not fn.endswith('.csv'):
-                fn = fn + '.csv'
-            os.system('cp %s %s' % (fn, file_name_df))

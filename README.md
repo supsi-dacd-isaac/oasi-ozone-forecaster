@@ -104,7 +104,7 @@ venv/bin/python3 tests/test_model_trainer.py -c conf/oasi_tests.json -t MOR -l l
 or alternatively you can run 
 
 ```
-venv/bin/python3 perform_all_tests.py -l logs/tests.log'
+venv/bin/python3 perform_all_tests.py -l logs/tests.log
 ```
 
 ## Internal instructions:

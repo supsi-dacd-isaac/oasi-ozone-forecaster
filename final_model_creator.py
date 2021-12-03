@@ -90,8 +90,8 @@ if __name__ == "__main__":
         FA.dataset_creator()
     FA.dataset_reader()
 
-    GS.search_weights()
+    MT.train_final_models()
 
-    logger.info("--- %s seconds elapsed for grid searching ---" % (time.time() - start_time))
+    logger.info("--- %s seconds elapsed for final model creation ---" % (time.time() - start_time))
 
     logger.info('Ending program')
