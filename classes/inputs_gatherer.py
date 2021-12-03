@@ -658,8 +658,8 @@ class InputsGatherer:
         return signals
 
     def global_signals(self):
-        # RHW is not considered in this analysis since it was never considered and we have a hole in the data in august
-        # 2019. Signal codes: ['RHW__d0', 'RHW__d1']
+        """RHW is not considered in this analysis since it was never considered and we have a hole in the data in august
+        2019. Signal codes were: ['RHW__d0', 'RHW__d1']"""
         signals = ['KLO-LUG', 'KLO-LUG_favonio', 'VOC_Totale', 'NOx_Totale', 'IsHolyday', 'DayWeek', 'IsWeekend']
         return signals
 
@@ -695,10 +695,8 @@ class InputsGatherer:
         return signals
 
     def generate_all_signals(self):
-        """
-        Function to generate and save all known signals of a specific region (e.g. Ticino) with defined measuring and
-        forecasting stations
-        """
+        """Method to generate and save all known signals of a specific region (e.g. Ticino) with defined measuring and
+        forecasting stations"""
 
         for region in self.cfg['regions']:
             signal_list = []
@@ -721,6 +719,7 @@ class InputsGatherer:
         return
 
     def output_folder_creator(self, dataset_name):
+        """Get the address of the output folder for the current case"""
 
         folder_path = '%s%s_%s_%s_%s_%s_%s-%s%s' % (self.cfg['datasetSettings']['outputCsvFolder'],
                                                     self.cfg['featuresAnalyzer']['datasetCreator'], dataset_name,

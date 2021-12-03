@@ -9,7 +9,7 @@ from influxdb import InfluxDBClient
 class ArtificialFeatures:
     """
     Class handling the forecasting of features calculated from the other measurements or forecasts (e.g. VOC,
-    Kloten-Luano pressure gradient, ...)
+    Kloten-Luano pressure gradient, specific time slots means, and so on...)
     """
 
     def __init__(self, influxdb_client, forecast_type, cfg, logger):
@@ -39,8 +39,8 @@ class ArtificialFeatures:
 
     def get_query_value_global(self, signal):
         """
-        Perform a query on signals independent from the location where they are measured. This method is used for
-        calculating VOC and NOx daily variables in method do_IFEC_query
+        Perform a query on signals who are location independent, i.e. it doesnt matter where they are measured.
+        This method is used for calculating VOC and NOx daily variables in method do_IFEC_query
         """
 
         measurement = self.cfg["influxDB"]["measurementGlobal"]

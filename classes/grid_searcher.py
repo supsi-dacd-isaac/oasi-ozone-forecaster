@@ -10,7 +10,8 @@ from ngboost.scores import MLE
 
 
 class GridSearcher:
-    """given a dataset with a target column this class performs grid search over the weights w1, w2 and w3"""
+    """Given a dataset with a target column this class performs grid search over the weights w1, w2 and w3 as specified
+     in the config files"""
 
     def __init__(self, features_analyzer, input_gatherer, model_trainer, forecast_type, cfg, logger):
         """
@@ -37,6 +38,8 @@ class GridSearcher:
         self.dataFrames = self.features_analyzer.dataFrames
 
     def search_weights(self):
+        """Iterate over the weights as specified in the config file, and for each iteration save the KPIs and all the
+        prediction of the algorithm performed on the test set"""
 
         self.get_datasets()
 

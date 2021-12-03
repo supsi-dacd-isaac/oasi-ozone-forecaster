@@ -62,24 +62,27 @@ class FeaturesAnalyzer:
         return output_dfs
 
     def dataset_reader(self):
-        """dataset_reader should always follow a call of dataset_creator, otherwise the existence of the files to be
-        read is not guaranteed"""
+        """This method reads a previously created or provided csv file. If the dataset is created from a custom JSON or
+        from regionals signals, this method has to be preceded by a call of dataset_creator"""
 
         output_dfs = {}
 
         if self.cfg["featuresAnalyzer"]["datasetCreator"] == 'customJSON':
+            # Read the dataset in the output folder
             for dataset in self.cfg['datasetSettings']['customJSONSignals']:
                 name = dataset['filename'].split('.')[0]
                 target_columns = dataset['targetColumn']
                 output_dfs = self.update_datasets(name, output_dfs, target_columns)
 
         elif self.cfg["featuresAnalyzer"]["datasetCreator"] == 'regions':
+            # Read the dataset in the output folder
             for region in self.cfg['regions']:
                 name = region
                 target_columns = self.cfg['regions'][region]['targetColumn']
                 output_dfs = self.update_datasets(name, output_dfs, target_columns)
 
         elif self.cfg["featuresAnalyzer"]["datasetCreator"] == 'CSVreader':
+            # Copy the provided dataset in the output folder
             for dataset in self.cfg['datasetSettings']['csvFiles']:
                 name = dataset['filename'].split('.')[0]
                 fp = self.inputs_gatherer.output_folder_creator(name)
@@ -89,6 +92,7 @@ class FeaturesAnalyzer:
                     fn = fn + '.csv'
                 os.system('cp %s %s' % (fn, file_name_df))
 
+            # Read the dataset in the output folder
             for dataset in self.cfg['datasetSettings']['csvFiles']:
                 name = dataset['filename'].split('.')[0]
                 target_columns = dataset['targetColumn']
@@ -155,6 +159,7 @@ class FeaturesAnalyzer:
         return x_data_np, y_data_np, features, x_data, y_data
 
     def important_features(self, x_data, y_data, features):
+        """Calculate the important features given design matrix, target vector and full list of features"""
 
         assert x_data.shape[1] == len(features)
 
@@ -185,6 +190,7 @@ class FeaturesAnalyzer:
         return new_features, important_features
 
     def perform_feature_selection(self, x_data, y_data, features):
+        """Obtain selected features and also save them in the output folder"""
 
         new_features, important_features = self.important_features(x_data, y_data, features[1:])
 

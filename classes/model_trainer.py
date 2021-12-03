@@ -13,7 +13,7 @@ from skgarden import RandomForestQuantileRegressor
 
 class ModelTrainer:
     """This class will perform training on datasets. This could happen during the grid search for the best combination
-    of weights, or, once the weights are assessed, for the creation of the final datasets"""
+    of weights, or, once the weights are assessed, for the creation of the final models"""
 
     def __init__(self, features_analyzer, input_gatherer, forecast_type, cfg, logger):
         """
@@ -49,7 +49,7 @@ class ModelTrainer:
         return lcl_acc
 
     def calculate_KPIs(self, prediction, measured):
-        """For each fold and/or tran/test separation, return the KPIs to establish the best weights combination"""
+        """For each fold and/or train/test separation, return the KPIs to establish the best weights combination"""
 
         threshold1 = self.cfg['featuresAnalyzer']['threshold1']
         threshold2 = self.cfg['featuresAnalyzer']['threshold2']
@@ -114,11 +114,12 @@ class ModelTrainer:
         assert len(Xtrain) == len(Ytrain)
         assert len(Xtest) == len(Ytest)
 
-        ngb = self.get_NGB_model(Xtrain, Ytrain)[0]
+        ngb = self.train_NGB_model(Xtrain, Ytrain)[0]
 
         return ngb.predict(Xtest)
 
-    def get_NGB_model(self, Xtrain, Ytrain):
+    def train_NGB_model(self, Xtrain, Ytrain):
+        """Return the NGB model trained on the available data"""
 
         n_est = self.cfg['featuresAnalyzer']['numberEstimatorsNGB']
         l_rate = self.cfg['featuresAnalyzer']['learningRate']
@@ -163,6 +164,8 @@ class ModelTrainer:
         return self.calculate_KPIs(prediction, measured), self.error_data(pred, Y.loc[test_index], 1)
 
     def error_data(self, pred, Y, fold):
+        """Create pandas df with weights, fold, measurements and predictions"""
+
         Y = np.array(Y.values)
         assert len(pred) == len(Y)
 
@@ -271,7 +274,7 @@ class ModelTrainer:
 
             X, Y = self.remove_date(X, Y)
 
-            ngb, weight = self.get_NGB_model(X, Y)
+            ngb, weight = self.train_NGB_model(X, Y)
 
             rfqr = RandomForestQuantileRegressor(n_estimators=1000).fit(X, np.array(Y).ravel(), sample_weight=weight)
             rfqr_no_w = RandomForestQuantileRegressor(n_estimators=1000).fit(X, np.array(Y).ravel(), sample_weight=None)
