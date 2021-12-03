@@ -81,6 +81,9 @@ if __name__ == "__main__":
     # Test using regions
     # --------------------------------------------------------------------------- #
 
+    if not os.path.exists('conf/csv/tests/'):
+        os.makedirs('conf/csv/tests/')
+
     cfg['datasetSettings']['startDay'] = '07-10'
     cfg['datasetSettings']['endDay'] = '07-20'
     cfg['datasetSettings']['years'] = [2019]
