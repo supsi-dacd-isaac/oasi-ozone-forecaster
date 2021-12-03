@@ -106,3 +106,12 @@ or alternatively you can run
 ```
 venv/bin/python3 perform_all_tests.py -l logs/tests.log'
 ```
+
+## Internal instructions:
+
+1. Create the dataset you're interested in using the script `dataset_creator` on a Ununpentio connected machine, such as `dev03` for instance. Be sure to correctly set the parameters to the dataset of your interest
+2. Move the thusly created dataset to some powerful machine (e.g. Shiva or Bombolo) and perform a computationally intensive grid search with the script `grid_search` over a configured set of weights. 
+   Be sure to have set the parameteres in the ??? section of the config file, in particular `cfg["featuresAnalyzer"]["datasetCreator"]` should be set to `CSVreader` and the previously created dataset should be placed in the right folder.
+   It is possible the machine will be angered by the package `skgarden` which is very outdated, in this case you should comment the offending lines, which are not needed anyway for the grid search.
+3. Observe the output of the grid search and manually select the best combination of weights. Do update the config file accordingly.
+4. On a machine able to run the whole code, use the script `final_model_creator` with the previously created dataset and the previously selected weights to create the final models, which can be used to do the daily forecast.
