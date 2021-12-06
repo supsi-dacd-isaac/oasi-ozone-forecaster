@@ -109,10 +109,15 @@ venv/bin/python3 perform_all_tests.py -l logs/tests.log
 
 ## Internal instructions:
 
-1. Create the dataset you're interested in using the script `dataset_creator` on a Ununpentio connected machine, such as `dev03` for instance. Be sure to correctly set the parameters in the `datasetSettings` section of config file.
-2. Move the thusly created dataset to some powerful machine (e.g. Shiva or Bombolo) and perform a computationally intensive grid search with the script `grid_search` over a configured set of weights.
+1. Beware that the `skgarden` package is severely outdated, thus some manual modifications are necessary in folder `/venv/lib64/python3.8/site-packages/skgarden/`:
+   - file `quantile/ensemble.py`, line 40: add `sample_weight` to method arguments
+   - file `quantile/ensemble.py`, line 79: add `sample_weight` to method call
+   - file `quantile/tree.py`, lines 221 and 230: remove `presort=False` option for clean output (optional)
+   - file `mondrian/ensemble/forest.py`, line 96, 229: add `sample_weight` to method arguments
+   - file `mondrian/ensemble/forest.py`, line 121, 254: add `sample_weight` to method call
+2. Create the dataset you're interested in using the script `dataset_creator` on a Ununpentio connected machine, such as `dev03` for instance. Be sure to correctly set the parameters in the `datasetSettings` section of config file.
+3. Move the thusly created dataset to some powerful machine (e.g. Shiva or Bombolo) and perform a computationally intensive grid search with the script `grid_search` over a configured set of weights.
    Be sure to have set the parameteres in the `gridSearcher` section of the config file, in particular `cfg["featuresAnalyzer"]["datasetCreator"]` should be set to `CSVreader`, the previously created dataset should be placed in the right `conf/csv/` folder and the file names should appear in the `cfg['datasetSettings']['csvFiles']` section.
-   It is possible the machine will be angered by the presence of the package `skgarden`, which is very outdated. In this case you should comment the offending lines of code, which are not needed anyway for the grid search.
-3. Note that ona  clean installation the package `skgarden` needs to be manually modified so that `sample_weights` is included in the `fit` method of at least 2 classes.
+   It is possible the machine will be angered by the presence of the package `skgarden`. In this case you should comment the offending lines of code, which are not needed anyway for the grid search.
 4. Observe the output of the grid search and manually select the best combination of weights. Do update the config file accordingly.
 5. On a machine able to run the whole code, use the script `final_model_creator` with the previously created dataset and the previously selected weights to create the final models, which can be used to perform the daily forecast.
