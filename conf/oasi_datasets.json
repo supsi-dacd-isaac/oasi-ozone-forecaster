@@ -9,7 +9,7 @@
     "waitAfterRequest": 1
   },
   "folders": {
-    "models": "models_dario"
+    "models": "models"
   },
   "forecastPeriod": {
     "case": "not_current",
