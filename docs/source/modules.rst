@@ -12,6 +12,5 @@ oasi-ozone-forecaster
    features_selector
    final_model_creator
    forecaster_manager
-   forecaster_manager_dario
    grid_search
    perform_all_tests
