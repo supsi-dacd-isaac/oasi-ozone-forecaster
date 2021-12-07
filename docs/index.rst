@@ -25,8 +25,8 @@ Installation
 
 Install $project by running:
 
-    pip install numpy
-    pip install -r requirements.txt
+    `pip install numpy`
+    `pip install -r requirements.txt`
 
 
 License

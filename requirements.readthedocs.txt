@@ -39,3 +39,8 @@ typing-extensions==3.7.4.3
 urllib3==1.26.4
 wrapt==1.12.1
 zipp==3.4.1
+sphinx-rtd-theme 
+sphinx 
+recommonmark 
+markdown  
+sphinx-markdown-tables
