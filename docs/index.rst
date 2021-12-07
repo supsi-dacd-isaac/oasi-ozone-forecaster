@@ -18,3 +18,18 @@ Indices and tables
 * :ref:`genindex`
 * :ref:`modindex`
 * :ref:`search`
+
+
+Installation
+------------
+
+Install $project by running:
+
+    pip install numpy
+    pip install -r requirements.txt
+
+
+License
+-------
+
+The project is licensed under the BSD license.
