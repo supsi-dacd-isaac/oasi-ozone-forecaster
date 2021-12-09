@@ -1,0 +1,257 @@
+<!DOCTYPE html>
+<html class="writer-html4" lang="en" >
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>artificial_features module &mdash; oasi-ozone-forecaster 0.0.1 documentation</title><link rel="stylesheet" href="_static/css/theme.css" type="text/css" />
+    <link rel="stylesheet" href="_static/pygments.css" type="text/css" />
+  <!--[if lt IE 9]>
+    <script src="_static/js/html5shiv.min.js"></script>
+  <![endif]-->
+  <script id="documentation_options" data-url_root="./" src="_static/documentation_options.js"></script>
+        <script type="text/javascript" src="_static/jquery.js"></script>
+        <script type="text/javascript" src="_static/underscore.js"></script>
+        <script type="text/javascript" src="_static/doctools.js"></script>
+        <script type="text/javascript" src="_static/language_data.js"></script>
+    <script src="_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="genindex.html" />
+    <link rel="search" title="Search" href="search.html" />
+    <link rel="next" title="data_manager module" href="data_manager.html" />
+    <link rel="prev" title="alerts module" href="alerts.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+            <a href="index.html" class="icon icon-home"> oasi-ozone-forecaster
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption"><span class="caption-text">Contents:</span></p>
+<ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="intro.html">Introduction-fake</a></li>
+<li class="toctree-l1"><a class="reference internal" href="introduction.html">Introduction</a></li>
+<li class="toctree-l1"><a class="reference internal" href="main_scripts.html">Main scripts</a></li>
+<li class="toctree-l1 current"><a class="reference internal" href="modules.html">classes</a><ul class="current">
+<li class="toctree-l2"><a class="reference internal" href="alerts.html">alerts module</a></li>
+<li class="toctree-l2 current"><a class="current reference internal" href="#">artificial_features module</a></li>
+<li class="toctree-l2"><a class="reference internal" href="data_manager.html">data_manager module</a></li>
+<li class="toctree-l2"><a class="reference internal" href="datasets_creator.html">datasets_creator module</a></li>
+<li class="toctree-l2"><a class="reference internal" href="features_analyzer.html">features_analyzer module</a></li>
+<li class="toctree-l2"><a class="reference internal" href="forecaster.html">forecaster module</a></li>
+<li class="toctree-l2"><a class="reference internal" href="grid_searcher.html">grid_searcher module</a></li>
+<li class="toctree-l2"><a class="reference internal" href="inputs_gatherer.html">inputs_gatherer module</a></li>
+<li class="toctree-l2"><a class="reference internal" href="model_trainer.html">model_trainer module</a></li>
+<li class="toctree-l2"><a class="reference internal" href="results_manager.html">results_manager module</a></li>
+<li class="toctree-l2"><a class="reference internal" href="threads_manager.html">threads_manager module</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="examples.html">Examples</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="index.html">oasi-ozone-forecaster</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="index.html" class="icon icon-home"></a> &raquo;</li>
+          <li><a href="modules.html">classes</a> &raquo;</li>
+      <li>artificial_features module</li>
+      <li class="wy-breadcrumbs-aside">
+            <a href="_sources/artificial_features.rst.txt" rel="nofollow"> View page source</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <div class="section" id="module-artificial_features">
+<span id="artificial-features-module"></span><h1>artificial_features module<a class="headerlink" href="#module-artificial_features" title="Permalink to this headline">¶</a></h1>
+<dl class="class">
+<dt id="artificial_features.ArtificialFeatures">
+<em class="property">class </em><code class="descclassname">artificial_features.</code><code class="descname">ArtificialFeatures</code><span class="sig-paren">(</span><em>influxdb_client</em>, <em>forecast_type</em>, <em>cfg</em>, <em>logger</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/artificial_features.html#ArtificialFeatures"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#artificial_features.ArtificialFeatures" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">object</span></code></p>
+<p>Class handling the forecasting of features calculated from the other measurements or forecasts (e.g. VOC,
+Kloten-Luano pressure gradient, specific time slots means, and so on…)</p>
+<dl class="method">
+<dt id="artificial_features.ArtificialFeatures.analyze_signal">
+<code class="descname">analyze_signal</code><span class="sig-paren">(</span><em>signal</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/artificial_features.html#ArtificialFeatures.analyze_signal"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#artificial_features.ArtificialFeatures.analyze_signal" title="Permalink to this definition">¶</a></dt>
+<dd><p>Parse the signal codes and send it to the appropriate method for value calculation</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="artificial_features.ArtificialFeatures.calc_data">
+<code class="descname">calc_data</code><span class="sig-paren">(</span><em>query</em>, <em>signal_data</em>, <em>func</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/artificial_features.html#ArtificialFeatures.calc_data"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#artificial_features.ArtificialFeatures.calc_data" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="method">
+<dt id="artificial_features.ArtificialFeatures.calculate_wood_emission">
+<code class="descname">calculate_wood_emission</code><span class="sig-paren">(</span><em>emissionType</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/artificial_features.html#ArtificialFeatures.calculate_wood_emission"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#artificial_features.ArtificialFeatures.calculate_wood_emission" title="Permalink to this definition">¶</a></dt>
+<dd><p>Calculate the VOC emissions from woods, using either forecasted or measured data</p>
+</dd></dl>
+
+<dl class="staticmethod">
+<dt id="artificial_features.ArtificialFeatures.create_forecast_chunk_steps_string">
+<em class="property">static </em><code class="descname">create_forecast_chunk_steps_string</code><span class="sig-paren">(</span><em>start</em>, <em>end</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/artificial_features.html#ArtificialFeatures.create_forecast_chunk_steps_string"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#artificial_features.ArtificialFeatures.create_forecast_chunk_steps_string" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="method">
+<dt id="artificial_features.ArtificialFeatures.do_KLO_query">
+<code class="descname">do_KLO_query</code><span class="sig-paren">(</span><em>signal_data</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/artificial_features.html#ArtificialFeatures.do_KLO_query"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#artificial_features.ArtificialFeatures.do_KLO_query" title="Permalink to this definition">¶</a></dt>
+<dd><p>Calculate the pressure gradient between Kloten airport and Lugano to take into account the air current between
+South and North of Switzerland</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="artificial_features.ArtificialFeatures.do_MAX_query">
+<code class="descname">do_MAX_query</code><span class="sig-paren">(</span><em>signal_data</em>, <em>measurement</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/artificial_features.html#ArtificialFeatures.do_MAX_query"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#artificial_features.ArtificialFeatures.do_MAX_query" title="Permalink to this definition">¶</a></dt>
+<dd><p>Maximum value of all hourly forecasted temperatures</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="artificial_features.ArtificialFeatures.do_T_2M_query">
+<code class="descname">do_T_2M_query</code><span class="sig-paren">(</span><em>signal_data</em>, <em>measurement</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/artificial_features.html#ArtificialFeatures.do_T_2M_query"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#artificial_features.ArtificialFeatures.do_T_2M_query" title="Permalink to this definition">¶</a></dt>
+<dd><p>MOR: mean values of hourly forecasted temperatures from 12:00 to 00:00 of the same day
+EVE: mean values of hourly forecasted temperatures from 10:00 to 21:00 of the following day
+The squared value of the above means is a considered signal too</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="artificial_features.ArtificialFeatures.do_VOC_query">
+<code class="descname">do_VOC_query</code><span class="sig-paren">(</span><em>measurement</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/artificial_features.html#ArtificialFeatures.do_VOC_query"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#artificial_features.ArtificialFeatures.do_VOC_query" title="Permalink to this definition">¶</a></dt>
+<dd><p>Total_NOx is easy, just query the previously calculated value in the DB. However, for Total_VOC it is necessary
+to query the existing value, which combines traffic (roads, highways, planes), combustion, agricolture,
+and industry, then add the daily calculated woods emission with the below iso gamma formula.
+Note that the VOC signal stored in the DB does NOT account for wood emission!</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="artificial_features.ArtificialFeatures.do_mor_eve_query">
+<code class="descname">do_mor_eve_query</code><span class="sig-paren">(</span><em>signal_data</em>, <em>measurement</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/artificial_features.html#ArtificialFeatures.do_mor_eve_query"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#artificial_features.ArtificialFeatures.do_mor_eve_query" title="Permalink to this definition">¶</a></dt>
+<dd><p>mean_mor: Mean of values from 03:00 UTC to 10:00 UTC
+mean_eve: Mean of values from 11:00 UTC to 21:00 UTC
+Forecasted signals considered: GLOB, CLCT</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="artificial_features.ArtificialFeatures.do_multiday_query">
+<code class="descname">do_multiday_query</code><span class="sig-paren">(</span><em>signal_data</em>, <em>measurement</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/artificial_features.html#ArtificialFeatures.do_multiday_query"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#artificial_features.ArtificialFeatures.do_multiday_query" title="Permalink to this definition">¶</a></dt>
+<dd><p>Calculate the mean of the last 24, 48 or 72 hourly measurements for all measured signals
+Special case NOx_12h is also calculated here:
+MOR: mean value of NOx hourly measurements from 22:00 to 10:00 of previous day (previous afternoon)
+EVE: mean value of NOx hourly measurements from 22:00 of previous day to 10:00 of present day (present morning)</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="artificial_features.ArtificialFeatures.do_tot_prec_query">
+<code class="descname">do_tot_prec_query</code><span class="sig-paren">(</span><em>signal_data</em>, <em>measurement</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/artificial_features.html#ArtificialFeatures.do_tot_prec_query"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#artificial_features.ArtificialFeatures.do_tot_prec_query" title="Permalink to this definition">¶</a></dt>
+<dd><p>Sum of the hourly forecasted precipitations for the next 24 hours</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="artificial_features.ArtificialFeatures.do_transf_query">
+<code class="descname">do_transf_query</code><span class="sig-paren">(</span><em>signal_data</em>, <em>measurement</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/artificial_features.html#ArtificialFeatures.do_transf_query"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#artificial_features.ArtificialFeatures.do_transf_query" title="Permalink to this definition">¶</a></dt>
+<dd><p>Maximum value of all hourly forecasted Dew Temperatures, to which we add 20 and cube the obtained value</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="artificial_features.ArtificialFeatures.get_Q_T_forecasted">
+<code class="descname">get_Q_T_forecasted</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="_modules/artificial_features.html#ArtificialFeatures.get_Q_T_forecasted"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#artificial_features.ArtificialFeatures.get_Q_T_forecasted" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="method">
+<dt id="artificial_features.ArtificialFeatures.get_Q_T_measured">
+<code class="descname">get_Q_T_measured</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="_modules/artificial_features.html#ArtificialFeatures.get_Q_T_measured"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#artificial_features.ArtificialFeatures.get_Q_T_measured" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="method">
+<dt id="artificial_features.ArtificialFeatures.get_query_value_forecast">
+<code class="descname">get_query_value_forecast</code><span class="sig-paren">(</span><em>measurement</em>, <em>signal_data</em>, <em>steps</em>, <em>func</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/artificial_features.html#ArtificialFeatures.get_query_value_forecast"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#artificial_features.ArtificialFeatures.get_query_value_forecast" title="Permalink to this definition">¶</a></dt>
+<dd><p>Perform a query on forecasted signals using a certain amount of steps forward in time and a data aggregating
+function, such as mean, max, min or sum.
+This method is used in most methods except KLO-LUG and past measurements features</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="artificial_features.ArtificialFeatures.get_query_value_global">
+<code class="descname">get_query_value_global</code><span class="sig-paren">(</span><em>signal</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/artificial_features.html#ArtificialFeatures.get_query_value_global"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#artificial_features.ArtificialFeatures.get_query_value_global" title="Permalink to this definition">¶</a></dt>
+<dd><p>Perform a query on signals who are location independent, i.e. it doesnt matter where they are measured.
+This method is used for calculating VOC and NOx daily variables in method do_IFEC_query</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="artificial_features.ArtificialFeatures.get_query_value_measure">
+<code class="descname">get_query_value_measure</code><span class="sig-paren">(</span><em>measurement</em>, <em>signal_data</em>, <em>start_dt</em>, <em>end_dt</em>, <em>func</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/artificial_features.html#ArtificialFeatures.get_query_value_measure"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#artificial_features.ArtificialFeatures.get_query_value_measure" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="method">
+<dt id="artificial_features.ArtificialFeatures.measurements_start_end">
+<code class="descname">measurements_start_end</code><span class="sig-paren">(</span><em>days</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/artificial_features.html#ArtificialFeatures.measurements_start_end"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#artificial_features.ArtificialFeatures.measurements_start_end" title="Permalink to this definition">¶</a></dt>
+<dd><p>Create start and end times for the measurement signal queries. To be used in the do_multiday_query method</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="artificial_features.ArtificialFeatures.set_forecast_day">
+<code class="descname">set_forecast_day</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="_modules/artificial_features.html#ArtificialFeatures.set_forecast_day"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#artificial_features.ArtificialFeatures.set_forecast_day" title="Permalink to this definition">¶</a></dt>
+<dd><p>Set the day related to the forecast</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="artificial_features.ArtificialFeatures.steps_type_forecast">
+<code class="descname">steps_type_forecast</code><span class="sig-paren">(</span><em>mor_start</em>, <em>mor_end</em>, <em>eve_start</em>, <em>eve_end</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/artificial_features.html#ArtificialFeatures.steps_type_forecast"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#artificial_features.ArtificialFeatures.steps_type_forecast" title="Permalink to this definition">¶</a></dt>
+<dd><p>Create a string for the forward steps in time of a forecast signal query</p>
+</dd></dl>
+
+</dd></dl>
+
+</div>
+
+
+           </div>
+          </div>
+          <footer><div class="rst-footer-buttons" role="navigation" aria-label="Footer">
+        <a href="alerts.html" class="btn btn-neutral float-left" title="alerts module" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left" aria-hidden="true"></span> Previous</a>
+        <a href="data_manager.html" class="btn btn-neutral float-right" title="data_manager module" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right" aria-hidden="true"></span></a>
+    </div>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2021, DM, DS.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

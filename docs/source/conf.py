@@ -15,6 +15,8 @@
 import os
 import sys
 sys.path.insert(0, os.path.abspath('../../'))
+sys.path.insert(0, os.path.abspath('../../classes/'))
+sys.path.insert(0, os.path.abspath('../../venv/lib64/python3.8/site-packages/matplotlib/axes/'))
 
 
 # -- Project information -----------------------------------------------------
@@ -42,6 +44,7 @@ extensions = [
     'sphinx.ext.autodoc',
     'sphinx.ext.viewcode',
     'sphinx.ext.napoleon',
+    'sphinx.ext.autosectionlabel',
 ]
 
 # Add any paths that contain templates here, relative to this directory.
