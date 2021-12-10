@@ -38,6 +38,7 @@
     }
   ],
   "datasetSettings": {
+    "datasetCreator": "regions",
     "saveDataset": true,
     "loadSignalsFolder": "conf/signals/",
     "customJSONSignals": [
@@ -104,7 +105,6 @@
   },
   "featuresAnalyzer":{
     "performFeatureSelection": true,
-    "datasetCreator": "regions",
     "numberEstimatorsNGB": 501,
     "learningRate": 0.05,
     "numberSelectedFeatures": 100,

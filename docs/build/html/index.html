@@ -13,10 +13,11 @@
         <script type="text/javascript" src="_static/underscore.js"></script>
         <script type="text/javascript" src="_static/doctools.js"></script>
         <script type="text/javascript" src="_static/language_data.js"></script>
+        <script async="async" type="text/javascript" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.5/latest.js?config=TeX-AMS-MML_HTMLorMML"></script>
     <script src="_static/js/theme.js"></script>
     <link rel="index" title="Index" href="genindex.html" />
     <link rel="search" title="Search" href="search.html" />
-    <link rel="next" title="Introduction-fake" href="intro.html" /> 
+    <link rel="next" title="Introduction" href="introduction.html" /> 
 </head>
 
 <body class="wy-body-for-nav"> 
@@ -36,11 +37,11 @@
         </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
               <p class="caption"><span class="caption-text">Contents:</span></p>
 <ul>
-<li class="toctree-l1"><a class="reference internal" href="intro.html">Introduction-fake</a></li>
 <li class="toctree-l1"><a class="reference internal" href="introduction.html">Introduction</a></li>
 <li class="toctree-l1"><a class="reference internal" href="main_scripts.html">Main scripts</a></li>
+<li class="toctree-l1"><a class="reference internal" href="config.html">Configuration files</a></li>
+<li class="toctree-l1"><a class="reference internal" href="tests.html">Unit testing</a></li>
 <li class="toctree-l1"><a class="reference internal" href="modules.html">classes</a></li>
-<li class="toctree-l1"><a class="reference internal" href="examples.html">Examples</a></li>
 </ul>
 
         </div>
@@ -72,20 +73,27 @@
 <div class="toctree-wrapper compound">
 <p class="caption"><span class="caption-text">Contents:</span></p>
 <ul>
-<li class="toctree-l1"><a class="reference internal" href="intro.html">Introduction-fake</a><ul>
-<li class="toctree-l2"><a class="reference internal" href="intro.html#motivation">Motivation</a></li>
-<li class="toctree-l2"><a class="reference internal" href="intro.html#limitations">Limitations</a></li>
-</ul>
-</li>
 <li class="toctree-l1"><a class="reference internal" href="introduction.html">Introduction</a><ul>
-<li class="toctree-l2"><a class="reference internal" href="introduction.html#how-to-use">How to use</a></li>
+<li class="toctree-l2"><a class="reference internal" href="introduction.html#basic-instructions">Basic instructions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="introduction.html#necessary-adjustaments">Necessary  adjustaments</a></li>
 </ul>
 </li>
 <li class="toctree-l1"><a class="reference internal" href="main_scripts.html">Main scripts</a><ul>
 <li class="toctree-l2"><a class="reference internal" href="main_scripts.html#dataset-creator">Dataset creator</a></li>
 <li class="toctree-l2"><a class="reference internal" href="main_scripts.html#features-selector">Features selector</a></li>
+<li class="toctree-l2"><a class="reference internal" href="main_scripts.html#grid-search">Grid search</a></li>
+<li class="toctree-l2"><a class="reference internal" href="main_scripts.html#final-model-creator">Final model creator</a></li>
 </ul>
 </li>
+<li class="toctree-l1"><a class="reference internal" href="config.html">Configuration files</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="config.html#dataset-creator-settings">Dataset creator settings</a></li>
+<li class="toctree-l2"><a class="reference internal" href="config.html#regions-settings">Regions settings</a></li>
+<li class="toctree-l2"><a class="reference internal" href="config.html#voc-settings">VOC settings</a></li>
+<li class="toctree-l2"><a class="reference internal" href="config.html#feature-analyzer-settings">Feature analyzer settings</a></li>
+<li class="toctree-l2"><a class="reference internal" href="config.html#grid-search-settings">Grid search settings</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="tests.html">Unit testing</a></li>
 <li class="toctree-l1"><a class="reference internal" href="modules.html">classes</a><ul>
 <li class="toctree-l2"><a class="reference internal" href="alerts.html">alerts module</a></li>
 <li class="toctree-l2"><a class="reference internal" href="artificial_features.html">artificial_features module</a></li>
@@ -98,11 +106,6 @@
 <li class="toctree-l2"><a class="reference internal" href="model_trainer.html">model_trainer module</a></li>
 <li class="toctree-l2"><a class="reference internal" href="results_manager.html">results_manager module</a></li>
 <li class="toctree-l2"><a class="reference internal" href="threads_manager.html">threads_manager module</a></li>
-</ul>
-</li>
-<li class="toctree-l1"><a class="reference internal" href="examples.html">Examples</a><ul>
-<li class="toctree-l2"><a class="reference internal" href="examples.html#installation-usage">Installation/Usage:</a></li>
-<li class="toctree-l2"><a class="reference internal" href="examples.html#search-for-device-connect-and-read-characteristic">Search for device, connect and read characteristic</a></li>
 </ul>
 </li>
 </ul>
@@ -121,7 +124,7 @@
            </div>
           </div>
           <footer><div class="rst-footer-buttons" role="navigation" aria-label="Footer">
-        <a href="intro.html" class="btn btn-neutral float-right" title="Introduction-fake" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right" aria-hidden="true"></span></a>
+        <a href="introduction.html" class="btn btn-neutral float-right" title="Introduction" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right" aria-hidden="true"></span></a>
     </div>
 
   <hr/>

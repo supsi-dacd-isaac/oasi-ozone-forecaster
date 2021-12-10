@@ -87,7 +87,7 @@ if __name__ == "__main__":
     cfg['datasetSettings']['startDay'] = '07-10'
     cfg['datasetSettings']['endDay'] = '07-20'
     cfg['datasetSettings']['years'] = [2019]
-    cfg['featuresAnalyzer']['datasetCreator'] = 'regions'
+    cfg['datasetSettings']['datasetCreator'] = 'regions'
     cfg['measuredSignalsStations']['BIO'] = []
     cfg['measuredSignalsStations']['CHI'] = []
     cfg['forecastedSignalsStations']['P_BIO'] = []
@@ -131,7 +131,7 @@ if __name__ == "__main__":
     cfg['datasetSettings']['startDay'] = '07-10'
     cfg['datasetSettings']['endDay'] = '07-20'
     cfg['datasetSettings']['years'] = [2019, 2021]
-    cfg['featuresAnalyzer']['datasetCreator'] = 'customJSON'
+    cfg['datasetSettings']['datasetCreator'] = 'customJSON'
     cfg['featuresAnalyzer']['performFeatureSelection'] = True
 
     for dataset in cfg['datasetSettings']['customJSONSignals']:
@@ -176,7 +176,7 @@ if __name__ == "__main__":
     cfg['datasetSettings']['csvFiles'] = [
         {'filename': filenames_csv[0], 'targetColumn': ['BIO__YO3__d1']},
         {'filename': filenames_csv[1], 'targetColumn': ['CHI__YO3__d1']}]
-    cfg['featuresAnalyzer']['datasetCreator'] = 'CSVreader'
+    cfg['datasetSettings']['datasetCreator'] = 'CSVreader'
     cfg['featuresAnalyzer']['performFeatureSelection'] = True
 
     FA.dataset_creator()
@@ -215,7 +215,7 @@ if __name__ == "__main__":
     cfg['datasetSettings']['startDay'] = '08-13'
     cfg['datasetSettings']['endDay'] = '08-23'
     cfg['datasetSettings']['years'] = [2019, 2020, 2021]
-    cfg['featuresAnalyzer']['datasetCreator'] = 'customJSON'
+    cfg['datasetSettings']['datasetCreator'] = 'customJSON'
     cfg['featuresAnalyzer']['performFeatureSelection'] = True
 
     for dataset in cfg['datasetSettings']['customJSONSignals']:
@@ -256,7 +256,7 @@ if __name__ == "__main__":
     cfg['datasetSettings']['startDay'] = '08-13'
     cfg['datasetSettings']['endDay'] = '08-23'
     cfg['datasetSettings']['years'] = [2019, 2020, 2021]
-    cfg['featuresAnalyzer']['datasetCreator'] = 'customJSON'
+    cfg['datasetSettings']['datasetCreator'] = 'customJSON'
 
     for dataset in cfg['datasetSettings']['customJSONSignals']:
         assert os.path.isfile(cfg['datasetSettings']['loadSignalsFolder'] + dataset['filename'])

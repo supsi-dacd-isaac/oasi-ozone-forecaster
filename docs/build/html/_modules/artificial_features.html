@@ -13,6 +13,7 @@
         <script type="text/javascript" src="../_static/underscore.js"></script>
         <script type="text/javascript" src="../_static/doctools.js"></script>
         <script type="text/javascript" src="../_static/language_data.js"></script>
+        <script async="async" type="text/javascript" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.5/latest.js?config=TeX-AMS-MML_HTMLorMML"></script>
     <script src="../_static/js/theme.js"></script>
     <link rel="index" title="Index" href="../genindex.html" />
     <link rel="search" title="Search" href="../search.html" /> 
@@ -35,11 +36,11 @@
         </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
               <p class="caption"><span class="caption-text">Contents:</span></p>
 <ul>
-<li class="toctree-l1"><a class="reference internal" href="../intro.html">Introduction-fake</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../introduction.html">Introduction</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../main_scripts.html">Main scripts</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../config.html">Configuration files</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../tests.html">Unit testing</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../modules.html">classes</a></li>
-<li class="toctree-l1"><a class="reference internal" href="../examples.html">Examples</a></li>
 </ul>
 
         </div>
@@ -127,7 +128,7 @@
         <span class="k">return</span> <span class="n">value</span></div>
 
 <div class="viewcode-block" id="ArtificialFeatures.get_query_value_forecast"><a class="viewcode-back" href="../artificial_features.html#artificial_features.ArtificialFeatures.get_query_value_forecast">[docs]</a>    <span class="k">def</span> <span class="nf">get_query_value_forecast</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">measurement</span><span class="p">,</span> <span class="n">signal_data</span><span class="p">,</span> <span class="n">steps</span><span class="p">,</span> <span class="n">func</span><span class="p">):</span>
-        <span class="sd">&quot;&quot;&quot;        Perform a query on forecasted signals using a certain amount of steps forward in time and a data aggregating</span>
+        <span class="sd">&quot;&quot;&quot;Perform a query on forecasted signals using a certain amount of steps forward in time and a data aggregating</span>
 <span class="sd">        function, such as mean, max, min or sum.</span>
 <span class="sd">        This method is used in most methods except KLO-LUG and past measurements features</span>
 <span class="sd">        &quot;&quot;&quot;</span>

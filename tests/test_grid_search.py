@@ -88,7 +88,7 @@ if __name__ == "__main__":
     cfg['datasetSettings']['startDay'] = '07-10'
     cfg['datasetSettings']['endDay'] = '07-20'
     cfg['datasetSettings']['years'] = [2019]
-    cfg['featuresAnalyzer']['datasetCreator'] = 'regions'
+    cfg['datasetSettings']['datasetCreator'] = 'regions'
     cfg['featuresAnalyzer']['performFeatureSelection'] = True
     cfg['featuresAnalyzer']['numberSelectedFeatures'] = 10
 

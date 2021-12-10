@@ -38,6 +38,7 @@
     }
   ],
   "datasetSettings": {
+    "datasetCreator": "regions",
     "saveDataset": true,
     "type": "MOR",
     "loadSignalsFolder": "conf/signals/tests/",
@@ -118,7 +119,6 @@
   },
   "featuresAnalyzer": {
     "performFeatureSelection": true,
-    "datasetCreator": "regions",
     "numberEstimatorsNGB": 10,
     "learningRate": 0.05,
     "numberSelectedFeatures": 10,

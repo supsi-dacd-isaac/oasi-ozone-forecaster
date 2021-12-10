@@ -725,7 +725,7 @@ class InputsGatherer:
         """Get the address of the output folder for the current case"""
 
         folder_path = '%s%s_%s_%s_%s_%s_%s-%s%s' % (self.cfg['datasetSettings']['outputCsvFolder'],
-                                                    self.cfg['featuresAnalyzer']['datasetCreator'], dataset_name,
+                                                    self.cfg['datasetSettings']['datasetCreator'], dataset_name,
                                                     self.forecast_type,
                                                     self.cfg['datasetSettings']['startDay'],
                                                     self.cfg['datasetSettings']['endDay'],

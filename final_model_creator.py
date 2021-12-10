@@ -86,7 +86,7 @@ if __name__ == "__main__":
 
     start_time = time.time()
 
-    if cfg["featuresAnalyzer"]["datasetCreator"] != "CSVreader":
+    if cfg["datasetSettings"]["datasetCreator"] != "CSVreader":
         FA.dataset_creator()
     FA.dataset_reader()
 

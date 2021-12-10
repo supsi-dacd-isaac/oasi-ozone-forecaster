@@ -43,11 +43,11 @@ class FeaturesAnalyzer:
         """This method builds the datasets according to the instructions in the config file in the datasetSettings
         section"""
 
-        if self.cfg["featuresAnalyzer"]["datasetCreator"] == 'customJSON':
+        if self.cfg["datasetSettings"]["datasetCreator"] == 'customJSON':
             self.inputs_gatherer.dataframe_builder_custom()
-        elif self.cfg["featuresAnalyzer"]["datasetCreator"] == 'regions':
+        elif self.cfg["datasetSettings"]["datasetCreator"] == 'regions':
             self.inputs_gatherer.dataframe_builder_regions()
-        elif self.cfg["featuresAnalyzer"]["datasetCreator"] == 'CSVreader':
+        elif self.cfg["datasetSettings"]["datasetCreator"] == 'CSVreader':
             pass
         else:
             self.logger.error(
@@ -67,21 +67,21 @@ class FeaturesAnalyzer:
 
         output_dfs = {}
 
-        if self.cfg["featuresAnalyzer"]["datasetCreator"] == 'customJSON':
+        if self.cfg["datasetSettings"]["datasetCreator"] == 'customJSON':
             # Read the dataset in the output folder
             for dataset in self.cfg['datasetSettings']['customJSONSignals']:
                 name = dataset['filename'].split('.')[0]
                 target_columns = dataset['targetColumn']
                 output_dfs = self.update_datasets(name, output_dfs, target_columns)
 
-        elif self.cfg["featuresAnalyzer"]["datasetCreator"] == 'regions':
+        elif self.cfg["datasetSettings"]["datasetCreator"] == 'regions':
             # Read the dataset in the output folder
             for region in self.cfg['regions']:
                 name = region
                 target_columns = self.cfg['regions'][region]['targetColumn']
                 output_dfs = self.update_datasets(name, output_dfs, target_columns)
 
-        elif self.cfg["featuresAnalyzer"]["datasetCreator"] == 'CSVreader':
+        elif self.cfg["datasetSettings"]["datasetCreator"] == 'CSVreader':
             # Copy the provided dataset in the output folder
             for dataset in self.cfg['datasetSettings']['csvFiles']:
                 name = dataset['filename'].split('.')[0]

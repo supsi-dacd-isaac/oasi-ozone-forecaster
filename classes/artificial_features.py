@@ -7,8 +7,7 @@ from influxdb import InfluxDBClient
 
 
 class ArtificialFeatures:
-    """
-    Class handling the forecasting of features calculated from the other measurements or forecasts (e.g. VOC,
+    """Class handling the forecasting of features calculated from the other measurements or forecasts (e.g. VOC,
     Kloten-Luano pressure gradient, specific time slots means, and so on...)
     """
 
@@ -38,8 +37,7 @@ class ArtificialFeatures:
         self.VOC_forecasted_status = None
 
     def get_query_value_global(self, signal):
-        """
-        Perform a query on signals who are location independent, i.e. it doesnt matter where they are measured.
+        """Perform a query on signals who are location independent, i.e. it doesnt matter where they are measured.
         This method is used for calculating VOC and NOx daily variables in method do_IFEC_query
         """
 
@@ -60,8 +58,7 @@ class ArtificialFeatures:
         return value
 
     def get_query_value_forecast(self, measurement, signal_data, steps, func):
-        """
-        Perform a query on forecasted signals using a certain amount of steps forward in time and a data aggregating
+        """Perform a query on forecasted signals using a certain amount of steps forward in time and a data aggregating
         function, such as mean, max, min or sum.
         This method is used in most methods except KLO-LUG and past measurements features
         """

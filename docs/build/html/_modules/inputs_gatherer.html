@@ -13,6 +13,7 @@
         <script type="text/javascript" src="../_static/underscore.js"></script>
         <script type="text/javascript" src="../_static/doctools.js"></script>
         <script type="text/javascript" src="../_static/language_data.js"></script>
+        <script async="async" type="text/javascript" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.5/latest.js?config=TeX-AMS-MML_HTMLorMML"></script>
     <script src="../_static/js/theme.js"></script>
     <link rel="index" title="Index" href="../genindex.html" />
     <link rel="search" title="Search" href="../search.html" /> 
@@ -35,11 +36,11 @@
         </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
               <p class="caption"><span class="caption-text">Contents:</span></p>
 <ul>
-<li class="toctree-l1"><a class="reference internal" href="../intro.html">Introduction-fake</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../introduction.html">Introduction</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../main_scripts.html">Main scripts</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../config.html">Configuration files</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../tests.html">Unit testing</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../modules.html">classes</a></li>
-<li class="toctree-l1"><a class="reference internal" href="../examples.html">Examples</a></li>
 </ul>
 
         </div>
@@ -794,7 +795,7 @@
         <span class="sd">&quot;&quot;&quot;Get the address of the output folder for the current case&quot;&quot;&quot;</span>
 
         <span class="n">folder_path</span> <span class="o">=</span> <span class="s1">&#39;</span><span class="si">%s%s</span><span class="s1">_</span><span class="si">%s</span><span class="s1">_</span><span class="si">%s</span><span class="s1">_</span><span class="si">%s</span><span class="s1">_</span><span class="si">%s</span><span class="s1">_</span><span class="si">%s</span><span class="s1">-</span><span class="si">%s%s</span><span class="s1">&#39;</span> <span class="o">%</span> <span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">cfg</span><span class="p">[</span><span class="s1">&#39;datasetSettings&#39;</span><span class="p">][</span><span class="s1">&#39;outputCsvFolder&#39;</span><span class="p">],</span>
-                                                    <span class="bp">self</span><span class="o">.</span><span class="n">cfg</span><span class="p">[</span><span class="s1">&#39;featuresAnalyzer&#39;</span><span class="p">][</span><span class="s1">&#39;datasetCreator&#39;</span><span class="p">],</span> <span class="n">dataset_name</span><span class="p">,</span>
+                                                    <span class="bp">self</span><span class="o">.</span><span class="n">cfg</span><span class="p">[</span><span class="s1">&#39;datasetSettings&#39;</span><span class="p">][</span><span class="s1">&#39;datasetCreator&#39;</span><span class="p">],</span> <span class="n">dataset_name</span><span class="p">,</span>
                                                     <span class="bp">self</span><span class="o">.</span><span class="n">forecast_type</span><span class="p">,</span>
                                                     <span class="bp">self</span><span class="o">.</span><span class="n">cfg</span><span class="p">[</span><span class="s1">&#39;datasetSettings&#39;</span><span class="p">][</span><span class="s1">&#39;startDay&#39;</span><span class="p">],</span>
                                                     <span class="bp">self</span><span class="o">.</span><span class="n">cfg</span><span class="p">[</span><span class="s1">&#39;datasetSettings&#39;</span><span class="p">][</span><span class="s1">&#39;endDay&#39;</span><span class="p">],</span>

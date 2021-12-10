@@ -38,6 +38,7 @@
     }
   ],
   "datasetSettings": {
+    "datasetCreator": "CSVreader",
     "saveDataset": true,
     "loadSignalsFolder": "conf/signals/",
     "customJSONSignals": [
@@ -110,7 +111,6 @@
   },
   "featuresAnalyzer":{
     "performFeatureSelection": true,
-    "datasetCreator": "CSVreader",
     "numberEstimatorsNGB": 501,
     "learningRate": 0.05,
     "numberSelectedFeatures": 100,
