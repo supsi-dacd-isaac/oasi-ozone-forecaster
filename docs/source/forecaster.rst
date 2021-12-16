@@ -1,5 +1,5 @@
-forecaster module
-=================
+The ``Forecaster`` class
+========================
 
 .. automodule:: forecaster
     :members:

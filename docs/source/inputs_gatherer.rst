@@ -1,5 +1,5 @@
-inputs\_gatherer module
-=======================
+The ``InputsGatherer`` class
+============================
 
 .. automodule:: inputs_gatherer
     :members:

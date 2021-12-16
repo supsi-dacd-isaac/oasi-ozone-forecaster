@@ -1,5 +1,5 @@
-datasets\_creator module
-========================
+The ``DatasetsCreator`` class
+=============================
 
 .. automodule:: datasets_creator
     :members:

@@ -17,12 +17,14 @@ class InputsGatherer:
     """
     Class handling the gathering of the inputs needed by a collection of predictors.
     There are 3 ways to create a dataframe:
-     - Read an existing CSV (see method dataframe_reader)
-     - Define a region composed of measurements and forecast stations, define the signals to be used by each station,
+    
+    - Read an existing CSV (see method dataframe_reader)
+    - Define a region composed of measurements and forecast stations, define the signals to be used by each station,
        then create all possible signals in JSON format and finally create the dataframe by querying InfluxDB
        (see method dataframe_builder_regions)
-     - read an existing JSON containing a set of signals and create the dataframe by querying InfluxDB (see method
+    - read an existing JSON containing a set of signals and create the dataframe by querying InfluxDB (see method
        dataframe_builder_custom)
+       
     """
 
     def __init__(self, influxdb_client, forecast_type, cfg, logger, artificial_features):
@@ -212,7 +214,6 @@ class InputsGatherer:
     def add_input_value(self, signal):
         """
         Add the input value related to a given signal
-
         :param signal: signal code
         :type signal: string
         :return query

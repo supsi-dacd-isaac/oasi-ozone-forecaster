@@ -1,5 +1,5 @@
-artificial\_features module
-===========================
+The ``ArtificialFeatures`` class
+================================
 
 .. automodule:: artificial_features
     :members:

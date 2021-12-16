@@ -1,5 +1,5 @@
-data\_manager module
-====================
+The ``DataManager`` class
+=========================
 
 .. automodule:: data_manager
     :members:

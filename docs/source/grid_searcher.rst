@@ -1,5 +1,5 @@
-grid\_searcher module
-=====================
+The ``GridSearcher`` class
+==========================
 
 .. automodule:: grid_searcher
     :members:

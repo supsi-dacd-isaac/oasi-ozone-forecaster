@@ -14,7 +14,7 @@ Welcome to oasi-ozone-forecaster's documentation!
    main_scripts
    config
    tests
-   modules
+   classes
 
 Indices and tables
 ==================

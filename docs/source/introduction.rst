@@ -23,12 +23,14 @@ To properly configure the installation, refer to the following basic instruction
 Necessary  adjustaments
 ***********************
 
-The skgarden package is severely outdated, thus some manual modifications need to be applied in folder ``/venv/lib64/python3.8/site-packages/skgarden/``:
+The skgarden package is severely outdated, thus some manual modifications need to be applied in folder ``/venv/lib64/python3.x/site-packages/skgarden/``:
 
 1. In file ``quantile/ensemble.py``, line 40: add ``sample_weight`` to method arguments
 #. In file ``quantile/ensemble.py``, line 79: add ``sample_weight`` to method call
 #. In file ``quantile/tree.py``, lines 221 and 232: remove ``presort=False`` option to clean stdout output (optional)
 #. In file ``mondrian/ensemble/forest.py``, line 96 and 229: add ``sample_weight`` to method arguments
 #. In file ``mondrian/ensemble/forest.py``, line 121 and 254: add ``sample_weight`` to method call
+
+Finally, in file ``classes/model_trainer.py`` uncomment line 11.
 
 You are now ready to execute the scripts. Proceed to :ref:`Main scripts` and the descriptions therein.

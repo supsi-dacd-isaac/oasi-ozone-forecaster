@@ -1,5 +1,5 @@
-model\_trainer module
-=====================
+The ``ModelTrainer`` class
+==========================
 
 .. automodule:: model_trainer
     :members:
