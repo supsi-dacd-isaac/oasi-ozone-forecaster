@@ -2,20 +2,17 @@ import os
 
 import numpy as np
 import pandas as pd
-import shap
-from ngboost import NGBRegressor
-from ngboost.distns import Normal
-from ngboost.learners import default_tree_learner
-from ngboost.scores import MLE
-
 
 class GridSearcher:
-    """Given a dataset with a target column this class performs grid search over the weights w1, w2 and w3 as specified
-     in the config files"""
+    """
+    Given a dataset with a target column this class performs grid search over the weights w1, w2 and w3 as specified in
+    the config files
+    """
 
     def __init__(self, features_analyzer, input_gatherer, model_trainer, forecast_type, cfg, logger):
         """
         Constructor
+
         :param inputs_gatherer: Inputs Gatherer
         :type inputs_gatherer: InputsGatherer
         :param forecast_type: Forecast type (MOR | EVE)
@@ -38,8 +35,10 @@ class GridSearcher:
         self.dataFrames = self.features_analyzer.dataFrames
 
     def search_weights(self):
-        """Iterate over the weights as specified in the config file, and for each iteration save the KPIs and all the
-        prediction of the algorithm performed on the test set"""
+        """
+        Iterate over the weights as specified in the config file, and for each iteration save the KPIs and all the
+        prediction of the algorithm performed on the test set
+        """
 
         self.get_datasets()
 

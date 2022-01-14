@@ -19,17 +19,14 @@ class InputsGatherer:
     There are 3 ways to create a dataframe:
     
     - Read an existing CSV (see method dataframe_reader)
-    - Define a region composed of measurements and forecast stations, define the signals to be used by each station,
-       then create all possible signals in JSON format and finally create the dataframe by querying InfluxDB
-       (see method dataframe_builder_regions)
-    - read an existing JSON containing a set of signals and create the dataframe by querying InfluxDB (see method
-       dataframe_builder_custom)
-       
+    - Define a region composed of measurements and forecast stations, define the signals to be used by each station, then create all possible signals in JSON format and finally create the dataframe by querying InfluxDB (see method dataframe_builder_regions)
+    - read an existing JSON containing a set of signals and create the dataframe by querying InfluxDB (see method dataframe_builder_custom)
     """
 
     def __init__(self, influxdb_client, forecast_type, cfg, logger, artificial_features):
         """
         Constructor
+
         :param influxdb_client: InfluxDB client
         :type influxdb_client: InfluxDBClient
         :param forecast_type: Forecast type (MOR | EVE)
@@ -214,10 +211,11 @@ class InputsGatherer:
     def add_input_value(self, signal):
         """
         Add the input value related to a given signal
+
         :param signal: signal code
         :type signal: string
-        :return query
-        :rtype string
+        :return: query
+        :rtype: string
         """
 
         # Signals exception (e.g. isWeekend, etc.)
@@ -621,6 +619,7 @@ class InputsGatherer:
     def get_index(val):
         """
         Get ozone index value (http://www.oasi.ti.ch/web/dati/aria.html)
+
         :param val: ozone value
         :type val: float
         :return: ozone index
@@ -659,8 +658,8 @@ class InputsGatherer:
         return signals
 
     def global_signals(self):
-        """RHW is not considered in this analysis since it was never considered and we have a hole in the data in august
-        2019. Signal codes were: ['RHW__d0', 'RHW__d1']"""
+        # RHW is not considered in this analysis since it was never considered and we have a hole in the data in august
+        # 2019. Signal codes were: ['RHW__d0', 'RHW__d1']
         signals = ['KLO-LUG', 'KLO-LUG_favonio', 'VOC_Totale', 'NOx_Totale', 'IsHolyday', 'DayWeek', 'IsWeekend']
         return signals
 
@@ -696,8 +695,10 @@ class InputsGatherer:
         return signals
 
     def generate_all_signals(self):
-        """Method to generate and save all known signals of a specific region (e.g. Ticino) with defined measuring and
-        forecasting stations"""
+        """
+        Method to generate and save all known signals of a specific region (e.g. Ticino) with defined measuring and
+        forecasting stations
+        """
 
         for region in self.cfg['regions']:
             signal_list = []
@@ -723,7 +724,9 @@ class InputsGatherer:
         return
 
     def output_folder_creator(self, dataset_name):
-        """Get the address of the output folder for the current case"""
+        """
+        Get the address of the output folder for the current case
+        """
 
         folder_path = '%s%s_%s_%s_%s_%s_%s-%s%s' % (self.cfg['datasetSettings']['outputCsvFolder'],
                                                     self.cfg['datasetSettings']['datasetCreator'], dataset_name,

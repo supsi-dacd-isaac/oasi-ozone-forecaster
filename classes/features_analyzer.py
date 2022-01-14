@@ -14,12 +14,15 @@ from classes.inputs_gatherer import InputsGatherer
 
 
 class FeaturesAnalyzer:
-    """Given a dataset composed of features on the columns and days on the rows of a pandas df, this class computes the
-    best features and their importance"""
+    """
+    Given a dataset composed of features on the columns and days on the rows of a pandas df, this class computes the
+    best features and their importance
+    """
 
     def __init__(self, inputs_gatherer, forecast_type, cfg, logger):
         """
         Constructor
+
         :param inputs_gatherer: Inputs Gatherer
         :type inputs_gatherer: InputsGatherer
         :param forecast_type: Forecast type (MOR | EVE)
@@ -40,8 +43,9 @@ class FeaturesAnalyzer:
         self.nan_features = None
 
     def dataset_creator(self):
-        """This method builds the datasets according to the instructions in the config file in the datasetSettings
-        section"""
+        """
+        This method builds the datasets according to the instructions in the config file in the datasetSettings section
+        """
 
         if self.cfg["datasetSettings"]["datasetCreator"] == 'customJSON':
             self.inputs_gatherer.dataframe_builder_custom()
@@ -62,8 +66,10 @@ class FeaturesAnalyzer:
         return output_dfs
 
     def dataset_reader(self):
-        """This method reads a previously created or provided csv file. If the dataset is created from a custom JSON or
-        from regionals signals, this method has to be preceded by a call of dataset_creator"""
+        """
+        This method reads a previously created or provided csv file. If the dataset is created from a custom JSON or
+        from regionals signals, this method has to be preceded by a call of dataset_creator
+        """
 
         output_dfs = {}
 
@@ -104,7 +110,9 @@ class FeaturesAnalyzer:
         self.dataFrames = output_dfs
 
     def dataset_splitter(self, name, data):
-        """Split a dataFrame in design matrix X and response vector Y"""
+        """
+        Split a dataFrame in design matrix X and response vector Y
+        """
 
         self.current_name = name
         df = data['dataset']
@@ -159,7 +167,9 @@ class FeaturesAnalyzer:
         return x_data_np, y_data_np, features, x_data, y_data
 
     def important_features(self, x_data, y_data, features):
-        """Calculate the important features given design matrix, target vector and full list of features"""
+        """
+        Calculate the important features given design matrix, target vector and full list of features
+        """
 
         assert x_data.shape[1] == len(features)
 
@@ -190,7 +200,9 @@ class FeaturesAnalyzer:
         return new_features, important_features
 
     def perform_feature_selection(self, x_data, y_data, features):
-        """Obtain selected features and also save them in the output folder"""
+        """
+        Obtain selected features and also save them in the output folder
+        """
 
         new_features, important_features = self.important_features(x_data, y_data, features[1:])
 

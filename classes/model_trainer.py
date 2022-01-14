@@ -8,16 +8,19 @@ from ngboost.distns import Normal
 from ngboost.learners import default_tree_learner
 from ngboost.scores import MLE
 from sklearn.metrics import mean_squared_error, mean_absolute_error, accuracy_score, confusion_matrix
-# ~ from skgarden import RandomForestQuantileRegressor
+from skgarden import RandomForestQuantileRegressor
 
 
 class ModelTrainer:
-    """This class will perform training on datasets. This could happen during the grid search for the best combination
-    of weights, or, once the weights are assessed, for the creation of the final models"""
+    """
+    This class will perform training on datasets. This could happen during the grid search for the best combination
+    of weights, or, once the weights are assessed, for the creation of the final models
+    """
 
     def __init__(self, features_analyzer, input_gatherer, forecast_type, cfg, logger):
         """
         Constructor
+
         :param inputs_gatherer: Inputs Gatherer
         :type inputs_gatherer: InputsGatherer
         :param forecast_type: Forecast type (MOR | EVE)
@@ -40,7 +43,9 @@ class ModelTrainer:
         self.dataFrames = self.features_analyzer.dataFrames
 
     def get_accuracy_threshold(self, threshold, prediction, measured):
-        """Calculate accuracy of predictions whose measured value is above a certain threshold"""
+        """
+        Calculate accuracy of predictions whose measured value is above a certain threshold
+        """
 
         lcl_acc = 0.0
         if not measured.loc[measured > threshold].empty:
@@ -49,7 +54,9 @@ class ModelTrainer:
         return lcl_acc
 
     def calculate_KPIs(self, prediction, measured):
-        """For each fold and/or train/test separation, return the KPIs to establish the best weights combination"""
+        """
+        For each fold and/or train/test separation, return the KPIs to establish the best weights combination
+        """
 
         threshold1 = self.cfg['featuresAnalyzer']['threshold1']
         threshold2 = self.cfg['featuresAnalyzer']['threshold2']
@@ -95,7 +102,9 @@ class ModelTrainer:
         return X, Y
 
     def convert_to_series(self, prediction, Y):
-        """Convert dataframes to series for easier KPIs calculation"""
+        """
+        Convert dataframes to series for easier KPIs calculation
+        """
 
         assert (len(prediction) == len(Y))
 
@@ -105,8 +114,10 @@ class ModelTrainer:
         return prediction, measured
 
     def fold_training(self, train_index, test_index, X, Y):
-        """For each fold and/or tran/test separation, create the model and calculate KPIs to establish the best weights
-        combination"""
+        """
+        For each fold and/or tran/test separation, create the model and calculate KPIs to establish the best weights
+        combination
+        """
 
         Xtrain, Xtest = np.array(X.loc[train_index, :]), np.array(X.loc[test_index, :])
         Ytrain, Ytest = Y.loc[train_index].reset_index(drop=True), Y.loc[test_index].reset_index(drop=True)
@@ -119,7 +130,9 @@ class ModelTrainer:
         return ngb.predict(Xtest)
 
     def train_NGB_model(self, Xtrain, Ytrain):
-        """Return the NGB model trained on the available data"""
+        """
+        Return the NGB model trained on the available data
+        """
 
         n_est = self.cfg['featuresAnalyzer']['numberEstimatorsNGB']
         l_rate = self.cfg['featuresAnalyzer']['learningRate']
@@ -144,7 +157,9 @@ class ModelTrainer:
         return ngb, weight
 
     def get_KPIs_with_random_separation(self, features, df_x, df_y):
-        """Normally used for testing only. This method uses 80% ot the dataset for training and the rest for testing"""
+        """
+        Normally used for testing only. This method uses 80% ot the dataset for training and the rest for testing
+        """
 
         x_data, y_data = self.get_numpy_df(df_x, df_y)
         selected_features = self.features_analyzer.important_features(x_data, y_data, features[1:])[0]
@@ -164,7 +179,9 @@ class ModelTrainer:
         return self.calculate_KPIs(prediction, measured), self.error_data(pred, Y.loc[test_index], 1)
 
     def error_data(self, pred, Y, fold):
-        """Create pandas df with weights, fold, measurements and predictions"""
+        """
+        Create pandas df with weights, fold, measurements and predictions
+        """
 
         Y = np.array(Y.values)
         assert len(pred) == len(Y)
@@ -184,8 +201,10 @@ class ModelTrainer:
         return df_pred
 
     def training_cross_validated_single_FS(self, features, df_x, df_y):
-        """This method calculates the KPIs for a set of weight with one single Feature selection: First we do the
-        feature selection on the whole dataset, then we reduce and split it to calculate the KPIs on each fold"""
+        """
+        This method calculates the KPIs for a set of weight with one single Feature selection: First we do the
+        feature selection on the whole dataset, then we reduce and split it to calculate the KPIs on each fold
+        """
 
         x_data, y_data = self.get_numpy_df(df_x, df_y)
         selected_features = self.features_analyzer.important_features(x_data, y_data, features[1:])[0]
@@ -219,8 +238,10 @@ class ModelTrainer:
         return self.calculate_KPIs(prediction, measured), df_pred
 
     def training_cross_validated_multiple_FS(self, features, df_x, df_y):
-        """This method calculates the KPIs for a set of weight with multiple Feature selection: First we create the
-        folds of the cross validation, then for each fold we do the feature selection and locally calculate the KPIs"""
+        """
+        This method calculates the KPIs for a set of weight with multiple Feature selection: First we create the
+        folds of the cross validation, then for each fold we do the feature selection and locally calculate the KPIs
+        """
 
         cv_folds = []
         years = sorted(list(set(df_x.date.str[0:4])))
@@ -257,8 +278,10 @@ class ModelTrainer:
         return self.calculate_KPIs(prediction, measured), df_pred
 
     def train_final_models(self):
-        """This method calculates the KPIs for a set of weight with multiple Feature selection: First we create the
-        folds of the cross validation, then for each fold we do the feature selection and locally calculate the KPIs"""
+        """
+        This method calculates the KPIs for a set of weight with multiple Feature selection: First we create the
+        folds of the cross validation, then for each fold we do the feature selection and locally calculate the KPIs
+        """
 
         self.get_datasets()
 
@@ -287,7 +310,9 @@ class ModelTrainer:
 
     @staticmethod
     def get_reduced_dataset(df_x, df_y, selected_features):
-        """Extract a smaller dataframe with the selected features as columns. Keep the date and refresh indices"""
+        """
+        Extract a smaller dataframe with the selected features as columns. Keep the date and refresh indices
+        """
 
         lcl_df_x = df_x.loc[:, ['date'] + selected_features]
         lcl_df_y = df_y
