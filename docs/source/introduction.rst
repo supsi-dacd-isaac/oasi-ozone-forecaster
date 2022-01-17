@@ -2,7 +2,7 @@ Introduction
 ============
 
 ``oasi-ozone-forecaster`` is a package for the forecast of the next day ozone maximum hourly concentration in Ticino, Switzerland. These forecasts are calculated twice: the night before for the upcoming day and the morning of the same day for the present day.
-The forecasts are achieved through a ML approach which is trained on a set of both measured and forecasted meteorological values from 2015 to 2021. Please consults the `openly accessible published paper <https://www.sciencedirect.com/science/article/pii/S0169207021001199/>`_ on the subject for more information.
+The forecasts are achieved through a ML approach which is trained on a set of both measured and forecasted meteorological values from 2015 to 2021. Please see the `openly accessible published paper <https://www.sciencedirect.com/science/article/pii/S0169207021001199/>`_ on the subject for more information.
 
 Basic instructions
 ******************
