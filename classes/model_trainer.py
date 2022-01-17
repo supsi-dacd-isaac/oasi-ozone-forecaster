@@ -8,7 +8,7 @@ from ngboost.distns import Normal
 from ngboost.learners import default_tree_learner
 from ngboost.scores import MLE
 from sklearn.metrics import mean_squared_error, mean_absolute_error, accuracy_score, confusion_matrix
-from skgarden import RandomForestQuantileRegressor
+# from skgarden import RandomForestQuantileRegressor
 
 
 class ModelTrainer:
@@ -21,8 +21,10 @@ class ModelTrainer:
         """
         Constructor
 
-        :param inputs_gatherer: Inputs Gatherer
-        :type inputs_gatherer: InputsGatherer
+        :param features_analyzer: Features Analyzer
+        :type features_analyzer: FeaturesAnalyzer
+        :param input_gatherer: Inputs Gatherer
+        :type input_gatherer: InputsGatherer
         :param forecast_type: Forecast type (MOR | EVE)
         :type forecast_type: str
         :param cfg: FTP parameters for the files exchange
