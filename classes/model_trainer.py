@@ -45,6 +45,15 @@ class ModelTrainer:
     def get_accuracy_threshold(self, threshold, prediction, measured):
         """
         Calculate accuracy of predictions whose measured value is above a certain threshold
+
+        :param threshold: threshold level
+        :type threshold: float
+        :param prediction: predicted data
+        :type prediction: numpy.array
+        :param measured: measured data
+        :type measured: numpy.array
+        :return: accuracy score
+        :rtype: float
         """
 
         lcl_acc = 0.0
@@ -56,6 +65,13 @@ class ModelTrainer:
     def calculate_KPIs(self, prediction, measured):
         """
         For each fold and/or train/test separation, return the KPIs to establish the best weights combination
+
+        :param prediction: predicted data
+        :type prediction: numpy.array
+        :param measured: measured data
+        :type measured: numpy.array
+        :return: pandas DF with KPIs for each dataset provided
+        :rtype: pandas.DataFrame
         """
 
         threshold1 = self.cfg['featuresAnalyzer']['threshold1']
@@ -117,6 +133,17 @@ class ModelTrainer:
         """
         For each fold and/or tran/test separation, create the model and calculate KPIs to establish the best weights
         combination
+
+        :param train_index: indexes of dataset that compose train set
+        :type train_index: pandas.Index
+        :param test_index: indexes of dataset that compose test set
+        :type test_index: pandas.Index
+        :param X: design matrix
+        :type X: pandas.DataFrame
+        :param Y: response vector
+        :type Y: pandas.DataFrame
+        :return: prediction performed on test dataset
+        :rtype: numpy.array
         """
 
         Xtrain, Xtest = np.array(X.loc[train_index, :]), np.array(X.loc[test_index, :])
@@ -132,6 +159,13 @@ class ModelTrainer:
     def train_NGB_model(self, Xtrain, Ytrain):
         """
         Return the NGB model trained on the available data
+
+        :param Xtrain: indexes of dataset that compose train set
+        :type Xtrain: np.array()
+        :param Ytrain: indexes of dataset that compose test set
+        :type Ytrain: pandas.DataFrame
+        :return: prediction model
+        :rtype: ngboost.NGBRegressor
         """
 
         n_est = self.cfg['featuresAnalyzer']['numberEstimatorsNGB']
@@ -159,6 +193,15 @@ class ModelTrainer:
     def get_KPIs_with_random_separation(self, features, df_x, df_y):
         """
         Normally used for testing only. This method uses 80% ot the dataset for training and the rest for testing
+
+        :param features: list of selected features
+        :type features: list
+        :param df_x: design matrix
+        :type df_x: pandas.DataFrame
+        :param df_y: response vector
+        :type df_y: pandas.DataFrame
+        :return: pandas DF with KPIs for each dataset provided
+        :rtype: pandas.DataFrame
         """
 
         x_data, y_data = self.get_numpy_df(df_x, df_y)
@@ -181,6 +224,15 @@ class ModelTrainer:
     def error_data(self, pred, Y, fold):
         """
         Create pandas df with weights, fold, measurements and predictions
+
+        :param pred: predicted data
+        :type pred: numpy.array
+        :param Y: measured data
+        :type Y: pandas.Series
+        :param fold: current fold of Cross Validation
+        :type fold: int
+        :return: pandas DF with information
+        :rtype: pandas.DataFrame
         """
 
         Y = np.array(Y.values)
@@ -202,8 +254,17 @@ class ModelTrainer:
 
     def training_cross_validated_single_FS(self, features, df_x, df_y):
         """
-        This method calculates the KPIs for a set of weight with one single Feature selection: First we do the
-        feature selection on the whole dataset, then we reduce and split it to calculate the KPIs on each fold
+        Calculate the KPIs for a set of weight with one single Feature selection: First we do the feature selection on
+        the whole dataset, then we reduce and split it to calculate the KPIs on each fold
+
+        :param features: list of selected features
+        :type features: list
+        :param df_x: design matrix
+        :type df_x: pandas.DataFrame
+        :param df_y: response vector
+        :type df_y: pandas.DataFrame
+        :return: pandas DF with KPIs for each dataset provided
+        :rtype: pandas.DataFrame
         """
 
         x_data, y_data = self.get_numpy_df(df_x, df_y)
@@ -239,8 +300,17 @@ class ModelTrainer:
 
     def training_cross_validated_multiple_FS(self, features, df_x, df_y):
         """
-        This method calculates the KPIs for a set of weight with multiple Feature selection: First we create the
-        folds of the cross validation, then for each fold we do the feature selection and locally calculate the KPIs
+        Calculates the KPIs for a set of weight with multiple Feature selection: First we create the folds of the cross
+        validation, then for each fold we do the feature selection and locally calculate the KPIs
+
+        :param features: list of selected features
+        :type features: list
+        :param df_x: design matrix
+        :type df_x: pandas.DataFrame
+        :param df_y: response vector
+        :type df_y: pandas.DataFrame
+        :return: pandas DF with KPIs for each dataset provided
+        :rtype: pandas.DataFrame
         """
 
         cv_folds = []
@@ -279,8 +349,8 @@ class ModelTrainer:
 
     def train_final_models(self):
         """
-        This method calculates the KPIs for a set of weight with multiple Feature selection: First we create the
-        folds of the cross validation, then for each fold we do the feature selection and locally calculate the KPIs
+        Calculates the KPIs for a set of weight with multiple Feature selection: First we create the folds of the cross
+        validation, then for each fold we do the feature selection and locally calculate the KPIs
         """
 
         self.get_datasets()
@@ -312,6 +382,16 @@ class ModelTrainer:
     def get_reduced_dataset(df_x, df_y, selected_features):
         """
         Extract a smaller dataframe with the selected features as columns. Keep the date and refresh indices
+
+
+        :param selected_features: list of selected features
+        :type selected_features: list
+        :param df_x: design matrix
+        :type df_x: pandas.DataFrame
+        :param df_y: response vector
+        :type df_y: pandas.DataFrame
+        :return: pandas DF with reduced columns
+        :rtype: pandas.DataFrame, pandas.DataFrame
         """
 
         lcl_df_x = df_x.loc[:, ['date'] + selected_features]

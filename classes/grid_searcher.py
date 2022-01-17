@@ -48,6 +48,7 @@ class GridSearcher:
             fn = fp + fp.split(os.sep)[1] + '_grid_search_KPIs_' + self.cfg['gridSearcher']['typeGridSearch'] + '.csv'
             fn_pred = fp + fp.split(os.sep)[1] + '_grid_search_all_errors_' + self.cfg['gridSearcher']['typeGridSearch'] + '.csv'
 
+            # Initialize empty files in folder. Data will be inserted at each iteration step
             pd.DataFrame([],
                          columns=['w1', 'w2', 'w3', 'Accuracy_1', 'Accuracy_2', 'Accuracy_3', 'Accuracy', 'RMSE',
                                   'MAE', 'ConfMat']).to_csv(fn, mode='w', header=True, index=False)

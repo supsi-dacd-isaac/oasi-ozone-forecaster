@@ -41,8 +41,12 @@ class ArtificialFeatures:
         """
         Perform a query on signals who are location independent, i.e. it doesnt matter where they are measured.
         This method is used for calculating VOC and NOx daily variables in method do_IFEC_query
-        """
 
+        :param signal: signal code
+        :type signal: str
+        :return: single value of the queried signal
+        :rtype: float
+        """
         measurement = self.cfg["influxDB"]["measurementGlobal"]
         dt = self.set_forecast_day()
         lcl_dt = dt.strftime('%Y-%m-%d')
@@ -62,9 +66,20 @@ class ArtificialFeatures:
     def get_query_value_forecast(self, measurement, signal_data, steps, func):
         """
         Perform a query on forecasted signals using a certain amount of steps forward in time and a data aggregating
-        function, such as mean, max, min or sum. This method is used in most methods except KLO-LUG and past measurements features
-        """
+        function, such as mean, max, min or sum. This method is used in most methods except KLO-LUG and past
+        measurements features
 
+        :param measurement: InfluxDB measurement code
+        :type measurement: str
+        :param signal_data: signal code
+        :type signal_data: str
+        :param steps: steps (hours) in the future for the data we're interested in
+        :type steps: str
+        :param func: reduction to apply to multiple data ('min', 'max' or 'mean')
+        :type func: str
+        :return: single value of the queried signal
+        :rtype: float
+        """
         (location, signal_code, aggregator) = signal_data.split('__')
         dt = self.set_forecast_day()
 
@@ -78,7 +93,22 @@ class ArtificialFeatures:
         return self.calc_data(query=query, signal_data=signal_data, func=func)
 
     def get_query_value_measure(self, measurement, signal_data, start_dt, end_dt, func):
+        """
+        Perform a query on measured signals using a starting and ending time and a data aggregating function
 
+        :param measurement: InfluxDB measurement code
+        :type measurement: str
+        :param signal_data: signal code
+        :type signal_data: str
+        :param start_dt: timestamp, format '%Y-%m-%dTHH:MM:SSZ'
+        :type start_dt: str
+        :param end_dt: timestamp, format '%Y-%m-%dTHH:MM:SSZ'
+        :type end_dt: str
+        :param func: reduction to apply to multiple data ('min', 'max' or 'mean')
+        :type func: str
+        :return: single value of the queried signal
+        :rtype: float
+        """
         (location, signal_code, aggregator) = signal_data.split('__', 2)
 
         query = 'SELECT value FROM %s WHERE location=\'%s\' AND signal=\'%s\' AND time>=\'%s\' AND ' \
@@ -100,6 +130,11 @@ class ArtificialFeatures:
     def measurements_start_end(self, days):
         """
         Create start and end times for the measurement signal queries. To be used in the do_multiday_query method
+
+        :param days: number of days back in time
+        :type days: int
+        :return: list of timestamps
+        :rtype: list
         """
 
         dt = self.set_forecast_day()
@@ -116,6 +151,11 @@ class ArtificialFeatures:
     def analyze_signal(self, signal):
         """
         Parse the signal codes and send it to the appropriate method for value calculation
+
+        :param signal: signal code
+        :type signal: str
+        :return: single value of the queried signal
+        :rtype: float
         """
 
         val = np.nan
@@ -129,8 +169,7 @@ class ArtificialFeatures:
                 val = self.get_query_value_global('Total_NOx')
 
             if signal == 'VOC_Totale':
-                measurement = self.cfg['influxDB']['measurementInputsMeasurements']
-                VOC_without_woods, VOC_woods, VOC_woods_corrected = self.do_VOC_query(measurement)
+                VOC_without_woods, VOC_woods, VOC_woods_corrected = self.do_VOC_query()
                 if self.cfg['VOC']['useCorrection'] and self.cfg['VOC'][
                     'emissionType'] == 'forecasted' and self.VOC_forecasted_status:
                     self.logger.info('Correcting forecasted VOC woods emissions')
@@ -178,7 +217,13 @@ class ArtificialFeatures:
 
     def calculate_wood_emission(self, emissionType):
         """
-        Calculate the VOC emissions from woods, using either forecasted or measured data
+        Calculate the VOC emissions from woods, using either forecasted or measured data. Forecasted data are not always
+        available, so sometimes we're forced to use measured values and infer the future.
+
+        :param emissionType: type of emission, either 'measured' or 'forecasted'
+        :type emissionType: str
+        :return: calculated VOC emission value
+        :rtype: float
         """
 
         # Load necessary constants
@@ -197,6 +242,7 @@ class ArtificialFeatures:
             [Q, T] = self.get_Q_T_measured()
         else:
             self.logger.error('Unrecognized VOC woods type of data to use')
+            [Q, T] = [None, None]
 
         # Calculate woods emission
         gamma = (alpha * C_L1 * Q / np.sqrt(1 + alpha * alpha * Q * Q)) * (
@@ -252,15 +298,16 @@ class ArtificialFeatures:
 
         return [Q_, T_]
 
-    def do_VOC_query(self, measurement):
+    def do_VOC_query(self):
         """
-        Total_NOx is easy, just query the previously calculated value in the DB. However, for Total_VOC it is necessary
-        to query the existing value, which combines traffic (roads, highways, planes), combustion, agricolture,
-        and industry, then add the daily calculated woods emission with the below iso gamma formula.
-        Note that the VOC signal stored in the DB does NOT account for wood emission!
+        Get values with and without woods emission
         """
 
-        # Get values with and without woods emission
+        # Total_NOx is easy, just query the previously calculated value in the DB. However, for Total_VOC it is
+        # necessary to query the existing value, which combines traffic (roads, highways, planes), combustion,
+        # agriculture and industry, then add the daily calculated woods emission with the iso gamma formula.
+        # Note that the VOC signal stored in the DB does NOT account for wood emission!
+
         VOC_without_woods = self.get_query_value_global('Total_VOC')
         VOC_woods = self.calculate_wood_emission(self.cfg['VOC']['emissionType'])
 
@@ -270,11 +317,9 @@ class ArtificialFeatures:
         return VOC_without_woods, VOC_woods, VOC_woods_corrected
 
     def do_mor_eve_query(self, signal_data, measurement):
-        """
-        mean_mor: Mean of values from 03:00 UTC to 10:00 UTC
-        mean_eve: Mean of values from 11:00 UTC to 21:00 UTC
-        Forecasted signals considered: GLOB, CLCT
-        """
+        # mean_mor: Mean of values from 03:00 UTC to 10:00 UTC
+        # mean_eve: Mean of values from 11:00 UTC to 21:00 UTC
+        # Forecasted signals considered: GLOB, CLCT
 
         (location, signal_code, aggregator) = signal_data.split('__')
         func = 'mean'
@@ -294,7 +339,14 @@ class ArtificialFeatures:
 
     def do_MAX_query(self, signal_data, measurement):
         """
-        Maximum value of all hourly forecasted temperatures
+        Calculate maximum value of all hourly forecasted temperatures
+
+        :param signal_data: signal code
+        :type signal_data: str
+        :param measurement: InfluxDB measurement code
+        :type measurement: str
+        :return: single value of the queried signal
+        :rtype: float
         """
 
         func = 'max'
@@ -303,11 +355,9 @@ class ArtificialFeatures:
         return self.get_query_value_forecast(measurement, signal_data, steps, func)
 
     def do_T_2M_query(self, signal_data, measurement):
-        """
-        MOR: mean values of hourly forecasted temperatures from 12:00 to 00:00 of the same day
-        EVE: mean values of hourly forecasted temperatures from 10:00 to 21:00 of the following day
-        The squared value of the above means is a considered signal too
-        """
+        # MOR: mean values of hourly forecasted temperatures from 12:00 to 00:00 of the same day
+        # EVE: mean values of hourly forecasted temperatures from 10:00 to 21:00 of the following day
+        # The squared value of the above means is a considered signal too
 
         func = 'mean'
         steps = self.steps_type_forecast(mor_start=7, mor_end=19, eve_start=22, eve_end=33)
@@ -344,6 +394,11 @@ class ArtificialFeatures:
         """
         Calculate the pressure gradient between Kloten airport and Lugano to take into account the air current between
         South and North of Switzerland
+
+        :param signal_data: signal code
+        :type signal_data: str
+        :return: single value of the queried signal
+        :rtype: float
         """
 
         func = 'mean'
@@ -375,6 +430,13 @@ class ArtificialFeatures:
         Special case NOx_12h is also calculated here:
         MOR: mean value of NOx hourly measurements from 22:00 to 10:00 of previous day (previous afternoon)
         EVE: mean value of NOx hourly measurements from 22:00 of previous day to 10:00 of present day (present morning)
+
+        :param signal_data: signal code
+        :type signal_data: str
+        :param measurement: InfluxDB measurement code
+        :type measurement: str
+        :return: single value of the queried signal
+        :rtype: float
         """
 
         (location, signal_code, aggregator) = signal_data.split('__', 2)

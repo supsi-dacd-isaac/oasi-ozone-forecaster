@@ -44,7 +44,7 @@ class FeaturesAnalyzer:
 
     def dataset_creator(self):
         """
-        This method builds the datasets according to the instructions in the config file in the datasetSettings section
+        Build the datasets according to the instructions in the config file in the datasetSettings section
         """
 
         if self.cfg["datasetSettings"]["datasetCreator"] == 'customJSON':
@@ -58,6 +58,10 @@ class FeaturesAnalyzer:
                 'Option for dataset_creator is not valid. Available options are "customJSON", "regions" or "CSVreader"')
 
     def update_datasets(self, name, output_dfs, target_columns):
+        """
+        Initialize folders and add metadata to container of datasets
+        """
+
         folder_path = self.inputs_gatherer.output_folder_creator(name)
         file_path_df = folder_path + folder_path.split(os.sep)[1] + '_dataset.csv'
         if not os.path.isfile(file_path_df):
@@ -67,7 +71,7 @@ class FeaturesAnalyzer:
 
     def dataset_reader(self):
         """
-        This method reads a previously created or provided csv file. If the dataset is created from a custom JSON or
+        Read a previously created or provided csv file. If the dataset is created from a custom JSON or
         from regionals signals, this method has to be preceded by a call of dataset_creator
         """
 
@@ -112,6 +116,13 @@ class FeaturesAnalyzer:
     def dataset_splitter(self, name, data):
         """
         Split a dataFrame in design matrix X and response vector Y
+
+        :param name: code name of the region/json/csv
+        :type name: str
+        :param data: full dataset
+        :type data: pandas.DataFrame
+        :return: split datasets in multiple formats
+        :rtype: numpy.array, numpy.array, list, pandas.DataFrame, pandas.DataFrame
         """
 
         self.current_name = name
@@ -169,6 +180,15 @@ class FeaturesAnalyzer:
     def important_features(self, x_data, y_data, features):
         """
         Calculate the important features given design matrix, target vector and full list of features
+
+        :param x_data: design matrix
+        :type x_data: numpy.array
+        :param y_data: response vector
+        :type y_data: numpy.array
+        :param features: list of features names
+        :type features: list
+        :return: list of new features and dataframe with relative importance of each single feature
+        :rtype: list, pandas.DataFrame
         """
 
         assert x_data.shape[1] == len(features)
@@ -202,6 +222,15 @@ class FeaturesAnalyzer:
     def perform_feature_selection(self, x_data, y_data, features):
         """
         Obtain selected features and also save them in the output folder
+
+        :param x_data: design matrix
+        :type x_data: numpy.array
+        :param y_data: response vector
+        :type y_data: numpy.array
+        :param features: list of features names
+        :type features: list
+        :return: list of new features and dataframe with relative importance of each single feature
+        :rtype: list, pandas.DataFrame
         """
 
         new_features, important_features = self.important_features(x_data, y_data, features[1:])
@@ -219,6 +248,15 @@ class FeaturesAnalyzer:
         return new_features, important_features
 
     def save_csv(self, important_features, new_features):
+        """
+        Save selected features and their relative importance
+
+        :param important_features: dataframe of the selected features and their relative importance
+        :type important_features: pandas.DataFrame
+        :param new_features: selected features
+        :type new_features: list
+        """
+
         fp = self.inputs_gatherer.output_folder_creator(self.current_name)
 
         if not os.path.exists(fp):
