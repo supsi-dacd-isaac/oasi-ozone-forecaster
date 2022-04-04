@@ -77,8 +77,8 @@ if __name__ == "__main__":
     IG = InputsGatherer(influx_client, forecast_type, cfg, logger, AF)
     FA = FeaturesAnalyzer(IG, forecast_type, cfg, logger)
 
-    for dataset in cfg['datasetSettings']['customJSONSignals']:
-        assert os.path.isfile(cfg['datasetSettings']['loadSignalsFolder'] + dataset['filename'])
+    # for dataset in cfg['datasetSettings']['customJSONSignals']:
+    #     assert os.path.isfile(cfg['datasetSettings']['loadSignalsFolder'] + dataset['filename'])
 
     start_time = time.time()
     FA.dataset_creator()
