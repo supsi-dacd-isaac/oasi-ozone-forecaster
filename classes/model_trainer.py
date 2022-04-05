@@ -7,6 +7,7 @@ from ngboost import NGBRegressor
 from ngboost.distns import Normal
 from ngboost.learners import default_tree_learner
 from ngboost.scores import MLE
+from skgarden import RandomForestQuantileRegressor
 from sklearn.metrics import mean_squared_error, mean_absolute_error, accuracy_score, confusion_matrix
 # from skgarden import RandomForestQuantileRegressor
 
@@ -371,8 +372,10 @@ class ModelTrainer:
 
             ngb, weight = self.train_NGB_model(X, Y)
 
-            rfqr = RandomForestQuantileRegressor(n_estimators=1000).fit(X, np.array(Y).ravel(), sample_weight=weight)
-            rfqr_no_w = RandomForestQuantileRegressor(n_estimators=1000).fit(X, np.array(Y).ravel(), sample_weight=None)
+            # rfqr = RandomForestQuantileRegressor(n_estimators=1000).fit(X, np.array(Y).ravel(), sample_weight=weight)
+            # rfqr_no_w = RandomForestQuantileRegressor(n_estimators=1000).fit(X, np.array(Y).ravel(), sample_weight=None)
+            rfqr = RandomForestQuantileRegressor(n_estimators=1000).fit(X, np.array(Y).ravel())
+            rfqr_no_w = RandomForestQuantileRegressor(n_estimators=1000).fit(X, np.array(Y).ravel())
 
             n_features = str(len(selected_features))
 

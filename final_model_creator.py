@@ -79,15 +79,15 @@ if __name__ == "__main__":
     IG = InputsGatherer(influx_client, forecast_type, cfg, logger, AF)
     FA = FeaturesAnalyzer(IG, forecast_type, cfg, logger)
     MT = ModelTrainer(FA, IG, forecast_type, cfg, logger)
-    GS = GridSearcher(FA, IG, MT, forecast_type, cfg, logger)
+    # GS = GridSearcher(FA, IG, MT, forecast_type, cfg, logger)
 
     for dataset in cfg['datasetSettings']['customJSONSignals']:
         assert os.path.isfile(cfg['datasetSettings']['loadSignalsFolder'] + dataset['filename'])
 
     start_time = time.time()
 
-    if cfg["datasetSettings"]["datasetCreator"] != "CSVreader":
-        FA.dataset_creator()
+    # if cfg["datasetSettings"]["datasetCreator"] != "CSVreader":
+    #     FA.dataset_creator()
     FA.dataset_reader()
 
     MT.train_final_models()

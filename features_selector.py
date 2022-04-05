@@ -81,7 +81,7 @@ if __name__ == "__main__":
         assert os.path.isfile(cfg['datasetSettings']['loadSignalsFolder'] + dataset['filename'])
 
     start_time = time.time()
-    FA.dataset_creator()
+    # FA.dataset_creator()
     logger.info("--- %s seconds elapsed for dataset creation ---" % (time.time() - start_time))
 
     if cfg['featuresAnalyzer']['performFeatureSelection']:

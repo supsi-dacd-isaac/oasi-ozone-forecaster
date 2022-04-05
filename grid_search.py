@@ -86,8 +86,8 @@ if __name__ == "__main__":
 
     start_time = time.time()
 
-    if cfg["datasetSettings"]["datasetCreator"] != "CSVreader":
-        FA.dataset_creator()
+    # if cfg["datasetSettings"]["datasetCreator"] != "CSVreader":
+    #     FA.dataset_creator()
     FA.dataset_reader()
 
     GS.search_weights()
