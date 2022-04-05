@@ -9,7 +9,6 @@ from ngboost.learners import default_tree_learner
 from ngboost.scores import MLE
 from skgarden import RandomForestQuantileRegressor
 from sklearn.metrics import mean_squared_error, mean_absolute_error, accuracy_score, confusion_matrix
-# from skgarden import RandomForestQuantileRegressor
 
 
 class ModelTrainer:
@@ -335,12 +334,14 @@ class ModelTrainer:
         fold = 1
 
         for (train_index, test_index) in cv_folds:
+            self.logger.info('Fold %i/%i: started FS' % (fold, len(cv_folds)))
             lcl_x, lcl_y = df_x.loc[train_index], df_y.loc[train_index]
             x_data, y_data = self.get_numpy_df(lcl_x, lcl_y)
             selected_features = self.features_analyzer.important_features(x_data, y_data, features[1:])[0]
             X, Y = self.get_reduced_dataset(df_x, df_y, selected_features)
             X, Y = self.remove_date(X, Y)
 
+            self.logger.info('Fold %i/%i: started model training' % (fold, len(cv_folds)))
             pred = self.fold_training(train_index, test_index, X, Y)
             ngb_prediction[test_index] = pred
             df_pred = pd.concat([df_pred, self.error_data(pred, Y.loc[test_index], fold)], ignore_index=True, axis=0)
@@ -362,24 +363,23 @@ class ModelTrainer:
             fp = self.input_gatherer.output_folder_creator(key)
             fn = fp + fp.split(os.sep)[1]
 
-            x_data, y_data, features, df_x, df_y = self.features_analyzer.dataset_splitter(key, df)
+            _, _, _, df_x, df_y = self.features_analyzer.dataset_splitter(key, df)
 
-            x_data, y_data = self.get_numpy_df(df_x, df_y)
-            selected_features = self.features_analyzer.important_features(x_data, y_data, features[1:])[0]
+            selected_features = json.loads(open('%s%s.json' % (fn, self.cfg['finalModelCreator']['signalsFileSuffix'])).read())['signals']
             X, Y = self.get_reduced_dataset(df_x, df_y, selected_features)
-
             X, Y = self.remove_date(X, Y)
 
+            # Train NGB model
+            self.logger.info('NGBoost model training')
             ngb, weight = self.train_NGB_model(X, Y)
 
-            # rfqr = RandomForestQuantileRegressor(n_estimators=1000).fit(X, np.array(Y).ravel(), sample_weight=weight)
-            # rfqr_no_w = RandomForestQuantileRegressor(n_estimators=1000).fit(X, np.array(Y).ravel(), sample_weight=None)
+            # Train QRF model
+            self.logger.info('RFQR model training')
             rfqr = RandomForestQuantileRegressor(n_estimators=1000).fit(X, np.array(Y).ravel())
-            rfqr_no_w = RandomForestQuantileRegressor(n_estimators=1000).fit(X, np.array(Y).ravel())
 
             n_features = str(len(selected_features))
 
-            pickle.dump([ngb, rfqr, rfqr_no_w], open(fn + '_mdl_' + n_features + '.pkl', 'wb'))
+            pickle.dump([ngb, rfqr], open(fn + '_mdl_' + n_features + '.pkl', 'wb'))
             pickle.dump(selected_features, open(fn + '_feats_' + n_features + '.pkl', 'wb'))
             json.dump({"signals": list(selected_features)}, open(fn + '_feats_' + n_features + '.json', 'w'))
 

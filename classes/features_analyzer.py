@@ -232,8 +232,9 @@ class FeaturesAnalyzer:
         :return: list of new features and dataframe with relative importance of each single feature
         :rtype: list, pandas.DataFrame
         """
-
+        self.logger.info('Launched FS (num_variables to select=%s), it can take a while...' % self.cfg['featuresAnalyzer']['numberSelectedFeatures'])
         new_features, important_features = self.important_features(x_data, y_data, features[1:])
+
 
         important_nan_features = [f for f in self.nan_features if f in new_features]
         if len(important_nan_features) > 0:

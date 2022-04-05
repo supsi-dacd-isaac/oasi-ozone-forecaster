@@ -38,7 +38,7 @@
     }
   ],
   "datasetSettings": {
-    "datasetCreator": "CSVreader",
+    "datasetCreator": "customJSON",
     "saveDataset": true,
     "loadSignalsFolder": "conf/signals/",
     "customJSONSignals": [
@@ -51,8 +51,8 @@
     ],
     "outputCsvFolder": "output/",
     "outputSignalFolder": "conf/signals/regions/",
-    "startDay": "05-15",
-    "endDay": "09-30",
+    "startDay": "06-01",
+    "endDay": "09-01",
     "years": [2015, 2016, 2017, 2018, 2019, 2020, 2021],
     "sleepTimeBetweenQueries": 0.0
   },
@@ -113,7 +113,7 @@
     "performFeatureSelection": true,
     "numberEstimatorsNGB": 501,
     "learningRate": 0.05,
-    "numberSelectedFeatures": 100,
+    "numberSelectedFeatures": 4,
     "w1": 0.1,
     "w2": 0.1,
     "w3": 0.1,
@@ -123,14 +123,17 @@
   },
   "gridSearcher": {
     "w1_start": 2.0,
-    "w1_end": 20.0,
+    "w1_end": 4.0,
     "w1_step": 2.0,
     "w2_start": 2.0,
-    "w2_end": 20.0,
+    "w2_end": 4.0,
     "w2_step": 2.0,
     "w3_start": 1.0,
     "w3_end": 2.0,
     "w3_step": 1.0,
     "typeGridSearch": "multiple"
+  },
+  "finalModelCreator": {
+    "signalsFileSuffix": "_signals"
   }
 }

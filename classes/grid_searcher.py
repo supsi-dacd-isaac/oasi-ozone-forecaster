@@ -67,7 +67,7 @@ class GridSearcher:
                         self.cfg['featuresAnalyzer']['w1'] = w1
                         self.cfg['featuresAnalyzer']['w2'] = w2
                         self.cfg['featuresAnalyzer']['w3'] = w3
-                        self.logger.info('Ws=[%i, %i, %i]' % (w1, w2, w3))
+                        self.logger.info('Weights=[%i, %i, %i]' % (w1, w2, w3))
 
                         if self.cfg['gridSearcher']['typeGridSearch'] == 'multiple':
                             lcl_KPIs, lcl_prediction = self.model_trainer.training_cross_validated_multiple_FS(features, df_x, df_y)

@@ -145,12 +145,10 @@ class Forecaster:
     def predict(self, predictor_file):
         if self.do_prediction is True:
             # ngb; NGBoost
-            # qrf_nw; QRF without weights
-            # qrf_ww; QRF wit weights
-            ngb, qrf_nw, qrf_ww = pickle.load(open(predictor_file, 'rb'))
+            ngb, qrf = pickle.load(open(predictor_file, 'rb'))
 
             res_ngb = ngb.pred_dist(self.input_df)
-            self.probs_over_limits = self.calc_probabilities(qrf_nw)
+            self.probs_over_limits = self.calc_probabilities(qrf)
             self.logger.info('Performed prediction: model=%s ' % predictor_file)
 
             dps = []

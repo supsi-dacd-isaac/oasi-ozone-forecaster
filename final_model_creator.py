@@ -14,7 +14,8 @@ from classes.artificial_features import ArtificialFeatures
 from classes.features_analyzer import FeaturesAnalyzer
 from classes.inputs_gatherer import InputsGatherer
 from classes.model_trainer import ModelTrainer
-from classes.grid_searcher import GridSearcher
+import warnings
+warnings.filterwarnings("ignore")
 
 urllib3.disable_warnings()
 
