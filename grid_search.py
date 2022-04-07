@@ -81,16 +81,17 @@ if __name__ == "__main__":
     MT = ModelTrainer(FA, IG, forecast_type, cfg, logger)
     GS = GridSearcher(FA, IG, MT, forecast_type, cfg, logger)
 
-    for dataset in cfg['datasetSettings']['customJSONSignals']:
-        assert os.path.isfile(cfg['datasetSettings']['loadSignalsFolder'] + dataset['filename'])
+    # for dataset in cfg['datasetSettings']['customJSONSignals']:
+    #     assert os.path.isfile(cfg['datasetSettings']['loadSignalsFolder'] + dataset['filename'])
 
     start_time = time.time()
 
-    # if cfg["datasetSettings"]["datasetCreator"] != "CSVreader":
-    #     FA.dataset_creator()
-    FA.dataset_reader()
+    # Cycle over the regions
+    for k_region in cfg['regions'].keys():
 
-    GS.search_weights()
+        FA.dataset_reader(target_column=cfg['regions'][k_region]['targetColumn'])
+
+        GS.search_weights()
 
     logger.info("--- %s seconds elapsed for grid searching ---" % (time.time() - start_time))
 

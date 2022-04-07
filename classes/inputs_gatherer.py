@@ -43,7 +43,7 @@ class InputsGatherer:
         self.forecast_type = forecast_type
         self.cfg = cfg
         self.logger = logger
-        self.input_data = None
+        self.io_data = None
         self.day_to_predict = None
         self.cfg_signals = None
         self.artificial_features = artificial_features
@@ -52,7 +52,7 @@ class InputsGatherer:
         """
         Build the dataset
         """
-        self.input_data = dict()
+        self.io_data = dict()
         self.day_to_predict = None
 
         # Get the locations configured for the prediction
@@ -80,34 +80,36 @@ class InputsGatherer:
         # get the values in the DB
         i = 1
         for signal in self.cfg_signals['signals']:
-            self.logger.info('Try to add input n. %02d/%2d, %s' % (i, len(self.cfg_signals['signals']), signal))
+            self.logger.info('Try to add input n. %02d/0%2d, %s' % (i, len(self.cfg_signals['signals']), signal))
             self.add_input_value(signal=signal)
-            self.logger.info('Added input n. %02d/%2d' % (i, len(self.cfg_signals['signals'])))
+            self.logger.info('Added input n. %02d/0%2d' % (i, len(self.cfg_signals['signals'])))
             i += 1
 
         # Check the data availability
         self.check_inputs_availability()
 
-    def build_dataset(self, name, signals_file):
+    def build_dataset(self, name, input_signals):
         """
         Build the training dataset given a signal json file in folder "conf/dataset" either from a region or from a
         custom list
         """
 
-        self.input_data = dict()
-        self.cfg_signals = self.cfg_signals = dict(signals=[])
+        self.io_data = dict()
         fp = self.output_folder_creator(name)
         file_name_df = fp + fp.split(os.sep)[1] + '_dataset.csv'
         file_name_tc = fp + fp.split(os.sep)[1] + '_target_columns.csv'
 
-        # Get the signals from the json provided in the cfg file
-        self.cfg_signals = json.loads(open(signals_file).read())
+        # Set the signal list
+        # self.input_signals = dict()
+        # self.cfg_signals['signals'] = signal_list
 
-        # destroy repetitions but preserve the order
-        self.cfg_signals['signals'] = list(dict.fromkeys(self.cfg_signals['signals']))
+        # # destroy repetitions but preserve the order
+        # input_signals = list(dict.fromkeys(self.cfg_signals['signals']))
 
         # initialize the Pandas dataframe that will contain the final dataset
-        dataset = pd.DataFrame(columns=['date'] + self.cfg_signals['signals'])
+        output_signals = self.cfg['regions'][name]['targetColumn']
+
+        dataset = pd.DataFrame(columns=['date'] + input_signals + output_signals)
 
         # Boolean flag to determine whether we should override an existing output dataset csv or not
         flag_starting_dataset = True
@@ -132,16 +134,20 @@ class InputsGatherer:
 
                 self.cfg['dayToForecast'] = curr_day
 
-                # Iterate over the signals
-                i = 1
-                for signal in self.cfg_signals['signals']:
-                    self.add_input_value(signal=signal)
-                    self.logger.info('Added input n. %02d/%2d' % (i, len(self.cfg_signals['signals'])))
+                # Iterate over the input signals
+                for i in range(0, len(input_signals)):
+                    self.add_input_value(signal=input_signals[i])
+                    self.logger.info('Added input n. %04d/%04d' % (i+1, len(input_signals)))
                     sleep(self.cfg['datasetSettings']['sleepTimeBetweenQueries'])
-                    i += 1
 
-                lcl_data = dict({'date': curr_day}, **self.input_data)
-                lcl_df = pd.DataFrame([lcl_data], columns=['date'] + self.cfg_signals['signals'])
+                # Iterate over the output signals
+                for i in range(0, len(output_signals)):
+                    self.add_output_value(signal=output_signals[i])
+                    self.logger.info('Added output n. %04d/%04d' % (i+1, len(output_signals)))
+                    sleep(self.cfg['datasetSettings']['sleepTimeBetweenQueries'])
+
+                lcl_data = dict({'date': curr_day}, **self.io_data)
+                lcl_df = pd.DataFrame([lcl_data], columns=dataset.columns   )
 
                 if self.cfg['datasetSettings']['saveDataset']:
                     if flag_starting_dataset:
@@ -170,17 +176,17 @@ class InputsGatherer:
     def check_inputs_availability(self):
         dps = []
 
-        self.input_data_availability = dict()
-        for k in self.input_data.keys():
-            if np.isnan(self.input_data[k]):
-                self.input_data[k] = self.retrieve_past_mean(code=k)
-                self.input_data_availability[k] = False
+        self.io_data_availability = dict()
+        for k in self.io_data.keys():
+            if np.isnan(self.io_data[k]):
+                self.io_data[k] = self.retrieve_past_mean(code=k)
+                self.io_data_availability[k] = False
             else:
-                self.input_data_availability[k] = True
+                self.io_data_availability[k] = True
                 point = {
                     'time': int(self.day_to_predict),
                     'measurement': self.cfg['influxDB']['measurementInputsHistory'],
-                    'fields': dict(value=float(self.input_data[k])),
+                    'fields': dict(value=float(self.io_data[k])),
                     'tags': dict(code=k, case=self.forecast_type)
                 }
                 dps.append(point)
@@ -210,7 +216,7 @@ class InputsGatherer:
 
     def add_input_value(self, signal):
         """
-        Add the input value related to a given signal
+        Add the value related to a given input signal
 
         :param signal: signal code
         :type signal: string
@@ -257,6 +263,19 @@ class InputsGatherer:
                         self.do_period_query(signal, measurement, 'measure')
                     else:
                         self.do_hourly_query(signal, measurement)
+
+    def add_output_value(self, signal):
+        """
+        Add the value related to a given output signal
+
+        :param signal: signal code
+        :type signal: string
+        :return: query
+        :rtype: string
+        """
+        measurement = self.cfg['influxDB']['measurementInputsMeasurements']
+        self.do_daily_query(signal, measurement, flag_output_signal=True)
+
 
     def do_forecast_period_query(self, signal_data, measurement):
         (location, signal_code, chunk, func) = signal_data.split('__')
@@ -320,11 +339,11 @@ class InputsGatherer:
                 val = float(res.raw['series'][0]['values'][0][1]) + 273.1
             else:
                 val = float(res.raw['series'][0]['values'][0][1])
-            self.input_data[signal_data] = val
+            self.io_data[signal_data] = val
         except Exception as e:
             self.logger.error('Forecast not available')
             self.logger.error('No data from query %s' % query)
-            self.input_data[signal_data] = np.nan
+            self.io_data[signal_data] = np.nan
 
     def do_chunk_query(self, signal_data, measurement):
         (location, signal_code, day, chunk, func) = signal_data.split('__')
@@ -365,7 +384,7 @@ class InputsGatherer:
 
         self.calc_data(query=query, signal_data=signal_data, func=func)
 
-    def do_daily_query(self, signal_data, measurement):
+    def do_daily_query(self, signal_data, measurement, flag_output_signal=False):
         if len(signal_data.split('__')) == 4:
             (location, signal_code, day, func) = signal_data.split('__')
         else:
@@ -374,7 +393,14 @@ class InputsGatherer:
             func = 'mean'
 
         dt = self.set_forecast_day()
-        day_date = dt - timedelta(int(day[-1]))
+
+        # If I have an output signal I have to get data related to future days
+        if flag_output_signal is True:
+            # OUTPUT: D --> D+x
+            day_date = dt + timedelta(int(day[-1]))
+        else:
+            # INPUT:  D-x <-- D
+            day_date = dt - timedelta(int(day[-1]))
 
         query = 'SELECT mean(value) FROM %s WHERE location=\'%s\' AND ' \
                 'signal=\'%s\' AND time>=\'%s\' AND time<=\'%s\' ' \
@@ -408,15 +434,15 @@ class InputsGatherer:
         res = self.influxdb_client.query(query, epoch='s')
 
         try:
-            self.input_data[signal_data] = res.raw['series'][0]['values'][0][1]
+            self.io_data[signal_data] = res.raw['series'][0]['values'][0][1]
         except Exception as e:
             self.logger.error('Forecast not available')
             self.logger.error('No data from query %s' % query)
             # Nocturnal irradiance in BIO is missing rather than 0, so fixing it here (DM 09.11.21)
             if location == 'BIO' and signal_code == 'Gl':
-                self.input_data[signal_data] = 0.0
+                self.io_data[signal_data] = 0.0
             else:
-                self.input_data[signal_data] = np.nan
+                self.io_data[signal_data] = np.nan
 
     def do_period_query(self, signal_data, measurement, case):
         (location, signal_code, period, func) = signal_data.split('__')
@@ -447,11 +473,11 @@ class InputsGatherer:
         res = self.influxdb_client.query(query, epoch='s')
 
         try:
-            self.input_data[signal_data] = res.raw['series'][0]['values'][0][1]
+            self.io_data[signal_data] = res.raw['series'][0]['values'][0][1]
         except Exception as e:
             self.logger.error('Forecast not available')
             self.logger.error('No data from query %s' % query)
-            self.input_data[signal_data] = np.nan
+            self.io_data[signal_data] = np.nan
 
     def calc_data(self, query, signal_data, func):
         self.logger.info('Performing query: %s' % query)
@@ -471,15 +497,15 @@ class InputsGatherer:
                     vals.append(val)
 
             if func == 'min':
-                self.input_data[signal_data] = np.min(vals)
+                self.io_data[signal_data] = np.min(vals)
             elif func == 'max':
-                self.input_data[signal_data] = np.max(vals)
+                self.io_data[signal_data] = np.max(vals)
             elif func == 'mean':
-                self.input_data[signal_data] = np.mean(vals)
+                self.io_data[signal_data] = np.mean(vals)
         except Exception as e:
             self.logger.error('Forecast not available')
             self.logger.error('No data from query %s' % query)
-            self.input_data[signal_data] = np.nan
+            self.io_data[signal_data] = np.nan
 
     def handle_exception_signal(self, signal_data):
 
@@ -499,15 +525,15 @@ class InputsGatherer:
             res = self.influxdb_client.query(query, epoch='s')
 
             try:
-                self.input_data[signal_data] = res.raw['series'][0]['values'][0][1]
+                self.io_data[signal_data] = res.raw['series'][0]['values'][0][1]
             except Exception as e:
                 self.logger.error('Forecast not available')
                 self.logger.error('No data from query %s' % query)
-                self.input_data[signal_data] = np.nan
+                self.io_data[signal_data] = np.nan
 
         elif any([s in signal_data for s in constants.ARTIFICIAL_FEATURES]):
             res = self.artificial_features.analyze_signal(signal_data)
-            self.input_data[signal_data] = res
+            self.io_data[signal_data] = res
 
         else:
             # if EVE case the day to predict is the next one
@@ -517,25 +543,25 @@ class InputsGatherer:
             # day of the week
             if signal_data == 'DayWeek':
 
-                self.input_data[signal_data] = float(dt.weekday())
+                self.io_data[signal_data] = float(dt.weekday())
 
             # weekend/not weekend
             elif signal_data == 'IsWeekend':
 
                 if dt.weekday() >= 5:
                     # weekend day
-                    self.input_data[signal_data] = 1.0
+                    self.io_data[signal_data] = 1.0
                 else:
                     # not weekend day
-                    self.input_data[signal_data] = 0.0
+                    self.io_data[signal_data] = 0.0
 
             # holydays
             elif signal_data == 'IsHolyday':
 
                 if dt.strftime('%m-%d') in constants.HOLYDAYS:
-                    self.input_data[signal_data] = 1.0
+                    self.io_data[signal_data] = 1.0
                 else:
-                    self.input_data[signal_data] = 0.0
+                    self.io_data[signal_data] = 0.0
 
     def set_forecast_day(self):
         """
@@ -657,21 +683,15 @@ class InputsGatherer:
                 signals.append(forecastStation + '__' + forecastedSignal + '__chunk' + str(i) + '__' + modifier)
         return signals
 
-    def global_signals(self):
-        # RHW is not considered in this analysis since it was never considered and we have a hole in the data in august
-        # 2019. Signal codes were: ['RHW__d0', 'RHW__d1']
-        signals = ['KLO-LUG', 'KLO-LUG_favonio', 'VOC_Totale', 'NOx_Totale', 'IsHolyday', 'DayWeek', 'IsWeekend']
-        return signals
-
-    def artificial_features_measured_signals(self, measurementStation):
-        signals = []
-        if measurementStation != 'MS-LUG':
-            signals.append(measurementStation + '__NOx__12h_mean')
-            signals.append(measurementStation + '__NO2__24h_mean')
-            if measurementStation != 'LUG':
-                signals.append(measurementStation + '__YO3__d1')
-                signals.append(measurementStation + '__YO3_index__d1')
-        return signals
+    # def artificial_features_measured_signals(self, measurementStation):
+    #     signals = []
+    #     if measurementStation != 'MS-LUG':
+    #         signals.append(measurementStation + '__NOx__12h_mean')
+    #         signals.append(measurementStation + '__NO2__24h_mean')
+    #         if measurementStation != 'LUG':
+    #             signals.append(measurementStation + '__YO3__d1')
+    #             signals.append(measurementStation + '__YO3_index__d1')
+    #     return signals
 
     def past_days_means_measured_signals(self, measurementStation, measuredSignal):
         signals = []
@@ -694,34 +714,28 @@ class InputsGatherer:
 
         return signals
 
-    def generate_all_signals(self):
+    def generate_input_signals_codes(self, region):
         """
         Method to generate and save all known signals of a specific region (e.g. Ticino) with defined measuring and
         forecasting stations
         """
 
-        for region in self.cfg['regions']:
-            signal_list = []
-            for measurementStation in self.cfg["regions"][region]["MeasureStations"]:
-                signal_list.extend(self.artificial_features_measured_signals(measurementStation))
-                for measuredSignal in self.cfg["measuredSignalsStations"][measurementStation]:
-                    signal_list.extend(self.past_days_means_measured_signals(measurementStation, measuredSignal))
-                    signal_list.extend(self.hourly_measured_signals(measurementStation, measuredSignal))
-            for forecastStation in self.cfg["regions"][region]["ForecastStations"]:
-                signal_list.extend(self.artificial_features_forecasted_signals(forecastStation))
-                for forecastedSignal in self.cfg["forecastedSignalsStations"][forecastStation]:
-                    signal_list.extend(self.hourly_forecasted_signals(forecastStation, forecastedSignal))
-                    signal_list.extend(self.chunks_forecasted_signals(forecastStation, forecastedSignal))
-            signal_list.extend(self.global_signals())
+        signal_list = []
 
-            fp = self.cfg['datasetSettings']['outputSignalFolder']
-            if not os.path.exists(fp):
-                os.makedirs(fp)
-            fn = fp + region + '_signals.json'
-            with open(fn, 'w') as f:
-                json.dump({"signals": signal_list}, f)
+        for measurementStation in self.cfg["regions"][region]["MeasureStations"]:
+            # signal_list.extend(self.artificial_features_measured_signals(measurementStation))
+            for measuredSignal in self.cfg["measuredSignalsStations"][measurementStation]:
+                signal_list.extend(self.past_days_means_measured_signals(measurementStation, measuredSignal))
+                signal_list.extend(self.hourly_measured_signals(measurementStation, measuredSignal))
 
-        return
+        for forecastStation in self.cfg["regions"][region]["ForecastStations"]:
+            signal_list.extend(self.artificial_features_forecasted_signals(forecastStation))
+            for forecastedSignal in self.cfg["forecastedSignalsStations"][forecastStation]:
+                signal_list.extend(self.hourly_forecasted_signals(forecastStation, forecastedSignal))
+                signal_list.extend(self.chunks_forecasted_signals(forecastStation, forecastedSignal))
+        signal_list.extend(self.cfg['globalSignals'])
+
+        return signal_list
 
     def output_folder_creator(self, dataset_name):
         """
@@ -742,11 +756,9 @@ class InputsGatherer:
 
     def dataframe_builder_regions(self):
 
-        self.generate_all_signals()
-
         for region in self.cfg['regions']:
-            region_file = self.cfg['datasetSettings']['outputSignalFolder'] + region + '_signals.json'
-            self.build_dataset(name=region, signals_file=region_file)
+            input_signals = self.generate_input_signals_codes(region)
+            self.build_dataset(name=region, input_signals=input_signals)
 
     def dataframe_builder_custom(self):
 

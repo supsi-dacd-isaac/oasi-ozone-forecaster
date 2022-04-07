@@ -69,7 +69,7 @@ class FeaturesAnalyzer:
         output_dfs[name] = {'dataset': pd.read_csv(file_path_df), 'targetColumns': target_columns}
         return output_dfs
 
-    def dataset_reader(self):
+    def dataset_reader(self, target_column):
         """
         Read a previously created or provided csv file. If the dataset is created from a custom JSON or
         from regionals signals, this method has to be preceded by a call of dataset_creator
@@ -81,32 +81,30 @@ class FeaturesAnalyzer:
             # Read the dataset in the output folder
             for dataset in self.cfg['datasetSettings']['customJSONSignals']:
                 name = dataset['filename'].split('.')[0]
-                target_columns = dataset['targetColumn']
-                output_dfs = self.update_datasets(name, output_dfs, target_columns)
+                output_dfs = self.update_datasets(name, output_dfs, target_column)
 
         elif self.cfg["datasetSettings"]["datasetCreator"] == 'regions':
             # Read the dataset in the output folder
             for region in self.cfg['regions']:
                 name = region
-                target_columns = self.cfg['regions'][region]['targetColumn']
-                output_dfs = self.update_datasets(name, output_dfs, target_columns)
+                output_dfs = self.update_datasets(name, output_dfs, target_column)
 
-        elif self.cfg["datasetSettings"]["datasetCreator"] == 'CSVreader':
-            # Copy the provided dataset in the output folder
-            for dataset in self.cfg['datasetSettings']['csvFiles']:
-                name = dataset['filename'].split('.')[0]
-                fp = self.inputs_gatherer.output_folder_creator(name)
-                file_name_df = fp + fp.split(os.sep)[1] + '_dataset.csv'
-                fn = self.cfg['datasetSettings']["loadCsvFolder"] + dataset['filename']
-                if not fn.endswith('.csv'):
-                    fn = fn + '.csv'
-                os.system('cp %s %s' % (fn, file_name_df))
-
-            # Read the dataset in the output folder
-            for dataset in self.cfg['datasetSettings']['csvFiles']:
-                name = dataset['filename'].split('.')[0]
-                target_columns = dataset['targetColumn']
-                output_dfs = self.update_datasets(name, output_dfs, target_columns)
+        # elif self.cfg["datasetSettings"]["datasetCreator"] == 'CSVreader':
+        #     # Copy the provided dataset in the output folder
+        #     for dataset in self.cfg['datasetSettings']['csvFiles']:
+        #         name = dataset['filename'].split('.')[0]
+        #         fp = self.inputs_gatherer.output_folder_creator(name)
+        #         file_name_df = fp + fp.split(os.sep)[1] + '_dataset.csv'
+        #         fn = self.cfg['datasetSettings']["loadCsvFolder"] + dataset['filename']
+        #         if not fn.endswith('.csv'):
+        #             fn = fn + '.csv'
+        #         os.system('cp %s %s' % (fn, file_name_df))
+        #
+        #     # Read the dataset in the output folder
+        #     for dataset in self.cfg['datasetSettings']['csvFiles']:
+        #         name = dataset['filename'].split('.')[0]
+        #         target_columns = dataset['targetColumn']
+        #         output_dfs = self.update_datasets(name, output_dfs, target_columns)
         else:
             self.logger.error(
                 'Option for dataset_creator is not valid. Available options are "customJSON", "regions" or "CSVreader"')
@@ -128,28 +126,32 @@ class FeaturesAnalyzer:
         self.current_name = name
         df = data['dataset']
 
-        if len(data['targetColumns']) == 0:
-            self.logger.error('Target column was not specified. Feature selection cannot be performed')
-        if len(data['targetColumns']) == 1:
-            target_column = data['targetColumns'][0]
-        else:
-            target_column = 'Max_O3_all_regions'
-            df[target_column] = df.loc[:, data['targetColumns']].max(axis=1)
+        target_column = data['targetColumns'][0]
 
-        y_data = pd.DataFrame()
-        x_data = pd.DataFrame()
-        df_years = list(dict.fromkeys(df['date'].str[:4]))
+        # todo CHECK THIS PART (probably useless!)
+        # y_data = pd.DataFrame()
+        # x_data = pd.DataFrame()
+        # df_years = list(dict.fromkeys(df['date'].str[:4]))
 
-        # If we're at MOR the value of the max ozone of day ahead is our target. If we're at EVE, it is the max
-        # value of 2 days ahead
-        days_ahead = 1 if self.forecast_type == 'MOR' else 2
+        # # If we're at MOR the value of the max ozone of day ahead is our target. If we're at EVE, it is the max
+        # # value of 2 days ahead
+        # days_ahead = 1 if self.forecast_type == 'MOR' else 2
+        #
+        # for year in df_years:
+        #     lcl_df = df.loc[df['date'].str[:4] == year, :].reset_index(drop=True)
+        #     lcl_y_data = lcl_df.loc[days_ahead:, ['date', target_column]]
+        #     lcl_x_data = lcl_df.iloc[:-days_ahead, :]
+        #     y_data = pd.concat([y_data, lcl_y_data], axis=0).reset_index(drop=True)
+        #     x_data = pd.concat([x_data, lcl_x_data], axis=0).reset_index(drop=True)
+        # # Remove the target column
+        # x_data = x_data.drop(target_column, axis=1)
 
-        for year in df_years:
-            lcl_df = df.loc[df['date'].str[:4] == year, :].reset_index(drop=True)
-            lcl_y_data = lcl_df.loc[days_ahead:, ['date', target_column]]
-            lcl_x_data = lcl_df.iloc[:-days_ahead, :]
-            y_data = pd.concat([y_data, lcl_y_data], axis=0).reset_index(drop=True)
-            x_data = pd.concat([x_data, lcl_x_data], axis=0).reset_index(drop=True)
+        # Create the inputs dataset (x_data)
+        x_data = data['dataset']
+        x_data = x_data.drop(target_column, axis=1)
+
+        # Create the outputs dataset (x_data)
+        y_data = pd.DataFrame({'date': data['dataset']['date'], target_column: data['dataset'][target_column]})
 
         assert (len(x_data) == len(y_data))
 
@@ -172,6 +174,7 @@ class FeaturesAnalyzer:
         assert (len(x_data_no_date) == len(y_data_no_date))
 
         features = x_data.columns.values
+        features = features[features != target_column]
         x_data_np = np.array(x_data_no_date, dtype='float64')
         y_data_np = np.array(y_data_no_date, dtype='float64')
 
@@ -232,7 +235,7 @@ class FeaturesAnalyzer:
         :return: list of new features and dataframe with relative importance of each single feature
         :rtype: list, pandas.DataFrame
         """
-        self.logger.info('Launched FS (num_variables to select=%s), it can take a while...' % self.cfg['featuresAnalyzer']['numberSelectedFeatures'])
+        self.logger.info('Launched FS (%s variables to select), it can take a while...' % self.cfg['featuresAnalyzer']['numberSelectedFeatures'])
         new_features, important_features = self.important_features(x_data, y_data, features[1:])
 
 

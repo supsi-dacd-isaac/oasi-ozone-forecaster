@@ -81,18 +81,20 @@ if __name__ == "__main__":
         assert os.path.isfile(cfg['datasetSettings']['loadSignalsFolder'] + dataset['filename'])
 
     start_time = time.time()
-    # FA.dataset_creator()
-    logger.info("--- %s seconds elapsed for dataset creation ---" % (time.time() - start_time))
+    logger.info("%s seconds elapsed for dataset creation" % (time.time() - start_time))
 
     if cfg['featuresAnalyzer']['performFeatureSelection']:
-        start_time = time.time()
-        FA.dataset_reader()
-        for key, df in FA.dataFrames.items():
-            x_data, y_data, features = FA.dataset_splitter(key, df)[:3]
+        for k_region in cfg['regions'].keys():
+            for target in cfg['regions'][k_region]['targetColumn']:
+                start_time = time.time()
 
-            new_features_custom, importance_custom = FA.perform_feature_selection(x_data, y_data, features)
-            logger.info(importance_custom)
+                FA.dataset_reader(target_column=[target])
+                for key, df in FA.dataFrames.items():
+                    x_data, y_data, features = FA.dataset_splitter(key, df)[:3]
 
-        logger.info("--- %s seconds elapsed for feature selection ---" % (time.time() - start_time))
+                    new_features_custom, importance_custom = FA.perform_feature_selection(x_data, y_data, features)
+                    logger.info(importance_custom)
+
+        logger.info("%s seconds elapsed for feature selection" % (time.time() - start_time))
 
     logger.info('Ending program')
