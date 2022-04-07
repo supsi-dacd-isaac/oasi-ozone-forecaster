@@ -149,12 +149,11 @@ class InputsGatherer:
                 lcl_data = dict({'date': curr_day}, **self.io_data)
                 lcl_df = pd.DataFrame([lcl_data], columns=dataset.columns   )
 
-                if self.cfg['datasetSettings']['saveDataset']:
-                    if flag_starting_dataset:
-                        lcl_df.to_csv(file_name_df, mode='w', header=True, index=False)
-                        flag_starting_dataset = False
-                    else:
-                        lcl_df.to_csv(file_name_df, mode='a', header=False, index=False)
+                if flag_starting_dataset:
+                    lcl_df.to_csv(file_name_df, mode='w', header=True, index=False)
+                    flag_starting_dataset = False
+                else:
+                    lcl_df.to_csv(file_name_df, mode='a', header=False, index=False)
 
                 dataset = dataset.append(lcl_df)
 
@@ -742,13 +741,14 @@ class InputsGatherer:
         Get the address of the output folder for the current case
         """
 
-        folder_path = '%s%s_%s_%s_%s_%s_%s-%s%s' % (self.cfg['datasetSettings']['outputCsvFolder'],
-                                                    self.cfg['datasetSettings']['datasetCreator'], dataset_name,
-                                                    self.forecast_type,
-                                                    self.cfg['datasetSettings']['startDay'],
-                                                    self.cfg['datasetSettings']['endDay'],
-                                                    self.cfg['datasetSettings']['years'][0],
-                                                    self.cfg['datasetSettings']['years'][-1], os.sep)
+        folder_path = '%s%s_%s_%s-%s_%s-%s%s' % (self.cfg['outputFolder'],
+                                                 dataset_name,
+                                                 self.forecast_type,
+                                                 self.cfg['datasetSettings']['years'][0],
+                                                 self.cfg['datasetSettings']['startDay'],
+                                                 self.cfg['datasetSettings']['years'][-1],
+                                                 self.cfg['datasetSettings']['endDay'], os.sep)
+        folder_path = folder_path.replace('-', '')
         if not os.path.exists(folder_path):
             os.makedirs(folder_path)
 

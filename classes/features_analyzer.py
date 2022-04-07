@@ -46,16 +46,7 @@ class FeaturesAnalyzer:
         """
         Build the datasets according to the instructions in the config file in the datasetSettings section
         """
-
-        if self.cfg["datasetSettings"]["datasetCreator"] == 'customJSON':
-            self.inputs_gatherer.dataframe_builder_custom()
-        elif self.cfg["datasetSettings"]["datasetCreator"] == 'regions':
-            self.inputs_gatherer.dataframe_builder_regions()
-        elif self.cfg["datasetSettings"]["datasetCreator"] == 'CSVreader':
-            pass
-        else:
-            self.logger.error(
-                'Option for dataset_creator is not valid. Available options are "customJSON", "regions" or "CSVreader"')
+        self.inputs_gatherer.dataframe_builder_regions()
 
     def update_datasets(self, name, output_dfs, target_columns):
         """
