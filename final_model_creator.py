@@ -83,13 +83,14 @@ if __name__ == "__main__":
 
 
     start_time = time.time()
+    logger.info("%s seconds elapsed for dataset creation" % (time.time() - start_time))
 
     # Cycle over the regions
     for k_region in cfg['regions'].keys():
-        FA.dataset_reader(target_column=cfg['regions'][k_region]['targetColumn'])
+        for target in cfg['regions'][k_region]['finalModelCreator']['targetColumns']:
+            FA.dataset_reader(k_region, [target])
+            MT.train_final_models(k_region, target)
 
-        MT.train_final_models()
-
-    logger.info("--- %s seconds elapsed for final model creation ---" % (time.time() - start_time))
+    logger.info("%s seconds elapsed for final model creation" % (time.time() - start_time))
 
     logger.info('Ending program')

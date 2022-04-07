@@ -107,7 +107,7 @@ class InputsGatherer:
         # input_signals = list(dict.fromkeys(self.cfg_signals['signals']))
 
         # initialize the Pandas dataframe that will contain the final dataset
-        output_signals = self.cfg['regions'][name]['targetColumn']
+        output_signals = self.cfg['regions'][name]['targetColumns']
 
         dataset = pd.DataFrame(columns=['date'] + input_signals + output_signals)
 

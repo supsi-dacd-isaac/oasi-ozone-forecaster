@@ -60,49 +60,18 @@ class FeaturesAnalyzer:
         output_dfs[name] = {'dataset': pd.read_csv(file_path_df), 'targetColumns': target_columns}
         return output_dfs
 
-    def dataset_reader(self, target_column):
+    def dataset_reader(self, region, target_column):
         """
         Read a previously created or provided csv file. If the dataset is created from a custom JSON or
         from regionals signals, this method has to be preceded by a call of dataset_creator
         """
 
         output_dfs = {}
-
-        if self.cfg["datasetSettings"]["datasetCreator"] == 'customJSON':
-            # Read the dataset in the output folder
-            for dataset in self.cfg['datasetSettings']['customJSONSignals']:
-                name = dataset['filename'].split('.')[0]
-                output_dfs = self.update_datasets(name, output_dfs, target_column)
-
-        elif self.cfg["datasetSettings"]["datasetCreator"] == 'regions':
-            # Read the dataset in the output folder
-            for region in self.cfg['regions']:
-                name = region
-                output_dfs = self.update_datasets(name, output_dfs, target_column)
-
-        # elif self.cfg["datasetSettings"]["datasetCreator"] == 'CSVreader':
-        #     # Copy the provided dataset in the output folder
-        #     for dataset in self.cfg['datasetSettings']['csvFiles']:
-        #         name = dataset['filename'].split('.')[0]
-        #         fp = self.inputs_gatherer.output_folder_creator(name)
-        #         file_name_df = fp + fp.split(os.sep)[1] + '_dataset.csv'
-        #         fn = self.cfg['datasetSettings']["loadCsvFolder"] + dataset['filename']
-        #         if not fn.endswith('.csv'):
-        #             fn = fn + '.csv'
-        #         os.system('cp %s %s' % (fn, file_name_df))
-        #
-        #     # Read the dataset in the output folder
-        #     for dataset in self.cfg['datasetSettings']['csvFiles']:
-        #         name = dataset['filename'].split('.')[0]
-        #         target_columns = dataset['targetColumn']
-        #         output_dfs = self.update_datasets(name, output_dfs, target_columns)
-        else:
-            self.logger.error(
-                'Option for dataset_creator is not valid. Available options are "customJSON", "regions" or "CSVreader"')
+        output_dfs = self.update_datasets(region, output_dfs, target_column)
 
         self.dataFrames = output_dfs
 
-    def dataset_splitter(self, name, data):
+    def dataset_splitter(self, region, data, target_column):
         """
         Split a dataFrame in design matrix X and response vector Y
 
@@ -114,12 +83,11 @@ class FeaturesAnalyzer:
         :rtype: numpy.array, numpy.array, list, pandas.DataFrame, pandas.DataFrame
         """
 
-        self.current_name = name
-        df = data['dataset']
-
-        target_column = data['targetColumns'][0]
-
         # todo CHECK THIS PART (probably useless!)
+
+        # self.current_name = name
+        # df = data['dataset']
+
         # y_data = pd.DataFrame()
         # x_data = pd.DataFrame()
         # df_years = list(dict.fromkeys(df['date'].str[:4]))
@@ -139,7 +107,9 @@ class FeaturesAnalyzer:
 
         # Create the inputs dataset (x_data)
         x_data = data['dataset']
-        x_data = x_data.drop(target_column, axis=1)
+        # Drop from the input dataset all the output variables defined for this region in the dataset
+        for target in self.cfg['regions'][region]['targetColumns']:
+            x_data = x_data.drop(target, axis=1)
 
         # Create the outputs dataset (x_data)
         y_data = pd.DataFrame({'date': data['dataset']['date'], target_column: data['dataset'][target_column]})
@@ -171,7 +141,7 @@ class FeaturesAnalyzer:
 
         return x_data_np, y_data_np, features, x_data, y_data
 
-    def important_features(self, x_data, y_data, features):
+    def important_features(self, region, x_data, y_data, features):
         """
         Calculate the important features given design matrix, target vector and full list of features
 
@@ -187,15 +157,15 @@ class FeaturesAnalyzer:
 
         assert x_data.shape[1] == len(features)
 
-        n_est = self.cfg['featuresAnalyzer']['numberEstimatorsNGB']
-        l_rate = self.cfg['featuresAnalyzer']['learningRate']
-        n_feat = self.cfg['featuresAnalyzer']['numberSelectedFeatures']
-        w1 = self.cfg['featuresAnalyzer']['w1']
-        w2 = self.cfg['featuresAnalyzer']['w2']
-        w3 = self.cfg['featuresAnalyzer']['w3']
-        threshold1 = self.cfg['featuresAnalyzer']['threshold1']  # 240
-        threshold2 = self.cfg['featuresAnalyzer']['threshold2']  # 180
-        threshold3 = self.cfg['featuresAnalyzer']['threshold3']  # 135
+        n_est = self.cfg['regions'][region]['featuresAnalyzer']['numberEstimatorsNGB']
+        l_rate = self.cfg['regions'][region]['featuresAnalyzer']['learningRate']
+        n_feat = self.cfg['regions'][region]['featuresAnalyzer']['numberSelectedFeatures']
+        w1 = self.cfg['regions'][region]['featuresAnalyzer']['w1']
+        w2 = self.cfg['regions'][region]['featuresAnalyzer']['w2']
+        w3 = self.cfg['regions'][region]['featuresAnalyzer']['w3']
+        threshold1 = self.cfg['regions'][region]['featuresAnalyzer']['threshold1']  # 240
+        threshold2 = self.cfg['regions'][region]['featuresAnalyzer']['threshold2']  # 180
+        threshold3 = self.cfg['regions'][region]['featuresAnalyzer']['threshold3']  # 135
 
         NGB_model = NGBRegressor(learning_rate=l_rate, Base=default_tree_learner, Dist=Normal, Score=MLE,
                                  n_estimators=n_est, random_state=500, verbose=False)
@@ -213,7 +183,7 @@ class FeaturesAnalyzer:
 
         return new_features, important_features
 
-    def perform_feature_selection(self, x_data, y_data, features):
+    def perform_feature_selection(self, region, x_data, y_data, features):
         """
         Obtain selected features and also save them in the output folder
 
@@ -226,8 +196,8 @@ class FeaturesAnalyzer:
         :return: list of new features and dataframe with relative importance of each single feature
         :rtype: list, pandas.DataFrame
         """
-        self.logger.info('Launched FS (%s variables to select), it can take a while...' % self.cfg['featuresAnalyzer']['numberSelectedFeatures'])
-        new_features, important_features = self.important_features(x_data, y_data, features[1:])
+        self.logger.info('Launched FS (%s variables to select), it can take a while...' % self.cfg['regions'][region]['featuresAnalyzer']['numberSelectedFeatures'])
+        new_features, important_features = self.important_features(region, x_data, y_data, features[1:])
 
 
         important_nan_features = [f for f in self.nan_features if f in new_features]
@@ -238,11 +208,11 @@ class FeaturesAnalyzer:
             for f in important_nan_features:
                 self.logger.warning(f)
 
-        self.save_csv(important_features, new_features)
+        self.save_csv(region, important_features, new_features)
 
         return new_features, important_features
 
-    def save_csv(self, important_features, new_features):
+    def save_csv(self, region, important_features, new_features):
         """
         Save selected features and their relative importance
 
@@ -252,7 +222,7 @@ class FeaturesAnalyzer:
         :type new_features: list
         """
 
-        fp = self.inputs_gatherer.output_folder_creator(self.current_name)
+        fp = self.inputs_gatherer.output_folder_creator(region)
 
         if not os.path.exists(fp):
             self.logger.error("Saving folder not found")

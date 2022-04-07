@@ -34,7 +34,7 @@ class GridSearcher:
     def get_datasets(self):
         self.dataFrames = self.features_analyzer.dataFrames
 
-    def search_weights(self):
+    def search_weights(self, region, target_column):
         """
         Iterate over the weights as specified in the config file, and for each iteration save the KPIs and all the
         prediction of the algorithm performed on the test set
@@ -45,8 +45,8 @@ class GridSearcher:
         for key, df in self.dataFrames.items():
 
             fp = self.input_gatherer.output_folder_creator(key)
-            fn = fp + fp.split(os.sep)[1] + '_grid_search_KPIs_' + self.cfg['gridSearcher']['typeGridSearch'] + '.csv'
-            fn_pred = fp + fp.split(os.sep)[1] + '_grid_search_all_errors_' + self.cfg['gridSearcher']['typeGridSearch'] + '.csv'
+            fn = fp + fp.split(os.sep)[1] + '_grid_search_KPIs_' + self.cfg['regions'][region]['gridSearcher']['typeGridSearch'] + '.csv'
+            fn_pred = fp + fp.split(os.sep)[1] + '_grid_search_all_errors_' + self.cfg['regions'][region]['gridSearcher']['typeGridSearch'] + '.csv'
 
             # Initialize empty files in folder. Data will be inserted at each iteration step
             pd.DataFrame([],
@@ -55,26 +55,26 @@ class GridSearcher:
             pd.DataFrame([],
                          columns=['w1', 'w2', 'w3', 'Fold', 'Measurements', 'Prediction']).to_csv(fn_pred, mode='w', header=True, index=False)
 
-            l1 = np.arange(self.cfg['gridSearcher']['w1_start'], self.cfg['gridSearcher']['w1_end']+1, self.cfg['gridSearcher']['w1_step'])
-            l2 = np.arange(self.cfg['gridSearcher']['w2_start'], self.cfg['gridSearcher']['w2_end']+1, self.cfg['gridSearcher']['w2_step'])
-            l3 = np.arange(self.cfg['gridSearcher']['w3_start'], self.cfg['gridSearcher']['w3_end']+1, self.cfg['gridSearcher']['w3_step'])
+            l1 = np.arange(self.cfg['regions'][region]['gridSearcher']['w1_start'], self.cfg['regions'][region]['gridSearcher']['w1_end']+1, self.cfg['regions'][region]['gridSearcher']['w1_step'])
+            l2 = np.arange(self.cfg['regions'][region]['gridSearcher']['w2_start'], self.cfg['regions'][region]['gridSearcher']['w2_end']+1, self.cfg['regions'][region]['gridSearcher']['w2_step'])
+            l3 = np.arange(self.cfg['regions'][region]['gridSearcher']['w3_start'], self.cfg['regions'][region]['gridSearcher']['w3_end']+1, self.cfg['regions'][region]['gridSearcher']['w3_step'])
 
-            x_data, y_data, features, df_x, df_y = self.features_analyzer.dataset_splitter(key, df)
+            _, _, features, df_x, df_y = self.features_analyzer.dataset_splitter(key, df, target_column)
 
             for w1 in l1:
                 for w2 in l2:
                     for w3 in l3:
-                        self.cfg['featuresAnalyzer']['w1'] = w1
-                        self.cfg['featuresAnalyzer']['w2'] = w2
-                        self.cfg['featuresAnalyzer']['w3'] = w3
+                        self.cfg['regions'][region]['featuresAnalyzer']['w1'] = w1
+                        self.cfg['regions'][region]['featuresAnalyzer']['w2'] = w2
+                        self.cfg['regions'][region]['featuresAnalyzer']['w3'] = w3
                         self.logger.info('Weights=[%i, %i, %i]' % (w1, w2, w3))
 
-                        if self.cfg['gridSearcher']['typeGridSearch'] == 'multiple':
-                            lcl_KPIs, lcl_prediction = self.model_trainer.training_cross_validated_multiple_FS(features, df_x, df_y)
-                        elif self.cfg['gridSearcher']['typeGridSearch'] == 'single':
-                            lcl_KPIs, lcl_prediction = self.model_trainer.training_cross_validated_single_FS(features, df_x, df_y)
-                        elif self.cfg['gridSearcher']['typeGridSearch'] == 'test':
-                            lcl_KPIs, lcl_prediction = self.model_trainer.get_KPIs_with_random_separation(features, df_x, df_y)
+                        if self.cfg['regions'][region]['gridSearcher']['typeGridSearch'] == 'multiple':
+                            lcl_KPIs, lcl_prediction = self.model_trainer.training_cross_validated_multiple_FS(features, region, df_x, df_y)
+                        elif self.cfg['regions'][region]['gridSearcher']['typeGridSearch'] == 'single':
+                            lcl_KPIs, lcl_prediction = self.model_trainer.training_cross_validated_single_FS(features, region, df_x, df_y)
+                        elif self.cfg['regions'][region]['gridSearcher']['typeGridSearch'] == 'test':
+                            lcl_KPIs, lcl_prediction = self.model_trainer.get_KPIs_with_random_separation(features, region, df_x, df_y)
                         else:
                             self.logger.error(
                                 'Option for grid search type is not valid. Available options are "multiple", "single" or "test"')

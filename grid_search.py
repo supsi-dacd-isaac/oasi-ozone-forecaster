@@ -89,9 +89,9 @@ if __name__ == "__main__":
     # Cycle over the regions
     for k_region in cfg['regions'].keys():
 
-        FA.dataset_reader(target_column=cfg['regions'][k_region]['targetColumn'])
-
-        GS.search_weights()
+        for target in cfg['regions'][k_region]['gridSearcher']['targetColumns']:
+            FA.dataset_reader(k_region, [target])
+            GS.search_weights(k_region, target)
 
     logger.info("--- %s seconds elapsed for grid searching ---" % (time.time() - start_time))
 

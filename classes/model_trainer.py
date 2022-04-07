@@ -64,7 +64,7 @@ class ModelTrainer:
                                      self.get_classes(measured.loc[measured > threshold]))
         return lcl_acc
 
-    def calculate_KPIs(self, prediction, measured):
+    def calculate_KPIs(self, region, prediction, measured):
         """
         For each fold and/or train/test separation, return the KPIs to establish the best weights combination
 
@@ -75,13 +75,12 @@ class ModelTrainer:
         :return: pandas DF with KPIs for each dataset provided
         :rtype: pandas.DataFrame
         """
-
-        threshold1 = self.cfg['featuresAnalyzer']['threshold1']
-        threshold2 = self.cfg['featuresAnalyzer']['threshold2']
-        threshold3 = self.cfg['featuresAnalyzer']['threshold3']
-        w1 = self.cfg['featuresAnalyzer']['w1']
-        w2 = self.cfg['featuresAnalyzer']['w2']
-        w3 = self.cfg['featuresAnalyzer']['w3']
+        threshold1 = self.cfg['regions'][region]['featuresAnalyzer']['threshold1']
+        threshold2 = self.cfg['regions'][region]['featuresAnalyzer']['threshold2']
+        threshold3 = self.cfg['regions'][region]['featuresAnalyzer']['threshold3']
+        w1 = self.cfg['regions'][region]['featuresAnalyzer']['w1']
+        w2 = self.cfg['regions'][region]['featuresAnalyzer']['w2']
+        w3 = self.cfg['regions'][region]['featuresAnalyzer']['w3']
 
         lcl_acc_1 = round(self.get_accuracy_threshold(threshold1, prediction, measured), 3)
         lcl_acc_2 = round(self.get_accuracy_threshold(threshold2, prediction, measured), 3)
@@ -131,7 +130,7 @@ class ModelTrainer:
 
         return prediction, measured
 
-    def fold_training(self, train_index, test_index, X, Y):
+    def fold_training(self, region, train_index, test_index, X, Y):
         """
         For each fold and/or tran/test separation, create the model and calculate KPIs to establish the best weights
         combination
@@ -154,11 +153,11 @@ class ModelTrainer:
         assert len(Xtrain) == len(Ytrain)
         assert len(Xtest) == len(Ytest)
 
-        ngb = self.train_NGB_model(Xtrain, Ytrain)[0]
+        ngb = self.train_NGB_model(region, Xtrain, Ytrain)[0]
 
         return ngb.predict(Xtest)
 
-    def train_NGB_model(self, Xtrain, Ytrain):
+    def train_NGB_model(self, region, Xtrain, Ytrain):
         """
         Return the NGB model trained on the available data
 
@@ -170,14 +169,14 @@ class ModelTrainer:
         :rtype: ngboost.NGBRegressor
         """
 
-        n_est = self.cfg['featuresAnalyzer']['numberEstimatorsNGB']
-        l_rate = self.cfg['featuresAnalyzer']['learningRate']
-        threshold1 = self.cfg['featuresAnalyzer']['threshold1']  # 240
-        threshold2 = self.cfg['featuresAnalyzer']['threshold2']  # 180
-        threshold3 = self.cfg['featuresAnalyzer']['threshold3']  # 135
-        w1 = self.cfg['featuresAnalyzer']['w1']
-        w2 = self.cfg['featuresAnalyzer']['w2']
-        w3 = self.cfg['featuresAnalyzer']['w3']
+        n_est = self.cfg['regions'][region]['featuresAnalyzer']['numberEstimatorsNGB']
+        l_rate = self.cfg['regions'][region]['featuresAnalyzer']['learningRate']
+        threshold1 = self.cfg['regions'][region]['featuresAnalyzer']['threshold1']  # 240
+        threshold2 = self.cfg['regions'][region]['featuresAnalyzer']['threshold2']  # 180
+        threshold3 = self.cfg['regions'][region]['featuresAnalyzer']['threshold3']  # 135
+        w1 = self.cfg['regions'][region]['featuresAnalyzer']['w1']
+        w2 = self.cfg['regions'][region]['featuresAnalyzer']['w2']
+        w3 = self.cfg['regions'][region]['featuresAnalyzer']['w3']
 
         weight = np.array(
             [w1 if x >= threshold1 else w2 if x >= threshold2 else w3 if x >= threshold3 else 0.1 for x in
@@ -223,7 +222,7 @@ class ModelTrainer:
 
         return self.calculate_KPIs(prediction, measured), self.error_data(pred, Y.loc[test_index], 1)
 
-    def error_data(self, pred, Y, fold):
+    def error_data(self, region, pred, Y, fold):
         """
         Create pandas df with weights, fold, measurements and predictions
 
@@ -240,9 +239,9 @@ class ModelTrainer:
         Y = np.array(Y.values)
         assert len(pred) == len(Y)
 
-        w1 = self.cfg['featuresAnalyzer']['w1']
-        w2 = self.cfg['featuresAnalyzer']['w2']
-        w3 = self.cfg['featuresAnalyzer']['w3']
+        w1 = self.cfg['regions'][region]['featuresAnalyzer']['w1']
+        w2 = self.cfg['regions'][region]['featuresAnalyzer']['w2']
+        w3 = self.cfg['regions'][region]['featuresAnalyzer']['w3']
 
         df_pred = pd.DataFrame()
         df_pred['w1'] = [w1] * len(Y)
@@ -300,7 +299,7 @@ class ModelTrainer:
 
         return self.calculate_KPIs(prediction, measured), df_pred
 
-    def training_cross_validated_multiple_FS(self, features, df_x, df_y):
+    def training_cross_validated_multiple_FS(self, features, region, df_x, df_y):
         """
         Calculates the KPIs for a set of weight with multiple Feature selection: First we create the folds of the cross
         validation, then for each fold we do the feature selection and locally calculate the KPIs
@@ -337,21 +336,21 @@ class ModelTrainer:
             self.logger.info('Fold %i/%i: started FS' % (fold, len(cv_folds)))
             lcl_x, lcl_y = df_x.loc[train_index], df_y.loc[train_index]
             x_data, y_data = self.get_numpy_df(lcl_x, lcl_y)
-            selected_features = self.features_analyzer.important_features(x_data, y_data, features[1:])[0]
+            selected_features = self.features_analyzer.important_features(region, x_data, y_data, features[1:])[0]
             X, Y = self.get_reduced_dataset(df_x, df_y, selected_features)
             X, Y = self.remove_date(X, Y)
 
             self.logger.info('Fold %i/%i: started model training' % (fold, len(cv_folds)))
-            pred = self.fold_training(train_index, test_index, X, Y)
+            pred = self.fold_training(region, train_index, test_index, X, Y)
             ngb_prediction[test_index] = pred
-            df_pred = pd.concat([df_pred, self.error_data(pred, Y.loc[test_index], fold)], ignore_index=True, axis=0)
+            df_pred = pd.concat([df_pred, self.error_data(region, pred, Y.loc[test_index], fold)], ignore_index=True, axis=0)
             fold += 1
 
         prediction, measured = self.convert_to_series(ngb_prediction, Y)
 
-        return self.calculate_KPIs(prediction, measured), df_pred
+        return self.calculate_KPIs(region, prediction, measured), df_pred
 
-    def train_final_models(self):
+    def train_final_models(self, k_region, target):
         """
         Calculates the KPIs for a set of weight with multiple Feature selection: First we create the folds of the cross
         validation, then for each fold we do the feature selection and locally calculate the KPIs
@@ -359,29 +358,31 @@ class ModelTrainer:
 
         self.get_datasets()
 
-        for key, df in self.dataFrames.items():
-            fp = self.input_gatherer.output_folder_creator(key)
-            fn = fp + fp.split(os.sep)[1]
+        key = k_region
+        df = self.dataFrames[key]
 
-            _, _, _, df_x, df_y = self.features_analyzer.dataset_splitter(key, df)
+        fp = self.input_gatherer.output_folder_creator(key)
+        fn = fp + fp.split(os.sep)[1]
 
-            selected_features = json.loads(open('%s%s.json' % (fn, self.cfg['finalModelCreator']['signalsFileSuffix'])).read())['signals']
-            X, Y = self.get_reduced_dataset(df_x, df_y, selected_features)
-            X, Y = self.remove_date(X, Y)
+        _, _, _, df_x, df_y = self.features_analyzer.dataset_splitter(key, df, target)
 
-            # Train NGB model
-            self.logger.info('NGBoost model training')
-            ngb, weight = self.train_NGB_model(X, Y)
+        selected_features = json.loads(open('%s%s.json' % (fn, self.cfg['regions'][k_region]['finalModelCreator']['signalsFileSuffix'])).read())['signals']
+        X, Y = self.get_reduced_dataset(df_x, df_y, selected_features)
+        X, Y = self.remove_date(X, Y)
 
-            # Train QRF model
-            self.logger.info('RFQR model training')
-            rfqr = RandomForestQuantileRegressor(n_estimators=1000).fit(X, np.array(Y).ravel())
+        # Train NGB model
+        self.logger.info('NGBoost model training')
+        ngb, weight = self.train_NGB_model(k_region, X, Y)
 
-            n_features = str(len(selected_features))
+        # Train QRF model
+        self.logger.info('RFQR model training')
+        rfqr = RandomForestQuantileRegressor(n_estimators=1000).fit(X, np.array(Y).ravel())
 
-            pickle.dump([ngb, rfqr], open(fn + '_mdl_' + n_features + '.pkl', 'wb'))
-            pickle.dump(selected_features, open(fn + '_feats_' + n_features + '.pkl', 'wb'))
-            json.dump({"signals": list(selected_features)}, open(fn + '_feats_' + n_features + '.json', 'w'))
+        n_features = str(len(selected_features))
+
+        pickle.dump([ngb, rfqr], open(fn + '_mdl_' + n_features + '.pkl', 'wb'))
+        pickle.dump(selected_features, open(fn + '_feats_' + n_features + '.pkl', 'wb'))
+        json.dump({"signals": list(selected_features)}, open(fn + '_feats_' + n_features + '.json', 'w'))
 
     @staticmethod
     def get_reduced_dataset(df_x, df_y, selected_features):
