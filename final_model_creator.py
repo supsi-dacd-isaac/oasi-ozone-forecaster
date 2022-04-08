@@ -90,7 +90,6 @@ if __name__ == "__main__":
     # Cycle over the regions
     for k_region in cfg['regions'].keys():
         for target in cfg['regions'][k_region]['finalModelCreator']['targetColumns']:
-
             tmp_proc = Process(target=mt_process, args=[ig, k_region, target, cfg, logger])
             tmp_proc.start()
             procs.append(tmp_proc)

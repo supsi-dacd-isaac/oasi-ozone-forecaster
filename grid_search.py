@@ -84,17 +84,10 @@ if __name__ == "__main__":
     procs = []
     # Cycle over the regions
     for k_region in cfg['regions'].keys():
-
         for target in cfg['regions'][k_region]['gridSearcher']['targetColumns']:
-            # tmp_proc = Process(target=gs_process, args=[ig, k_region, target, cfg, logger])
-            # tmp_proc.start()
-            # procs.append(tmp_proc)
-            fa = FeaturesAnalyzer(ig, forecast_type, cfg, logger)
-            mt = ModelTrainer(fa, ig, forecast_type, cfg, logger)
-            gs = GridSearcher(fa, ig, mt, forecast_type, cfg, logger)
-
-            fa.dataset_reader(k_region, [target])
-            gs.search_weights(k_region, target)
+            tmp_proc = Process(target=gs_process, args=[ig, k_region, target, cfg, logger])
+            tmp_proc.start()
+            procs.append(tmp_proc)
 
     for proc in procs:
         proc.join()
