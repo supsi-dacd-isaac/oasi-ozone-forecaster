@@ -47,10 +47,6 @@ if __name__ == "__main__":
 
     cfg = json.loads(open(args.c).read())
 
-    # Load the connections parameters and update the config dict with the related values
-    cfg_conns = json.loads(open(cfg['connectionsFile']).read())
-    cfg.update(cfg_conns)
-
     # Define the forecast type
     forecast_type = args.t
 
@@ -68,18 +64,8 @@ if __name__ == "__main__":
 
     logger.info('Starting program')
 
-    logger.info('Connection to InfluxDb server on socket [%s:%s]' % (cfg['influxDB']['host'], cfg['influxDB']['port']))
-    try:
-        influx_client = InfluxDBClient(host=cfg['influxDB']['host'], port=cfg['influxDB']['port'],
-                                       password=cfg['influxDB']['password'], username=cfg['influxDB']['user'],
-                                       database=cfg['influxDB']['database'], ssl=cfg['influxDB']['ssl'])
-    except Exception as e:
-        logger.error('EXCEPTION: %s' % str(e))
-        sys.exit(3)
-    logger.info('Connection successful')
-
-    af = ArtificialFeatures(influx_client, forecast_type, cfg, logger)
-    ig = InputsGatherer(influx_client, forecast_type, cfg, logger, af)
+    af = ArtificialFeatures(None, forecast_type, cfg, logger)
+    ig = InputsGatherer(None, forecast_type, cfg, logger, af)
 
     procs = []
     # Cycle over the regions
