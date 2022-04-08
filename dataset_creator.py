@@ -2,11 +2,8 @@ import json
 import logging
 import os
 import sys
-import shutil
 import argparse
-import time
 
-import numpy as np
 import urllib3
 from influxdb import InfluxDBClient
 
@@ -66,21 +63,11 @@ if __name__ == "__main__":
     logger.info('Connection successful')
 
     # --------------------------------------------------------------------------- #
-    # Functions
-    # --------------------------------------------------------------------------- #
-
-    # --------------------------------------------------------------------------- #
     # Start calculations
     # --------------------------------------------------------------------------- #
 
-    AF = ArtificialFeatures(influx_client, forecast_type, cfg, logger)
-    IG = InputsGatherer(influx_client, forecast_type, cfg, logger, AF)
-    FA = FeaturesAnalyzer(IG, forecast_type, cfg, logger)
-
-    # for dataset in cfg['datasetSettings']['customJSONSignals']:
-    #     assert os.path.isfile(cfg['datasetSettings']['loadSignalsFolder'] + dataset['filename'])
-
-    start_time = time.time()
-    FA.dataset_creator()
-    logger.info("--- %s seconds elapsed for dataset creation ---" % (time.time() - start_time))
+    af = ArtificialFeatures(influx_client, forecast_type, cfg, logger)
+    ig = InputsGatherer(influx_client, forecast_type, cfg, logger, af)
+    fa = FeaturesAnalyzer(ig, forecast_type, cfg, logger)
+    fa.dataset_creator()
     logger.info('Ending program')

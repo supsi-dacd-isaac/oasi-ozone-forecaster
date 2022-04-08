@@ -141,7 +141,7 @@ class FeaturesAnalyzer:
 
         return x_data_np, y_data_np, features, x_data, y_data
 
-    def important_features(self, region, x_data, y_data, features):
+    def important_features(self, region, x_data, y_data, features, weights):
         """
         Calculate the important features given design matrix, target vector and full list of features
 
@@ -160,12 +160,13 @@ class FeaturesAnalyzer:
         n_est = self.cfg['regions'][region]['featuresAnalyzer']['numberEstimatorsNGB']
         l_rate = self.cfg['regions'][region]['featuresAnalyzer']['learningRate']
         n_feat = self.cfg['regions'][region]['featuresAnalyzer']['numberSelectedFeatures']
-        w1 = self.cfg['regions'][region]['featuresAnalyzer']['w1']
-        w2 = self.cfg['regions'][region]['featuresAnalyzer']['w2']
-        w3 = self.cfg['regions'][region]['featuresAnalyzer']['w3']
-        threshold1 = self.cfg['regions'][region]['featuresAnalyzer']['threshold1']  # 240
-        threshold2 = self.cfg['regions'][region]['featuresAnalyzer']['threshold2']  # 180
-        threshold3 = self.cfg['regions'][region]['featuresAnalyzer']['threshold3']  # 135
+        threshold1 = self.cfg['regions'][region]['featuresAnalyzer']['threshold1']
+        threshold2 = self.cfg['regions'][region]['featuresAnalyzer']['threshold2']
+        threshold3 = self.cfg['regions'][region]['featuresAnalyzer']['threshold3']
+
+        w1 = weights['w1']
+        w2 = weights['w2']
+        w3 = weights['w3']
 
         NGB_model = NGBRegressor(learning_rate=l_rate, Base=default_tree_learner, Dist=Normal, Score=MLE,
                                  n_estimators=n_est, random_state=500, verbose=False)
@@ -183,7 +184,7 @@ class FeaturesAnalyzer:
 
         return new_features, important_features
 
-    def perform_feature_selection(self, region, x_data, y_data, features):
+    def perform_feature_selection(self, region, x_data, y_data, features, target_data):
         """
         Obtain selected features and also save them in the output folder
 
@@ -197,7 +198,8 @@ class FeaturesAnalyzer:
         :rtype: list, pandas.DataFrame
         """
         self.logger.info('Launched FS (%s variables to select), it can take a while...' % self.cfg['regions'][region]['featuresAnalyzer']['numberSelectedFeatures'])
-        new_features, important_features = self.important_features(region, x_data, y_data, features[1:])
+        new_features, important_features = self.important_features(region, x_data, y_data, features[1:],
+                                                                   target_data['weights'][self.forecast_type])
 
 
         important_nan_features = [f for f in self.nan_features if f in new_features]
@@ -208,11 +210,11 @@ class FeaturesAnalyzer:
             for f in important_nan_features:
                 self.logger.warning(f)
 
-        self.save_csv(region, important_features, new_features)
+        self.save_csv(region, important_features, target_data['signal'], new_features)
 
         return new_features, important_features
 
-    def save_csv(self, region, important_features, new_features):
+    def save_csv(self, region, important_features, target, new_features):
         """
         Save selected features and their relative importance
 
@@ -229,8 +231,8 @@ class FeaturesAnalyzer:
 
         output_df = pd.DataFrame(range(1, len(important_features) + 1), columns=['rank'])
         output_df = pd.concat([output_df, important_features], axis=1)
-        output_df.to_csv(fp + fp.split(os.sep)[1] + '_features_importance.csv', index=False, header=True)
+        output_df.to_csv(fp + fp.split(os.sep)[1] + '_' + target + '_features_importance.csv', index=False, header=True)
 
-        fn = fp + fp.split(os.sep)[1] + '_signals.json'
+        fn = fp + fp.split(os.sep)[1] + '_' + target + '_signals.json'
         with open(fn, 'w') as f:
             json.dump({"signals": new_features}, f)

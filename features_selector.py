@@ -2,19 +2,29 @@ import json
 import logging
 import os
 import sys
-import shutil
 import argparse
-import time
 
-import numpy as np
 import urllib3
 from influxdb import InfluxDBClient
+from multiprocessing import Process
 
 from classes.artificial_features import ArtificialFeatures
 from classes.features_analyzer import FeaturesAnalyzer
 from classes.inputs_gatherer import InputsGatherer
 
 urllib3.disable_warnings()
+
+
+# --------------------------------------------------------------------------- #
+# Functions
+# --------------------------------------------------------------------------- #
+def fa_process(ig, k_region, target_data, cfg, logger):
+    fa = FeaturesAnalyzer(ig, forecast_type, cfg, logger)
+    fa.dataset_reader(k_region, target_column=[target_data['signal']])
+    for key, df in fa.dataFrames.items():
+        x_data, y_data, features = fa.dataset_splitter(key, df, target_data['signal'])[:3]
+        fa.perform_feature_selection(key, x_data, y_data, features, target_data)
+
 
 if __name__ == "__main__":
     # --------------------------------------------------------------------------- #
@@ -65,32 +75,17 @@ if __name__ == "__main__":
         sys.exit(3)
     logger.info('Connection successful')
 
-    # --------------------------------------------------------------------------- #
-    # Functions
-    # --------------------------------------------------------------------------- #
+    af = ArtificialFeatures(influx_client, forecast_type, cfg, logger)
+    ig = InputsGatherer(influx_client, forecast_type, cfg, logger, af)
 
-    # --------------------------------------------------------------------------- #
-    # Start calculations
-    # --------------------------------------------------------------------------- #
-
-    AF = ArtificialFeatures(influx_client, forecast_type, cfg, logger)
-    IG = InputsGatherer(influx_client, forecast_type, cfg, logger, AF)
-    FA = FeaturesAnalyzer(IG, forecast_type, cfg, logger)
-
-    start_time = time.time()
-    logger.info("%s seconds elapsed for dataset creation" % (time.time() - start_time))
-
+    procs = []
     for k_region in cfg['regions'].keys():
-        for target in cfg['regions'][k_region]['featuresAnalyzer']['targetColumns']:
-            start_time = time.time()
+        for target_data in cfg['regions'][k_region]['featuresAnalyzer']['targetColumns']:
+            tmp_proc = Process(target=fa_process, args=[ig, k_region, target_data, cfg, logger])
+            tmp_proc.start()
+            procs.append(tmp_proc)
 
-            FA.dataset_reader(k_region, target_column=[target])
-            for key, df in FA.dataFrames.items():
-                x_data, y_data, features = FA.dataset_splitter(key, df, target)[:3]
-
-                new_features_custom, importance_custom = FA.perform_feature_selection(key, x_data, y_data, features)
-                logger.info(importance_custom)
-
-        logger.info("%s seconds elapsed for feature selection" % (time.time() - start_time))
+    for proc in procs:
+        proc.join()
 
     logger.info('Ending program')

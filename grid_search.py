@@ -2,11 +2,9 @@ import json
 import logging
 import os
 import sys
-import shutil
 import argparse
-import time
 
-import numpy as np
+from multiprocessing import Process
 import urllib3
 from influxdb import InfluxDBClient
 
@@ -17,6 +15,19 @@ from classes.model_trainer import ModelTrainer
 from classes.grid_searcher import GridSearcher
 
 urllib3.disable_warnings()
+
+
+# --------------------------------------------------------------------------- #
+# Functions
+# --------------------------------------------------------------------------- #
+def gs_process(ig, k_region, target, cfg, logger):
+    fa = FeaturesAnalyzer(ig, forecast_type, cfg, logger)
+    mt = ModelTrainer(fa, ig, forecast_type, cfg, logger)
+    gs = GridSearcher(fa, ig, mt, forecast_type, cfg, logger)
+
+    fa.dataset_reader(k_region, [target])
+    gs.search_weights(k_region, target)
+
 
 if __name__ == "__main__":
     # --------------------------------------------------------------------------- #
@@ -67,32 +78,25 @@ if __name__ == "__main__":
         sys.exit(3)
     logger.info('Connection successful')
 
-    # --------------------------------------------------------------------------- #
-    # Functions
-    # --------------------------------------------------------------------------- #
+    af = ArtificialFeatures(influx_client, forecast_type, cfg, logger)
+    ig = InputsGatherer(influx_client, forecast_type, cfg, logger, af)
 
-    # --------------------------------------------------------------------------- #
-    # Start calculations
-    # --------------------------------------------------------------------------- #
-
-    AF = ArtificialFeatures(influx_client, forecast_type, cfg, logger)
-    IG = InputsGatherer(influx_client, forecast_type, cfg, logger, AF)
-    FA = FeaturesAnalyzer(IG, forecast_type, cfg, logger)
-    MT = ModelTrainer(FA, IG, forecast_type, cfg, logger)
-    GS = GridSearcher(FA, IG, MT, forecast_type, cfg, logger)
-
-    # for dataset in cfg['datasetSettings']['customJSONSignals']:
-    #     assert os.path.isfile(cfg['datasetSettings']['loadSignalsFolder'] + dataset['filename'])
-
-    start_time = time.time()
-
+    procs = []
     # Cycle over the regions
     for k_region in cfg['regions'].keys():
 
         for target in cfg['regions'][k_region]['gridSearcher']['targetColumns']:
-            FA.dataset_reader(k_region, [target])
-            GS.search_weights(k_region, target)
+            # tmp_proc = Process(target=gs_process, args=[ig, k_region, target, cfg, logger])
+            # tmp_proc.start()
+            # procs.append(tmp_proc)
+            fa = FeaturesAnalyzer(ig, forecast_type, cfg, logger)
+            mt = ModelTrainer(fa, ig, forecast_type, cfg, logger)
+            gs = GridSearcher(fa, ig, mt, forecast_type, cfg, logger)
 
-    logger.info("--- %s seconds elapsed for grid searching ---" % (time.time() - start_time))
+            fa.dataset_reader(k_region, [target])
+            gs.search_weights(k_region, target)
+
+    for proc in procs:
+        proc.join()
 
     logger.info('Ending program')
