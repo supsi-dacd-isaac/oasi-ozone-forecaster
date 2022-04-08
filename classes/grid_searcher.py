@@ -71,7 +71,8 @@ class GridSearcher:
             for w1 in l1:
                 for w2 in l2:
                     for w3 in l3:
-                        self.logger.info('Weights=[%i, %i, %i]' % (w1, w2, w3))
+                        self.logger.info('Region: %s, target: %s -> weights = [%i, %i, %i]' % (region, target_column,
+                                                                                             w1, w2, w3))
                         weights = {'w1': w1, 'w2': w2, 'w3': w3}
 
                         lcl_kpis, lcl_prediction = self.model_trainer.training_cross_validated_fs(features,
