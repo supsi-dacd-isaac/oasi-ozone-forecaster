@@ -396,7 +396,10 @@ class InputsGatherer:
         # If I have an output signal I have to get data related to future days
         if flag_output_signal is True:
             # OUTPUT: D --> D+x
-            day_date = dt + timedelta(int(day[-1]))
+            if self.forecast_type == 'EVE':
+                day_date = dt + timedelta(int(day[-1])+1)
+            else:
+                day_date = dt + timedelta(int(day[-1]))
         else:
             # INPUT:  D-x <-- D
             day_date = dt - timedelta(int(day[-1]))

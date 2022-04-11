@@ -1,5 +1,5 @@
 .idea
-venv
+venv*
 data
 tmp
 archive
