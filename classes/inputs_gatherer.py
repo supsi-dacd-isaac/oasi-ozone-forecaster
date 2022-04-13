@@ -256,6 +256,8 @@ class InputsGatherer:
                         self.do_chunk_query(signal, measurement)
                     else:
                         self.do_daily_query(signal, measurement)
+                elif '__db' in signal:
+                    self.do_daily_query(signal, measurement)
                 else:
                     # specific period query
                     if 'h__' in signal:
@@ -402,7 +404,10 @@ class InputsGatherer:
                 day_date = dt + timedelta(int(day[-1]))
         else:
             # INPUT:  D-x <-- D
-            day_date = dt - timedelta(int(day[-1]))
+            if self.forecast_type == 'EVE':
+                day_date = dt - timedelta(int(day[-1])-1)
+            else:
+                day_date = dt - timedelta(int(day[-1]))
 
         query = 'SELECT mean(value) FROM %s WHERE location=\'%s\' AND ' \
                 'signal=\'%s\' AND time>=\'%s\' AND time<=\'%s\' ' \
@@ -695,9 +700,14 @@ class InputsGatherer:
     #             signals.append(measurementStation + '__YO3_index__d1')
     #     return signals
 
-    def past_days_means_measured_signals(self, measurementStation, measuredSignal):
+    def past_days_means_measured_signals(self, measurementStation, measuredSignal, cases=False):
         signals = []
-        for i in ['24h', '48h', '72h']:
+        if cases is not False:
+            choices = cases
+        else:
+            choices = ['24h', '48h', '72h']
+
+        for i in choices:
             signals.append(measurementStation + '__' + measuredSignal + '__' + str(i) + '__mean')
         return signals
 
@@ -733,10 +743,13 @@ class InputsGatherer:
                     signal_list.extend(self.hourly_measured_signals(measurementStation, measuredSignal))
 
                 else:
-                    if self.cfg["measuredSignalsStations"][measurementStation][measuredSignal]['aggregations']['daily'] is True:
+                    if self.cfg["measuredSignalsStations"][measurementStation][measuredSignal]['aggregations']['daily'] == 'all':
                         signal_list.extend(self.past_days_means_measured_signals(measurementStation, measuredSignal))
+                    elif type(self.cfg["measuredSignalsStations"][measurementStation][measuredSignal]['aggregations']['daily']) is list:
+                        signal_list.extend(self.past_days_means_measured_signals(measurementStation, measuredSignal,
+                                                                                 cases=self.cfg["measuredSignalsStations"][measurementStation][measuredSignal]['aggregations']['daily']))
 
-                    if self.cfg["measuredSignalsStations"][measurementStation][measuredSignal]['aggregations']['hourly'] is True:
+                    if self.cfg["measuredSignalsStations"][measurementStation][measuredSignal]['aggregations']['hourly'] == 'all':
                         signal_list.extend(self.hourly_measured_signals(measurementStation, measuredSignal))
 
         for forecastStation in self.cfg["regions"][region]["ForecastStations"]:
@@ -744,7 +757,7 @@ class InputsGatherer:
             for forecastedSignal in self.cfg["forecastedSignalsStations"][forecastStation]:
                 signal_list.extend(self.hourly_forecasted_signals(forecastStation, forecastedSignal))
                 signal_list.extend(self.chunks_forecasted_signals(forecastStation, forecastedSignal))
-        signal_list.extend(self.cfg['globalSignals'])
+        # signal_list.extend(self.cfg['globalSignals'])
 
         return signal_list
 
