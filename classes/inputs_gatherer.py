@@ -726,9 +726,18 @@ class InputsGatherer:
 
         for measurementStation in self.cfg["regions"][region]["MeasureStations"]:
             # signal_list.extend(self.artificial_features_measured_signals(measurementStation))
-            for measuredSignal in self.cfg["measuredSignalsStations"][measurementStation]:
-                signal_list.extend(self.past_days_means_measured_signals(measurementStation, measuredSignal))
-                signal_list.extend(self.hourly_measured_signals(measurementStation, measuredSignal))
+            for measuredSignal in self.cfg["measuredSignalsStations"][measurementStation].keys():
+
+                if self.cfg["measuredSignalsStations"][measurementStation][measuredSignal] == 'all':
+                    signal_list.extend(self.past_days_means_measured_signals(measurementStation, measuredSignal))
+                    signal_list.extend(self.hourly_measured_signals(measurementStation, measuredSignal))
+
+                else:
+                    if self.cfg["measuredSignalsStations"][measurementStation][measuredSignal]['aggregations']['daily'] is True:
+                        signal_list.extend(self.past_days_means_measured_signals(measurementStation, measuredSignal))
+
+                    if self.cfg["measuredSignalsStations"][measurementStation][measuredSignal]['aggregations']['hourly'] is True:
+                        signal_list.extend(self.hourly_measured_signals(measurementStation, measuredSignal))
 
         for forecastStation in self.cfg["regions"][region]["ForecastStations"]:
             signal_list.extend(self.artificial_features_forecasted_signals(forecastStation))
