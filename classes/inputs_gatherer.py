@@ -757,7 +757,7 @@ class InputsGatherer:
             for forecastedSignal in self.cfg["forecastedSignalsStations"][forecastStation]:
                 signal_list.extend(self.hourly_forecasted_signals(forecastStation, forecastedSignal))
                 signal_list.extend(self.chunks_forecasted_signals(forecastStation, forecastedSignal))
-        # signal_list.extend(self.cfg['globalSignals'])
+        signal_list.extend(self.cfg['globalSignals'])
 
         return signal_list
 
