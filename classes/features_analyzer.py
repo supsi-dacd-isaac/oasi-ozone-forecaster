@@ -197,7 +197,8 @@ class FeaturesAnalyzer:
         :return: list of new features and dataframe with relative importance of each single feature
         :rtype: list, pandas.DataFrame
         """
-        self.logger.info('Launched FS (%s variables to select), it can take a while...' % self.cfg['regions'][region]['featuresAnalyzer']['numberSelectedFeatures'])
+        self.logger.info('Launched FS (%s variables to select, weights=[%s]), it can take a while...' % (self.cfg['regions'][region]['featuresAnalyzer']['numberSelectedFeatures'],
+                                                                                                         target_data['weights'][self.forecast_type]))
         new_features, important_features = self.important_features(region, x_data, y_data, features[1:],
                                                                    target_data['weights'][self.forecast_type])
 

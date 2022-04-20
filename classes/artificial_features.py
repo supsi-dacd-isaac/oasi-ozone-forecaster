@@ -264,8 +264,8 @@ class ArtificialFeatures:
         else:
             steps_G = steps_T = self.create_forecast_chunk_steps_string(10, 33)
 
-        Q = self.get_query_value_forecast(measurement_MS, 'LUG__GLOB__', steps_G, func)
-        T_ = self.get_query_value_forecast(measurement_MS, 'LUG__T_2M__', steps_T, func)
+        Q = self.get_query_value_forecast(measurement_MS, '%s__GLOB__' % self.cfg['VOC']['location'], steps_G, func)
+        T_ = self.get_query_value_forecast(measurement_MS, '%s__T_2M__' % self.cfg['VOC']['location'], steps_T, func)
 
         # Transform into the appropriate unit of measurement
         if (Q is not None) and (T_ is not None):
