@@ -35,7 +35,6 @@ class ArtificialFeatures:
         self.day_to_predict = None
         self.cfg_signals = None
         self.input_df = None
-        self.VOC_forecasted_status = None
 
     def get_query_value_global(self, signal):
         """
@@ -168,14 +167,15 @@ class ArtificialFeatures:
             if signal == 'NOx_Totale':
                 val = self.get_query_value_global('Total_NOx')
 
-            if signal == 'VOC_Totale':
-                VOC_without_woods, VOC_woods, VOC_woods_corrected = self.do_VOC_query()
-                if self.cfg['VOC']['useCorrection'] and self.cfg['VOC'][
-                    'emissionType'] == 'forecasted' and self.VOC_forecasted_status:
-                    self.logger.info('Correcting forecasted VOC woods emissions')
-                    val = VOC_without_woods + VOC_woods_corrected
-                else:
-                    val = VOC_without_woods + VOC_woods
+            # This signal is not handled as global anymore
+            # if signal == 'VOC_Totale':
+            #     VOC_without_woods, VOC_woods, VOC_woods_corrected = self.do_VOC_query()
+            #     if self.cfg['VOC']['useCorrection'] and self.cfg['VOC'][
+            #         'emissionType'] == 'forecasted' and self.VOC_forecasted_status:
+            #         self.logger.info('Correcting forecasted VOC woods emissions')
+            #         val = VOC_without_woods + VOC_woods_corrected
+            #     else:
+            #         val = VOC_without_woods + VOC_woods
 
         else:
             tmp = signal.split('__')
@@ -215,7 +215,7 @@ class ArtificialFeatures:
 
         return val
 
-    def calculate_wood_emission(self, emissionType):
+    def calculate_wood_emission(self, region):
         """
         Calculate the VOC emissions from woods, using either forecasted or measured data. Forecasted data are not always
         available, so sometimes we're forced to use measured values and infer the future.
@@ -227,35 +227,30 @@ class ArtificialFeatures:
         """
 
         # Load necessary constants
-        T_s = self.cfg['VOC']['T_s']
-        R = self.cfg['VOC']['R']
+        temp_s = self.cfg['VOC']['T_s']
+        r = self.cfg['VOC']['R']
         alpha = self.cfg['VOC']['alpha']
-        C_L1 = self.cfg['VOC']['C_L1']
-        C_T1 = self.cfg['VOC']['C_T1']
-        C_T2 = self.cfg['VOC']['C_T2']
+        c_l1 = self.cfg['VOC']['C_L1']
+        c_temp1 = self.cfg['VOC']['C_T1']
+        c_temp2 = self.cfg['VOC']['C_T2']
         T_m = self.cfg['VOC']['T_m']
         # C_T3 = self.cfg['VOC']['C_T3']
 
-        if emissionType == 'forecasted':
-            [Q, T] = self.get_Q_T_forecasted()
-        elif emissionType == 'measured':
-            [Q, T] = self.get_Q_T_measured()
-        else:
-            self.logger.error('Unrecognized VOC woods type of data to use')
-            [Q, T] = [None, None]
+        q, temp = self.get_Q_T_forecasted(region)
+
+        # if emissionType == 'forecasted':
+        #
+        # elif emissionType == 'measured':
+        #     [Q, T] = self.get_Q_T_measured()
+        # else:
+        #     self.logger.error('Unrecognized VOC woods type of data to use')
+        #     [Q, T] = [None, None]
 
         # Calculate woods emission
-        gamma = (alpha * C_L1 * Q / np.sqrt(1 + alpha * alpha * Q * Q)) * (
-            np.exp(C_T1 * (T - T_s) / (R * T_s * T))) / (1 + np.exp(C_T2 * (T - T_m) / (R * T_s * T)))
-        emission = self.cfg['VOC']['KG_per_gamma'] * gamma
-        return emission
+        gamma = (alpha * c_l1 * q / np.sqrt(1 + np.power(alpha, 2) * np.power(q, 2))) * (np.exp(c_temp1 * (temp - temp_s) / (r * temp_s * temp))) / (1 + np.exp(c_temp2 * (temp - T_m) / (r * temp_s * temp)))
+        return self.cfg['VOC']['KG_per_gamma'] * gamma
 
-    def get_Q_T_forecasted(self):
-
-        self.VOC_forecasted_status = True
-
-        measurement_MS = self.cfg['influxDB']['measurementInputsForecasts']
-        func = 'mean'
+    def get_Q_T_forecasted(self, region):
 
         # Get 24 hours of forecasts
         if self.forecast_type == 'MOR':
@@ -264,57 +259,54 @@ class ArtificialFeatures:
         else:
             steps_G = steps_T = self.create_forecast_chunk_steps_string(10, 33)
 
-        Q = self.get_query_value_forecast(measurement_MS, '%s__GLOB__' % self.cfg['VOC']['location'], steps_G, func)
-        T_ = self.get_query_value_forecast(measurement_MS, '%s__T_2M__' % self.cfg['VOC']['location'], steps_T, func)
+        q = self.get_query_value_forecast(self.cfg['influxDB']['measurementInputsForecasts'],
+                                          '%s__GLOB__' % self.cfg['regions'][region]['VOCStation'], steps_G, 'mean')
+        temp = self.get_query_value_forecast(self.cfg['influxDB']['measurementInputsForecasts'],
+                                             '%s__T_2M__' % self.cfg['regions'][region]['VOCStation'], steps_T, 'mean')
 
         # Transform into the appropriate unit of measurement
-        if (Q is not None) and (T_ is not None):
-            Q_ = Q * self.cfg['VOC']['GLOB_to_PAR']
-        else:
-            # Forecasts not available. Use measurements instead
-            self.logger.warning('Forecasted data for calculating VOC not found. Using measured data instead.')
-            Q_, T_ = self.get_Q_T_measured()
+        q = q * self.cfg['VOC']['GLOB_to_PAR']
 
-        return [Q_, T_]
+        return q, temp
 
-    def get_Q_T_measured(self):
+    # def get_Q_T_measured(self):
+    #
+    #     self.VOC_forecasted_status = False
+    #
+    #     dt = self.set_forecast_day()
+    #     func = 'mean'
+    #     measurement = self.cfg['influxDB']['measurementInputsMeasurements']
+    #     location = 'MS-LUG'
+    #
+    #     start_dt = '%sT23:05:00Z' % (dt - timedelta(days=1)).strftime('%Y-%m-%d')
+    #     end_dt = '%sT23:05:00Z' % dt.strftime('%Y-%m-%d')
+    #
+    #     Q = self.get_query_value_measure(measurement, location + '__Gl__', start_dt, end_dt, func)
+    #     T = self.get_query_value_measure(measurement, location + '__T__', start_dt, end_dt, func)
+    #
+    #     # Transform into the appropriate unit of measurement
+    #     Q_ = Q * self.cfg['VOC']['GLOB_to_PAR']
+    #     T_ = T + 273.1
+    #
+    #     return [Q_, T_]
 
-        self.VOC_forecasted_status = False
-
-        dt = self.set_forecast_day()
-        func = 'mean'
-        measurement = self.cfg['influxDB']['measurementInputsMeasurements']
-        location = 'MS-LUG'
-
-        start_dt = '%sT23:05:00Z' % (dt - timedelta(days=1)).strftime('%Y-%m-%d')
-        end_dt = '%sT23:05:00Z' % dt.strftime('%Y-%m-%d')
-
-        Q = self.get_query_value_measure(measurement, location + '__Gl__', start_dt, end_dt, func)
-        T = self.get_query_value_measure(measurement, location + '__T__', start_dt, end_dt, func)
-
-        # Transform into the appropriate unit of measurement
-        Q_ = Q * self.cfg['VOC']['GLOB_to_PAR']
-        T_ = T + 273.1
-
-        return [Q_, T_]
-
-    def do_VOC_query(self):
+    # This functions should not be used anymore
+    def do_VOC_query(self, region):
         """
         Get values with and without woods emission
         """
+        voc_other = self.get_query_value_global('Total_VOC')
+        voc_woods_raw, voc_woods_corrected = self.calc_voc_woods(region)
 
-        # Total_NOx is easy, just query the previously calculated value in the DB. However, for Total_VOC it is
-        # necessary to query the existing value, which combines traffic (roads, highways, planes), combustion,
-        # agriculture and industry, then add the daily calculated woods emission with the iso gamma formula.
-        # Note that the VOC signal stored in the DB does NOT account for wood emission!
+        return voc_other, voc_woods_raw, voc_woods_corrected
 
-        VOC_without_woods = self.get_query_value_global('Total_VOC')
-        VOC_woods = self.calculate_wood_emission(self.cfg['VOC']['emissionType'])
-
-        VOC_woods_corrected = self.cfg['VOC']['correction']['slope'] * VOC_woods + self.cfg['VOC']['correction'][
-            'intercept']
-
-        return VOC_without_woods, VOC_woods, VOC_woods_corrected
+    def calc_voc_woods(self, region):
+        """
+        Get values with and without woods emission
+        """
+        voc_woods_raw = self.calculate_wood_emission(region)
+        voc_woods_corrected = self.cfg['VOC']['correction']['slope'] * voc_woods_raw + self.cfg['VOC']['correction']['intercept']
+        return voc_woods_raw, voc_woods_corrected
 
     def do_mor_eve_query(self, signal_data, measurement):
         # mean_mor: Mean of values from 03:00 UTC to 10:00 UTC
