@@ -10,6 +10,8 @@ from ngboost.scores import MLE
 from skgarden import RandomForestQuantileRegressor
 from sklearn.metrics import mean_squared_error, mean_absolute_error, accuracy_score, confusion_matrix
 
+from classes.qrfr import QuantileRandomForestRegressor as qfrfQuantileRandomForestRegressor
+
 class ModelTrainer:
     """
     This class will perform training on datasets. This could happen during the grid search for the best combination
@@ -231,6 +233,13 @@ class ModelTrainer:
         :return: pandas DF with KPIs for each dataset provided
         :rtype: pandas.DataFrame
         """
+        self.logger.info('Region: %s, target: %s, weights: %s -> Started FS on whole dataset' % (region, target_column,
+                                                                                                 weights))
+        x_data, y_data = self.get_numpy_df(df_x, df_y)
+        selected_features = self.features_analyzer.important_features(region, x_data, y_data, features[1:], weights)[0]
+        X, Y = self.get_reduced_dataset(df_x, df_y, selected_features)
+        self.logger.info('Region: %s, target: %s, weights: %s -> Ended FS on whole dataset' % (region, target_column,
+                                                                                               weights))
 
         cv_folds = []
         years = sorted(list(set(df_x.date.str[0:4])))
@@ -246,17 +255,18 @@ class ModelTrainer:
 
         assert (sum([len(fold[1]) for fold in cv_folds]) == len(df_x))
 
+        X, Y = self.remove_date(X, Y)
         ngb_prediction = np.empty(len(df_y))
         df_pred = pd.DataFrame(columns=['w1', 'w2', 'w3', 'Fold', 'Measurements', 'Prediction'])
-        fold = 1
 
+        fold = 1
         for (train_index, test_index) in cv_folds:
-            self.logger.info('Region: %s, target: %s, weights: %s -> Started FS fold %i/%i' % (region, target_column, weights, fold, len(cv_folds)))
-            lcl_x, lcl_y = df_x.loc[train_index], df_y.loc[train_index]
-            x_data, y_data = self.get_numpy_df(lcl_x, lcl_y)
-            selected_features = self.features_analyzer.important_features(region, x_data, y_data, features[1:], weights)[0]
-            X, Y = self.get_reduced_dataset(df_x, df_y, selected_features)
-            X, Y = self.remove_date(X, Y)
+            # self.logger.info('Region: %s, target: %s, weights: %s -> Started FS fold %i/%i' % (region, target_column, weights, fold, len(cv_folds)))
+            # lcl_x, lcl_y = df_x.loc[train_index], df_y.loc[train_index]
+            # x_data, y_data = self.get_numpy_df(lcl_x, lcl_y)
+            # selected_features = self.features_analyzer.important_features(region, x_data, y_data, features[1:], weights)[0]
+            # X, Y = self.get_reduced_dataset(df_x, df_y, selected_features)
+            # X, Y = self.remove_date(X, Y)
 
             self.logger.info('Region: %s, target: %s, weights: %s -> Started model training fold %i/%i' % (region, target_column, weights, fold, len(cv_folds)))
             pred = self.fold_training(region, train_index, test_index, X, Y, weights)
@@ -289,12 +299,20 @@ class ModelTrainer:
         X, Y = self.remove_date(X, Y)
 
         # Train NGB model
-        self.logger.info('NGBoost model training')
+        self.logger.info('NGBoost model training start')
         ngb, weight = self.train_NGB_model(k_region, X, Y, target_data['weights'][self.forecast_type])
+        self.logger.info('NGBoost model training end')
 
         # Train QRF model
-        self.logger.info('RFQR model training')
+        self.logger.info('RFQR model training start')
         rfqr = RandomForestQuantileRegressor(n_estimators=1000).fit(X, np.array(Y).ravel())
+        self.logger.info('RFQR model training end')
+
+        # Todo this part has to be tested
+        self.logger.info('pyquantrf RFQR model training start')
+        rfqr_w = qfrfQuantileRandomForestRegressor(nthreads=4, n_estimators=1000, min_samples_leaf=10)
+        rfqr_w.fit(X, np.array(Y).ravel(), sample_weight=weight)
+        self.logger.info('pyquantrf RFQR model training end')
 
         n_features = str(len(selected_features))
 
