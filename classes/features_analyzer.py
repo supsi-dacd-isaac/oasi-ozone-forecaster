@@ -58,6 +58,20 @@ class FeaturesAnalyzer:
         if not os.path.isfile(file_path_df):
             self.logger.error('File %s does not exist' % file_path_df)
         output_dfs[name] = {'dataset': pd.read_csv(file_path_df), 'targetColumns': target_columns}
+
+        # Select only configured input signals
+        input_signals = self.inputs_gatherer.generate_input_signals_codes(name)
+        candidate_signals = list(output_dfs[name]['dataset'].columns)
+        # Remove date and output from candidates list
+        candidate_signals.remove('date')
+        for target_column in self.cfg['regions'][name]['targetColumns']:
+            candidate_signals.remove(target_column)
+
+        for candidate_signal in candidate_signals:
+            if candidate_signal not in input_signals:
+                # This signal has not to be used in the grid search
+                output_dfs[name]['dataset'] = output_dfs[name]['dataset'].drop(candidate_signal, axis=1)
+
         return output_dfs
 
     def dataset_reader(self, region, target_column):
@@ -82,9 +96,7 @@ class FeaturesAnalyzer:
         :return: split datasets in multiple formats
         :rtype: numpy.array, numpy.array, list, pandas.DataFrame, pandas.DataFrame
         """
-
         # todo CHECK THIS PART (probably useless!)
-
         # self.current_name = name
         # df = data['dataset']
 
