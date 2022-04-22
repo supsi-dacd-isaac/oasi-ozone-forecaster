@@ -180,7 +180,7 @@ class ModelTrainer:
         w3 = weights['w3']
 
         weight = np.array(
-            [w1 if x >= threshold1 else w2 if x >= threshold2 else w3 if x >= threshold3 else 0.1 for x in
+            [w1 if x >= threshold1 else w2 if x >= threshold2 else w3 if x >= threshold3 else 1.0 for x in
              np.array(Ytrain)],
             dtype='float64')
 
