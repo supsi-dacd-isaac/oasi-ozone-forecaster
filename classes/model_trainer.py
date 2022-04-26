@@ -219,6 +219,24 @@ class ModelTrainer:
 
         return df_pred
 
+    def get_weights_folder_results(self, region, target_column, weights):
+        root_output_folder_path = self.input_gatherer.output_folder_creator(region)
+        str_ws = ''
+        for kw in weights.keys():
+            str_ws = '%s%s-%s_' % (str_ws, kw, weights[kw])
+        str_ws = str_ws[0:-1]
+
+        if not os.path.exists(root_output_folder_path + 'gs'):
+            os.mkdir(root_output_folder_path + 'gs')
+
+        if not os.path.exists(root_output_folder_path + 'gs' + os.sep + target_column):
+            os.mkdir(root_output_folder_path + 'gs' + os.sep + target_column)
+
+        if not os.path.exists(root_output_folder_path + 'gs' + os.sep + target_column + os.sep + str_ws):
+            os.mkdir(root_output_folder_path + 'gs' + os.sep + target_column + os.sep + str_ws)
+
+        return '%s%s%s%s%s%s%s' % (root_output_folder_path, 'gs', os.sep, target_column, os.sep, str_ws, os.sep)
+
     def training_cross_validated_fs(self, features, region, target_column, df_x, df_y, weights):
         """
         Calculates the KPIs for a set of weight with multiple Feature selection: First we create the folds of the cross
@@ -236,10 +254,13 @@ class ModelTrainer:
         self.logger.info('Region: %s, target: %s, weights: %s -> Started FS on whole dataset' % (region, target_column,
                                                                                                  weights))
         x_data, y_data = self.get_numpy_df(df_x, df_y)
-        selected_features = self.features_analyzer.important_features(region, x_data, y_data, features[1:], weights)[0]
+        selected_features, important_features = self.features_analyzer.important_features(region, x_data, y_data, features[1:], weights)
         X, Y = self.get_reduced_dataset(df_x, df_y, selected_features)
         self.logger.info('Region: %s, target: %s, weights: %s -> Ended FS on whole dataset' % (region, target_column,
                                                                                                weights))
+
+        output_folder = self.get_weights_folder_results(region, target_column, weights)
+        self.features_analyzer.save_csv(important_features, target_column, selected_features, output_folder)
 
         cv_folds = []
         years = sorted(list(set(df_x.date.str[0:4])))

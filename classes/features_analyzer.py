@@ -223,11 +223,12 @@ class FeaturesAnalyzer:
             for f in important_nan_features:
                 self.logger.warning(f)
 
-        self.save_csv(region, important_features, target_data['signal'], new_features)
+        output_folder_path = self.inputs_gatherer.output_folder_creator(region)
+        self.save_csv(important_features, target_data['signal'], new_features, output_folder_path)
 
         return new_features, important_features
 
-    def save_csv(self, region, important_features, target, new_features):
+    def save_csv(self, important_features, target, new_features, output_folder_path):
         """
         Save selected features and their relative importance
 
@@ -236,8 +237,7 @@ class FeaturesAnalyzer:
         :param new_features: selected features
         :type new_features: list
         """
-
-        fp = self.inputs_gatherer.output_folder_creator(region)
+        fp = output_folder_path
 
         if not os.path.exists(fp):
             self.logger.error("Saving folder not found")
