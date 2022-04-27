@@ -12,7 +12,7 @@ class Forecaster:
     Class handling the forecasting of a couple location_case (e.g. BIO_MOR)
     """
 
-    def __init__(self, influxdb_client, forecast_type, location, model_name, cfg, logger):
+    def __init__(self, influxdb_client, forecast_type, region, output_signal, model_name, cfg, logger):
         """
         Constructor
         :param influxdb_client: InfluxDB client
@@ -31,7 +31,8 @@ class Forecaster:
         # set the variables
         self.influxdb_client = influxdb_client
         self.forecast_type = forecast_type
-        self.location = location
+        self.region = region
+        self.output_signal = output_signal
         self.model_name = model_name
         self.cfg = cfg
         self.logger = logger
@@ -41,11 +42,11 @@ class Forecaster:
         self.available_features = 0
         self.unavailable_features = []
         self.unsurrogable_features = []
-        self.predicted_value = 0
-        self.perc_available_features = 0
         self.do_prediction = True
-        self.probs_over_limits = 0
         self.flag_best = 'false'
+        self.ngb_output = 0
+        self.qrf_output = 0
+        self.perc_available_features = 0
 
     def build_model_input_dataset(self, inputs_gatherer, input_cfg_file):
         """
@@ -58,14 +59,14 @@ class Forecaster:
         for signal in self.cfg_signals['signals']:
             # Take into account only the inputs needed by the model
             if signal in self.cfg_signals['signals']:
-                input_data_values.append(inputs_gatherer.input_data[signal])
+                input_data_values.append(inputs_gatherer.io_data[signal])
 
         # self.logger.info('Create the input dataframe')
         self.input_df = pd.DataFrame([input_data_values], columns=self.cfg_signals['signals'],
                                      index=[pd.DatetimeIndex([self.day_to_predict*1e9])])
 
         # Check inputs effective availability
-        self.check_inputs_availability(inputs_gatherer.input_data_availability)
+        self.check_inputs_availability(inputs_gatherer.io_data_availability)
 
     def check_inputs_availability(self, inputs_availability):
         self.available_features = 0
@@ -125,62 +126,78 @@ class Forecaster:
                    if qrf1_percentiles[i] > threshold:
                        return float(100-(i+1))
 
-    def calc_probabilities(self, qrf):
-        qrf_percentiles_limits = [qrf.predict(self.input_df, quantile=1.0), qrf.predict(self.input_df, quantile=99.0)]
-        probs = []
-        thresholds = self.cfg['predictionSettings']['thresholds']
-        for threshold in thresholds:
-            tmp_prob = self.prob_overlimit(qrf, qrf_percentiles_limits, threshold)
-            probs.append(tmp_prob)
+    def calc_prob_interval(self, pred_dataset, lower_limit, upper_limit):
+        mask = np.logical_and(pred_dataset > lower_limit, pred_dataset < upper_limit)
+        return len(pred_dataset[mask]) / len(pred_dataset)
 
-        # Calculate the probabilities for the configured intervals
-        dict_probs = dict()
-        dict_probs['[0:%i]' % thresholds[0]] = 100 - probs[0]
-        for i in range(0, len(probs) - 1):
-            dict_probs['[%i:%i]' % (thresholds[i], thresholds[i + 1])] = (probs[i] - probs[i + 1])
-        dict_probs['[%i:inf]' % thresholds[-1]] = probs[-1]
+    def handle_qrf_output(self, qrf, region_code):
+        qntls = np.array(self.cfg['regions'][region_code]['forecaster']['quantiles'])
+        pred_qntls, pred_dataset = qrf.predict(self.input_df, qntls)
+        pred_dataset = pred_dataset[0]
+        pred_qntls = pred_qntls[0]
+
+        ths = self.cfg['regions'][region_code]['forecaster']['thresholds']
+        eps = np.finfo(np.float32).eps
+        dict_probs = {'thresholds': {}, 'quantiles': {}}
+
+        # Get probabilities to be in configured thresholds
+        for i in range(1, len(ths)):
+            dict_probs['thresholds']['[%i:%i]' % (ths[i-1], ths[i])] = self.calc_prob_interval(pred_dataset, ths[i-1], ths[i]-eps)
+        dict_probs['thresholds']['[%i:%f]' % (ths[i], np.inf)] = self.calc_prob_interval(pred_dataset, ths[i], np.inf)
+
+        # Get probabilities to be in the configured quantiles
+        for i in range(0, len(qntls)):
+            dict_probs['quantiles']['perc%.0f' % (qntls[i]*100)] = pred_qntls[i]
 
         return dict_probs
 
-    def predict(self, predictor_file):
+    def predict(self, predictor_file, region_data):
         if self.do_prediction is True:
-            # ngb; NGBoost
-            ngb, qrf = pickle.load(open(predictor_file, 'rb'))
+            # Unload the model (qrf is not used because it does not consider the weights)
+            ngb, qrf, qrf_w = pickle.load(open(predictor_file, 'rb'))
 
+            # Perform the prediction
             res_ngb = ngb.pred_dist(self.input_df)
-            self.probs_over_limits = self.calc_probabilities(qrf)
+            self.ngb_output = float(res_ngb.loc[0])
+            self.qrf_output = self.handle_qrf_output(qrf_w, region_data['code'])
+            self.perc_available_features = round(self.available_features * 100 / len(self.input_df.columns), 0)
             self.logger.info('Performed prediction: model=%s ' % predictor_file)
 
-            dps = []
-
-            # Saving predicted value
-            self.predicted_value = float(res_ngb.loc[0])
-            self.perc_available_features = round(self.available_features*100/len(self.input_df.columns), 0)
-
             # Define best tag: i.e. the current predictor is the best one for this case
-            if self.location['bestLabels'][self.forecast_type] in predictor_file:
+            if self.cfg['regions'][region_data['code']]['forecaster']['bestLabels'][self.forecast_type] in predictor_file:
                 self.flag_best = 'true'
             else:
                 self.flag_best = 'false'
 
-            predictor_desc = predictor_file.split(os.sep)[-1].split('.')[0].split('_')[-1]
+            dps = []
+            # Define general tags
             point = {
                 'time': self.day_to_predict,
-                'measurement': self.cfg['influxDB']['measurementForecasts'],
-                'fields': dict(PredictedValue=float(self.predicted_value),
+                'measurement': self.cfg['influxDB']['measurementOutputSingleForecast'],
+                'fields': dict(PredictedValue=float(self.ngb_output),
                                AvailableFeatures=float(self.perc_available_features)),
-                'tags': dict(location=self.location['code'], case=self.forecast_type, flag_best=self.flag_best,
-                             predictor=predictor_desc)
+                'tags': dict(location=region_data['code'], case=self.forecast_type, flag_best=self.flag_best,
+                             predictor=self.model_name, signal=self.output_signal)
             }
             dps.append(point)
 
-            for interval in self.probs_over_limits.keys():
+            for interval in self.qrf_output['thresholds'].keys():
                 point = {
                     'time': self.day_to_predict,
-                    'measurement': self.cfg['influxDB']['measurementForecastsProbs'],
-                    'fields': dict(Probability=float(self.probs_over_limits[interval])),
-                    'tags': dict(location=self.location['code'], case=self.forecast_type, flag_best=self.flag_best,
-                                 predictor=predictor_desc, interval=interval)
+                    'measurement': self.cfg['influxDB']['measurementOutputThresholdsForecast'],
+                    'fields': dict(Probability=float(self.qrf_output['thresholds'][interval])),
+                    'tags': dict(location=region_data['code'], case=self.forecast_type, flag_best=self.flag_best,
+                                 predictor=self.model_name, signal=self.output_signal, interval=interval)
+                }
+                dps.append(point)
+
+            for quantile in self.qrf_output['quantiles'].keys():
+                point = {
+                    'time': self.day_to_predict,
+                    'measurement': self.cfg['influxDB']['measurementOutputQuantilesForecast'],
+                    'fields': dict(PredictedValue=float(self.qrf_output['quantiles'][quantile])),
+                    'tags': dict(location=region_data['code'], case=self.forecast_type, flag_best=self.flag_best,
+                                 predictor=self.model_name, signal=self.output_signal, quantile=quantile)
                 }
                 dps.append(point)
 
@@ -188,5 +205,5 @@ class Forecaster:
             self.influxdb_client.write_points(dps, time_precision='s')
         else:
             self.logger.error('Model %s can not perform prediction, some features cannot be surrogated' % predictor_file)
-            self.predicted_value = None
+            self.ngb_output = None
             self.perc_available_features = None

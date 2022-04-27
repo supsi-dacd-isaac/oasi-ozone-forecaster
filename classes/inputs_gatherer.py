@@ -55,11 +55,6 @@ class InputsGatherer:
         self.io_data = dict()
         self.day_to_predict = None
 
-        # Get the locations configured for the prediction
-        locations_configured = []
-        for location in self.cfg['locations']:
-            locations_configured.append(location['code'])
-
         # Create the signals list considering all the couples location-model
         self.cfg_signals = dict(signals=[])
 
@@ -67,8 +62,8 @@ class InputsGatherer:
         for tmp_folder in glob.glob('%s%s*%s' % (self.cfg['folders']['models'], os.sep, self.forecast_type)):
 
             # Check if the current folder refers to a location configured for the prediction
-            location_code = tmp_folder.split(os.sep)[-1].split('_')[0]
-            if location_code in locations_configured:
+            region_code = tmp_folder.split(os.sep)[-1].split('_')[0]
+            if region_code in self.cfg['regions'].keys():
 
                 # Cycle over the input files in the folder (each files correspond to a model)
                 for input_cfg_file in glob.glob('%s%s/inputs_*.json' % (tmp_folder, os.sep)):
@@ -201,7 +196,7 @@ class InputsGatherer:
         query = 'SELECT mean(value) FROM %s WHERE code=\'%s\' AND case=\'%s\' AND ' \
                 'time>=\'%s\' AND time<\'%s\'' % (self.cfg['influxDB']['measurementInputsHistory'], code,
                                                   self.forecast_type,
-                                                  self.cfg['predictionSettings']['startDateForMeanImputation'],
+                                                  self.cfg['predictionGeneralSettings']['startDateForMeanImputation'],
                                                   datetime.fromtimestamp(self.day_to_predict).strftime('%Y-%m-%d'))
 
         self.logger.info('Performing query: %s' % query)
@@ -597,22 +592,37 @@ class InputsGatherer:
 
     def get_previous_day(self):
         if self.cfg['forecastPeriod']['case'] == 'current':
-            dt = datetime.now(pytz.utc) - timedelta(1)
+            dt = datetime.now(pytz.utc) - timedelta(days=1)
         else:
             dt = datetime.strptime(self.cfg['dayToForecast'], '%Y-%m-%d')
             dt = pytz.utc.localize(dt)
-            dt = dt - timedelta(1)
+            dt = dt - timedelta(days=1)
         return dt
 
-    def calc_yesterday_o3_daily_values(self):
+    def get_location_with_output_signal(self, region, os):
+        stations = []
+        for ms in self.cfg['regions'][region]['MeasureStations']:
+            if os in self.cfg['measuredSignalsStations'][ms]:
+                stations.append(ms)
+        return stations
+
+    def calc_yesterday_output_daily_values(self, region, os):
         """
         Calc daily data of O3 values related to yesterday
         """
         # get the date to analyze
         dt = self.get_previous_day()
+        o3_locations = self.get_location_with_output_signal(region, os)
 
-        query = 'SELECT mean(value) FROM %s WHERE signal=\'O3\' AND time>=\'%sT00:00:00Z\' AND ' \
-                'time<=\'%sT23:59:59Z\' GROUP BY time(1h), location, signal' % (self.cfg['influxDB']['measurementOASI'],
+        str_o3_locs = '('
+        for o3loc in o3_locations:
+            str_o3_locs += 'location=\'%s\' OR ' % o3loc
+        str_o3_locs = '%s)' % str_o3_locs[0:-4]
+
+        query = 'SELECT mean(value) FROM %s WHERE signal=\'%s\' AND %s AND ' \
+                'time>=\'%sT00:00:00Z\' AND ' \
+                'time<=\'%sT23:59:59Z\' GROUP BY time(1h), location, signal' % (self.cfg['influxDB']['measurementInputsMeasurements'],
+                                                                                os, str_o3_locs,
                                                                                 dt.strftime('%Y-%m-%d'),
                                                                                 dt.strftime('%Y-%m-%d'))
 
@@ -621,55 +631,25 @@ class InputsGatherer:
 
         utc_ts = int(dt.timestamp())
         dps = []
+        daily_max = -1
         for series in res.raw['series']:
             vals = []
             for i in range(0, len(series['values'])):
                 if series['values'][i][1] is not None:
                     vals.append(series['values'][i][1])
+            vals.append(daily_max)
             daily_max = np.max(vals)
-            daily_idx = self.get_index(np.max(vals))
 
-            point = {
-                'time': utc_ts,
-                'measurement': self.cfg['influxDB']['measurementOASI'],
-                'fields': dict(value=float(daily_max)),
-                'tags': dict(signal='YO3', location=series['tags']['location'])
-            }
-            dps.append(point)
-
-            point = {
-                'time': utc_ts,
-                'measurement': self.cfg['influxDB']['measurementOASI'],
-                'fields': dict(value=float(daily_idx)),
-                'tags': dict(signal='YO3_index', location=series['tags']['location'])
-            }
-            dps.append(point)
+        point = {
+            'time': utc_ts,
+            'measurement': self.cfg['influxDB']['measurementInputsMeasurements'],
+            'fields': dict(value=float(daily_max)),
+            'tags': dict(signal='Y%s' % os, location=region)
+        }
+        dps.append(point)
 
         self.logger.info('Sent %i points to InfluxDB server' % len(dps))
         self.influxdb_client.write_points(dps, time_precision=self.cfg['influxDB']['timePrecision'])
-
-    @staticmethod
-    def get_index(val):
-        """
-        Get ozone index value (http://www.oasi.ti.ch/web/dati/aria.html)
-
-        :param val: ozone value
-        :type val: float
-        :return: ozone index
-        :rtype: int
-        """
-        if 0 <= val <= 60:
-            return 1
-        elif 60 < val <= 120:
-            return 2
-        elif 120 < val <= 135:
-            return 3
-        elif 135 < val <= 180:
-            return 4
-        elif 180 < val <= 240:
-            return 5
-        else:
-            return 6
 
     def hourly_measured_signals(self, measurementStation, measuredSignal):
         signals = []

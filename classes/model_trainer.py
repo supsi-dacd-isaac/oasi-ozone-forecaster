@@ -337,7 +337,7 @@ class ModelTrainer:
 
         n_features = str(len(selected_features))
 
-        pickle.dump([ngb, rfqr], open(fn + '_mdl_' + n_features + '.pkl', 'wb'))
+        pickle.dump([ngb, rfqr, rfqr_w], open(fn + '_mdl_' + n_features + '.pkl', 'wb'))
         pickle.dump(selected_features, open(fn + '_feats_' + n_features + '.pkl', 'wb'))
         json.dump({"signals": list(selected_features)}, open(fn + '_feats_' + n_features + '.json', 'w'))
 
