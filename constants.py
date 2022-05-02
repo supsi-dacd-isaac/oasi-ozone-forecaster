@@ -27,6 +27,7 @@ LOCATIONS = {
                 'bioggio': 'BIO',
                 'brionesm': 'BRI',
                 'chiasso': 'CHI',
+                'giubiasco': 'GIU',
                 'locarno': 'LOC',
                 'mendrisio': 'MEN',
                 'sagno': 'SAG',
@@ -34,13 +35,14 @@ LOCATIONS = {
                 'nabel-lugano': 'LUG',
 
                 # MeteoSvizzera locations
-                'meteosvizzera-stabio': 'MS-STB',
-                'meteosvizzera-montegeneroso': 'MS-GEN',
-                'meteosvizzera-lugano': 'MS-LUG',
-                'meteosvizzera-ludianomatro': 'MS-MAT',
-                'meteosvizzera-locarnomonti': 'MS-OTL',
-                'meteosvizzera-gutsch': 'MS-GUT',
                 'meteosvizzera-acquarossacomprovasco': 'MS-COM',
+                'meteosvizzera-montegeneroso': 'MS-GEN',
+                'meteosvizzera-gutsch': 'MS-GUT',
+                'meteosvizzera-locarnomonti': 'MS-OTL',
+                'meteosvizzera-magadino': 'MS-MAG',
+                'meteosvizzera-ludianomatro': 'MS-MAT',
+                'meteosvizzera-lugano': 'MS-LUG',
+                'meteosvizzera-stabio': 'MS-STB',
 
                 # ARPA locations
                 'Bormio': 'IT-BOR',

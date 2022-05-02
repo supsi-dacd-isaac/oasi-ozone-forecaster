@@ -208,13 +208,13 @@ class DataManager:
             # ARPA case
             str_locations = raw.decode(constants.ENCODING)
             arpa_locations_keys = str_locations[:-1].split(';')[1:]
-            measurement = self.cfg['influxDB']['measurementARPA']
+            measurement = self.cfg['influxDB']['measurementInputsMeasurements']
         else:
             if 'meteosvizzera' in file_name:
                 # MeteoSuisse case
                 [key1, key2, _, _] = file_name.split('-')
                 oasi_location_key = '%s-%s' % (key1, key2)
-                measurement = self.cfg['influxDB']['measurementMeteoSuisse']
+                measurement = self.cfg['influxDB']['measurementInputsMeasurements']
             else:
                 if 'nabel' in file_name:
                     # Nabel OASI case
@@ -223,7 +223,7 @@ class DataManager:
                 else:
                     # Simple OASI case
                     [oasi_location_key, _, _] = file_name.split('-')
-                measurement = self.cfg['influxDB']['measurementOASI']
+                measurement = self.cfg['influxDB']['measurementInputsMeasurements']
 
         # Signals
         raw = f.readline()
