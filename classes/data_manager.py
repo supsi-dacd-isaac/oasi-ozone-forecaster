@@ -149,13 +149,13 @@ class DataManager:
             self.logger.info('Getting data from %s' % file_path)
 
             try:
-                # Meteosuisse forecasts
-                if 'VOPA' in file_name or 'VNXA51' in file_name:
-                    dps = self.handle_meteo_forecasts(file_path, dps)
+                # Meteo forecasts provided by Meteosuisse
+                if 'VQCA19' in file_name or 'VNYA34' in file_name or 'VNXA51' in file_name:
+                    dps = self.handle_meteo_forecasts_file(file_path, dps)
 
                 # OASI/ARPA/Meteosuisse measurements
                 else:
-                    dps = self.location_signals_handling(file_path, file_name, dps)
+                    dps = self.handle_measures_file(file_path, file_name, dps)
 
                 # Archive file
                 self.archive_file(file_name)
@@ -171,7 +171,7 @@ class DataManager:
         self.influxdb_client.write_points(dps, time_precision=self.cfg['influxDB']['timePrecision'])
 
     def archive_file(self, file_name):
-        if 'VOPA' in file_name or 'VNXA51' in file_name:
+        if 'VNYA34' in file_name or 'VNXA51' in file_name or 'VQCA19' in file_name:
             archive_folder = '%s%s%s' % (self.cfg['ftp']['localFolders']['archive'], os.sep, file_name.split('.')[1][0:8])
             self.check_folder(archive_folder)
         else:
@@ -196,7 +196,7 @@ class DataManager:
         if os.path.exists(folder) is False:
             os.mkdir(folder)
 
-    def location_signals_handling(self, file_path, file_name, dps):
+    def handle_measures_file(self, file_path, file_name, dps):
         # Open the file
         f = open(file_path, 'rb')
 
@@ -281,7 +281,7 @@ class DataManager:
         except ValueError:
             return False
 
-    def handle_meteo_forecasts(self, input_file, dps):
+    def handle_meteo_forecasts_file(self, input_file, dps):
         """
         Save measures data (OASI and ARPA) in InfluxDB
 
@@ -294,8 +294,9 @@ class DataManager:
 
         f = open(input_file, 'rb')
 
-        # VNXA51 case: stations forecasts
-        if 'VNXA51' in code:
+        # Meteosuisse forecasts for specific locations (VNXA51 case: COSMO1, VNYA34 case: COSMO2)
+        if 'VNYA34' in code or 'VNXA51' in code:
+
             dt_run = None
             signals = None
 
@@ -320,16 +321,28 @@ class DataManager:
                         else:
                             val = float(data[i])
 
-                        # Find the : position
-                        colon = data[2].find(':')
+                        # Check if the data is available
+                        if val != -99999:
+                            # Find the : position
+                            colon = data[2].find(':')
 
-                        point = {
-                                    'time': int(utc_dt.timestamp()),
-                                    'measurement': self.cfg['influxDB']['measurementMeteoSuisse'],
-                                    'fields': dict(value=val),
-                                    'tags': dict(signal=signals[i], location=data[0], step='step%s' % data[2][colon-2:colon])
-                                }
-                        dps = self.point_handling(dps, point)
+                            # Step and COSMO2 suffix handling
+                            step = int(data[2].split(':')[0])
+                            if 'VNYA34' in code:
+                                str_step = 'step%03d' % step
+                                signal_suffix = '_c2'
+                            else:
+                                str_step = 'step%02d' % step
+                                signal_suffix = ''
+
+                            point = {
+                                        'time': int(utc_dt.timestamp()),
+                                        'measurement': self.cfg['influxDB']['measurementInputsForecasts'],
+                                        'fields': dict(value=val),
+                                        'tags': dict(signal='%s%s' % (signals[i], signal_suffix), location=data[0],
+                                                     step=str_step)
+                                    }
+                            dps = self.point_handling(dps, point)
 
                 # define signals
                 if row[0:3] == 'stn':
@@ -337,14 +350,14 @@ class DataManager:
                     # skip the line related to unit measures
                     f.readline()
 
-        # VOPA45 case: global forecast about meteorological situation in Ticino
-        elif 'VOPA45' in code:
+        # VQCA19 case: global forecast about meteorological situation in Ticino
+        elif 'VQCA19' in code:
             for raw_row in f:
                 row = raw_row.decode(constants.ENCODING)
                 row = row[:-1]
                 if 'RHW' in row:
-                    row = row.replace(' ', '')
-                    (id, day, signal, value) = row.split('|')
+                    # row = row.replace(' ', '')
+                    (signal, day, value) = row.replace('  ', ',').replace(' ','').replace(',,',',')[0:-2].split(',')
 
                     utc_day = datetime.strptime(day, self.cfg['local']['timeFormatGlobal'])
                     utc_day = pytz.utc.localize(utc_day)
