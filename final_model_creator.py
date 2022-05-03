@@ -22,16 +22,11 @@ urllib3.disable_warnings()
 # Functions
 # --------------------------------------------------------------------------- #
 def mt_process(ig, k_region, target, cfg, logger):
-    # Find the target info for the training
-    for target_data in cfg['regions'][k_region]['featuresAnalyzer']['targetColumns']:
-        if target_data['signal'] == target:
-            break
-
     fa = FeaturesAnalyzer(ig, forecast_type, cfg, logger)
     fa.dataset_reader(k_region, [target])
 
     mt = ModelTrainer(fa, ig, forecast_type, cfg, logger)
-    mt.train_final_models(k_region, target_data)
+    mt.train_final_models(k_region, target)
 
 
 if __name__ == "__main__":
@@ -89,7 +84,7 @@ if __name__ == "__main__":
     procs = []
     # Cycle over the regions
     for k_region in cfg['regions'].keys():
-        for target in cfg['regions'][k_region]['finalModelCreator']['targetColumns']:
+        for target in cfg['regions'][k_region]['finalModelCreator']['targets'].keys():
             tmp_proc = Process(target=mt_process, args=[ig, k_region, target, cfg, logger])
             tmp_proc.start()
             procs.append(tmp_proc)

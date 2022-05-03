@@ -3,6 +3,7 @@ import pandas as pd
 import pickle
 import os
 import json
+import glob
 from ngboost import NGBRegressor
 from ngboost.distns import Normal
 from ngboost.learners import default_tree_learner
@@ -299,11 +300,21 @@ class ModelTrainer:
 
         return self.calculate_KPIs(region, prediction, measured, weights), df_pred
 
-    def train_final_models(self, k_region, target_data):
+    def get_weights(self, input_file_name):
+        w = {}
+        str_w = ''
+        for elem in input_file_name.split(os.sep)[-2].split('_'):
+            code, val = elem.split('-')
+            w[code] = int(val)
+            str_w += val + '-'
+        return w, str_w[:-1]
+
+    def train_final_models(self, k_region, target_signal):
         """
         Calculates the KPIs for a set of weight with multiple Feature selection: First we create the folds of the cross
         validation, then for each fold we do the feature selection and locally calculate the KPIs
         """
+        target_data = self.cfg['regions'][k_region]['finalModelCreator']['targets'][target_signal]
 
         self.get_datasets()
 
@@ -311,35 +322,43 @@ class ModelTrainer:
         df = self.dataFrames[key]
 
         fp = self.input_gatherer.output_folder_creator(key)
-        fn = fp + fp.split(os.sep)[1] + '_' + target_data['signal']
+        fn = fp + fp.split(os.sep)[1] + '_' + target_signal
 
-        _, _, _, df_x, df_y = self.features_analyzer.dataset_splitter(key, df, target_data['signal'])
+        _, _, _, df_x, df_y = self.features_analyzer.dataset_splitter(key, df, target_signal)
 
-        selected_features = json.loads(open('%s%s.json' % (fn, self.cfg['regions'][k_region]['finalModelCreator']['signalsFileSuffix'])).read())['signals']
-        X, Y = self.get_reduced_dataset(df_x, df_y, selected_features)
-        X, Y = self.remove_date(X, Y)
+        root_folder = '%sgs%s%s%s*' % (fp, os.sep, target_signal, os.sep)
+        suffix = self.cfg['regions'][k_region]['finalModelCreator']['signalsFileSuffix']
+        for weights_folder in glob.glob(root_folder):
+            for input_file in glob.glob('%s%s*%s.json' % (weights_folder, os.sep, suffix)):
+                selected_features = json.loads(open(input_file).read())['signals']
+                X, Y = self.get_reduced_dataset(df_x, df_y, selected_features)
+                X, Y = self.remove_date(X, Y)
 
-        # Train NGB model
-        self.logger.info('NGBoost model training start')
-        ngb, weight = self.train_NGB_model(k_region, X, Y, target_data['weights'][self.forecast_type])
-        self.logger.info('NGBoost model training end')
+                target_data['weights'], target_data['str_weights'] = self.get_weights(input_file)
 
-        # Train QRF model
-        self.logger.info('RFQR model training start')
-        rfqr = RandomForestQuantileRegressor(n_estimators=1000).fit(X, np.array(Y).ravel())
-        self.logger.info('RFQR model training end')
+                self.logger.info('Train models for %s - %s, case %s, weights: %s' % (k_region, target_signal,
+                                                                                     self.forecast_type,
+                                                                                     target_data['weights']))
 
-        # Todo this part has to be tested
-        self.logger.info('pyquantrf RFQR model training start')
-        rfqr_w = qfrfQuantileRandomForestRegressor(nthreads=4, n_estimators=1000, min_samples_leaf=10)
-        rfqr_w.fit(X, np.array(Y).ravel(), sample_weight=weight)
-        self.logger.info('pyquantrf RFQR model training end')
+                # Train NGB model
+                self.logger.info('NGBoost model training start')
+                ngb, weight = self.train_NGB_model(k_region, X, Y, target_data['weights'])
+                self.logger.info('NGBoost model training end')
 
-        n_features = str(len(selected_features))
+                # Train QRF model
+                rfqr = None
+                # self.logger.info('RFQR model training start')
+                # rfqr = RandomForestQuantileRegressor(n_estimators=1000).fit(X, np.array(Y).ravel())
+                # self.logger.info('RFQR model training end')
 
-        pickle.dump([ngb, rfqr, rfqr_w], open(fn + '_mdl_' + n_features + '.pkl', 'wb'))
-        pickle.dump(selected_features, open(fn + '_feats_' + n_features + '.pkl', 'wb'))
-        json.dump({"signals": list(selected_features)}, open(fn + '_feats_' + n_features + '.json', 'w'))
+                self.logger.info('pyquantrf RFQR model training start')
+                rfqr_w = qfrfQuantileRandomForestRegressor(nthreads=4, n_estimators=1000, min_samples_leaf=10)
+                rfqr_w.fit(X, np.array(Y).ravel(), sample_weight=weight)
+                self.logger.info('pyquantrf RFQR model training end')
+
+                files_noext = weights_folder + os.sep + 'predictor_' + target_data['label'] + '_w' + target_data['str_weights']
+                pickle.dump([ngb, rfqr, rfqr_w], open('%s.pkl' % files_noext, 'wb'))
+                json.dump({"signals": list(selected_features)}, open('%s.json' % files_noext.replace('predictor', 'inputs'), 'w'))
 
     @staticmethod
     def get_reduced_dataset(df_x, df_y, selected_features):
