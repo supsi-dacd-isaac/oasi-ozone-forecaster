@@ -10,9 +10,14 @@ import time
 import ftplib
 import numpy as np
 import pandas as pd
+
+
 def warn(*args, **kwargs):
     pass
+
+
 import warnings
+
 warnings.warn = warn
 
 import sklearn.metrics as metrics
@@ -22,6 +27,7 @@ from datetime import date, datetime, timedelta
 from influxdb import InfluxDBClient
 
 import constants
+
 
 class DataManager:
     """
@@ -112,6 +118,11 @@ class DataManager:
         except Exception as e:
             self.logger.error('Connection exception: %s' % str(e))
 
+    def is_meteosuisse_forecast_file(self, file_name):
+        if 'VNXA51' in file_name or 'VQCA19' in file_name or 'VNYA34' in file_name:
+            return True
+        else:
+            return False
 
     def delete_remote_files(self):
 
@@ -122,7 +133,7 @@ class DataManager:
             # cycle over the remote files
             for file_to_delete in self.files_correctly_handled:
                 # Set the remote folder
-                if 'VOPA' in file_to_delete or 'VNXA51' in file_to_delete:
+                if self.is_meteosuisse_forecast_file(file_to_delete):
                     self.ftp.cwd('/%s' % self.cfg['ftp']['remoteFolders']['forecasts'])
                 else:
                     self.ftp.cwd('/%s' % self.cfg['ftp']['remoteFolders']['measures'])
@@ -150,7 +161,7 @@ class DataManager:
 
             try:
                 # Meteo forecasts provided by Meteosuisse
-                if 'VQCA19' in file_name or 'VNYA34' in file_name or 'VNXA51' in file_name:
+                if self.is_meteosuisse_forecast_file(file_name):
                     dps = self.handle_meteo_forecasts_file(file_path, dps)
 
                 # OASI/ARPA/Meteosuisse measurements
@@ -171,15 +182,18 @@ class DataManager:
         self.influxdb_client.write_points(dps, time_precision=self.cfg['influxDB']['timePrecision'])
 
     def archive_file(self, file_name):
-        if 'VNYA34' in file_name or 'VNXA51' in file_name or 'VQCA19' in file_name:
-            archive_folder = '%s%s%s' % (self.cfg['ftp']['localFolders']['archive'], os.sep, file_name.split('.')[1][0:8])
+        if self.is_meteosuisse_forecast_file(file_name):
+            archive_folder = '%s%s%s' % (
+            self.cfg['ftp']['localFolders']['archive'], os.sep, file_name.split('.')[1][0:8])
             self.check_folder(archive_folder)
         else:
             if 'meteosvizzera' in file_name or 'arpal' in file_name or 'nabel' in file_name:
-                archive_folder = '%s%s%s' % (self.cfg['ftp']['localFolders']['archive'], os.sep, file_name.split('-')[2])
+                archive_folder = '%s%s%s' % (
+                self.cfg['ftp']['localFolders']['archive'], os.sep, file_name.split('-')[2])
                 self.check_folder(archive_folder)
             else:
-                archive_folder = '%s%s%s' % (self.cfg['ftp']['localFolders']['archive'], os.sep, file_name.split('-')[1])
+                archive_folder = '%s%s%s' % (
+                self.cfg['ftp']['localFolders']['archive'], os.sep, file_name.split('-')[1])
                 self.check_folder(archive_folder)
 
         # Zip the raw file
@@ -311,7 +325,7 @@ class DataManager:
                     if dt_run is None:
                         dt_run = data[1]
 
-                    for i in range(3, len(data)-1):
+                    for i in range(3, len(data) - 1):
                         utc_time = datetime.strptime(dt_run, self.cfg['local']['timeFormatForecasts'])
                         utc_dt = pytz.utc.localize(utc_time)
 
@@ -336,12 +350,12 @@ class DataManager:
                                 signal_suffix = ''
 
                             point = {
-                                        'time': int(utc_dt.timestamp()),
-                                        'measurement': self.cfg['influxDB']['measurementInputsForecasts'],
-                                        'fields': dict(value=val),
-                                        'tags': dict(signal='%s%s' % (signals[i], signal_suffix), location=data[0],
-                                                     step=str_step)
-                                    }
+                                'time': int(utc_dt.timestamp()),
+                                'measurement': self.cfg['influxDB']['measurementInputsForecasts'],
+                                'fields': dict(value=val),
+                                'tags': dict(signal='%s%s' % (signals[i], signal_suffix), location=data[0],
+                                             step=str_step)
+                            }
                             dps = self.point_handling(dps, point)
 
                 # define signals
@@ -357,17 +371,17 @@ class DataManager:
                 row = row[:-1]
                 if 'RHW' in row:
                     # row = row.replace(' ', '')
-                    (signal, day, value) = row.replace('  ', ',').replace(' ','').replace(',,',',')[0:-2].split(',')
+                    (signal, day, value) = row.replace('  ', ',').replace(' ', '').replace(',,', ',')[0:-2].split(',')
 
                     utc_day = datetime.strptime(day, self.cfg['local']['timeFormatGlobal'])
                     utc_day = pytz.utc.localize(utc_day)
 
                     point = {
-                                'time': int(utc_day.timestamp()),
-                                'measurement': self.cfg['influxDB']['measurementGlobal'],
-                                'fields': dict(value=float(value)),
-                                'tags': dict(signal=signal)
-                            }
+                        'time': int(utc_day.timestamp()),
+                        'measurement': self.cfg['influxDB']['measurementGlobal'],
+                        'fields': dict(value=float(value)),
+                        'tags': dict(signal=signal)
+                    }
                     dps.append(copy.deepcopy(point))
 
         # close the file
@@ -427,8 +441,7 @@ class DataManager:
             # check if the last inputs string in the temporary file is related to yesterday and
             # no data about yesterday were already saved in the datasets
             if yesterday in last_data_inputs_tmp and yesterday not in last_data_inputs and \
-               yesterday not in last_data_outputs:
-
+                    yesterday not in last_data_outputs:
                 # append inputs
                 with open(inputs_file, 'a') as fw:
                     fw.write('%s\n' % last_data_inputs_tmp)
@@ -468,9 +481,10 @@ class DataManager:
 
             # get measurement data
             query = 'SELECT mean(value) FROM %s WHERE signal=\'YO3\' AND time>=\'%sT00:00:00Z\' AND ' \
-                    'time<=\'%sT23:59:59Z\' GROUP BY time(1d), location, signal' % (self.cfg['influxDB']['measurementOASI'],
-                                                                                    start_date,
-                                                                                    end_date)
+                    'time<=\'%sT23:59:59Z\' GROUP BY time(1d), location, signal' % (
+                    self.cfg['influxDB']['measurementOASI'],
+                    start_date,
+                    end_date)
 
             self.logger.info('Performing query: %s' % query)
             res = self.influxdb_client.query(query, epoch='s')
@@ -532,24 +546,24 @@ class DataManager:
                     mae_ens = metrics.mean_absolute_error(mdf_ens[location], mdf_ens[id])
 
                     point = {
-                                'time': int(dt_start_date.timestamp()),
-                                'measurement': self.cfg['influxDB']['measurementForecastsKPIs'],
-                                'fields': dict(rmse=float(rmse_ens), mae=float(mae_ens)),
-                                'tags': dict(location=location, case=case, predictor=predictor,
-                                             start_date='sd_%s' % start_date, type='ENS')
-                            }
+                        'time': int(dt_start_date.timestamp()),
+                        'measurement': self.cfg['influxDB']['measurementForecastsKPIs'],
+                        'fields': dict(rmse=float(rmse_ens), mae=float(mae_ens)),
+                        'tags': dict(location=location, case=case, predictor=predictor,
+                                     start_date='sd_%s' % start_date, type='ENS')
+                    }
                     dps = self.point_handling(dps, point)
 
                     rmse_rf = np.sqrt(metrics.mean_squared_error(mdf_rf[location], mdf_rf[id]))
                     mae_rf = metrics.mean_absolute_error(mdf_rf[location], mdf_rf[id])
 
                     point = {
-                                'time': int(dt_start_date.timestamp()),
-                                'measurement': self.cfg['influxDB']['measurementForecastsKPIs'],
-                                'fields': dict(rmse=float(rmse_rf), mae=float(mae_rf)),
-                                'tags': dict(location=location, case=case, predictor=predictor,
-                                             start_date='sd_%s' % start_date, type='RF')
-                            }
+                        'time': int(dt_start_date.timestamp()),
+                        'measurement': self.cfg['influxDB']['measurementForecastsKPIs'],
+                        'fields': dict(rmse=float(rmse_rf), mae=float(mae_rf)),
+                        'tags': dict(location=location, case=case, predictor=predictor,
+                                     start_date='sd_%s' % start_date, type='RF')
+                    }
                     dps = self.point_handling(dps, point)
 
                     # calculate the errors
@@ -564,19 +578,19 @@ class DataManager:
                     # ensemble case
                     for index, row in mdf_ens.iterrows():
                         point = {
-                                    'time': int(index),
-                                    'measurement': self.cfg['influxDB']['measurementForecastsKPIs'],
-                                    'fields': dict(err=float(row['err']), abs_err=float(row['abs_err'])),
-                                    'tags': dict(location=location, case=case, predictor=predictor, type='ENS')}
+                            'time': int(index),
+                            'measurement': self.cfg['influxDB']['measurementForecastsKPIs'],
+                            'fields': dict(err=float(row['err']), abs_err=float(row['abs_err'])),
+                            'tags': dict(location=location, case=case, predictor=predictor, type='ENS')}
                         dps = self.point_handling(dps, point)
 
                     # random forest
                     for index, row in mdf_rf.iterrows():
                         point = {
-                                    'time': int(index),
-                                    'measurement': self.cfg['influxDB']['measurementForecastsKPIs'],
-                                    'fields': dict(err=float(row['err']), abs_err=float(row['abs_err'])),
-                                    'tags': dict(location=location, case=case, predictor=predictor, type='RF')}
+                            'time': int(index),
+                            'measurement': self.cfg['influxDB']['measurementForecastsKPIs'],
+                            'fields': dict(err=float(row['err']), abs_err=float(row['abs_err'])),
+                            'tags': dict(location=location, case=case, predictor=predictor, type='RF')}
                         dps = self.point_handling(dps, point)
                 else:
                     self.logger.info('Unable to calculate the kpis')
@@ -588,4 +602,3 @@ class DataManager:
     @staticmethod
     def mean_absolute_percentage_error(y_true, y_pred):
         return np.mean(np.abs((y_true - y_pred) / y_true)) * 100
-
