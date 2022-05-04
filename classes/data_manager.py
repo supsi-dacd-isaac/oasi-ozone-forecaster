@@ -161,7 +161,7 @@ class DataManager:
                 self.archive_file(file_name)
                 self.files_correctly_handled.append(file_name)
             except Exception as e:
-                self.logger.error('EXCEPTION: %s' % str(e))
+                self.logger.error('EXCEPTION: %s, file %s' % (str(e), file_name))
                 self.files_not_correctly_handled[file_name] = str(e)
                 # Delete the raw file
                 os.unlink('%s%s%s' % (self.cfg['ftp']['localFolders']['tmp'], os.sep, file_name))
