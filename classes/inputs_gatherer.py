@@ -309,19 +309,20 @@ class InputsGatherer:
             (location, signal_code, case, step) = signal_data.split('__')
         else:
             (location, signal_code, step) = signal_data.split('__')
-        # write step parameter with the proper format
-        step = 'step%02d' % int(step[4:])
 
         dt = self.set_forecast_day()
 
         # the last forecast has been performed at 03:00 or at 12:00
         if self.forecast_type == 'MOR':
-            str_dt = '%sT03:00:00Z' % dt.strftime('%Y-%m-%d')
+            # COSMO2 forecast start at 00:00, COSMO1 at 03:00
+            if '_c2' in signal_code:
+                str_dt = '%sT00:00:00Z' % dt.strftime('%Y-%m-%d')
+                step = 'step%03d' % int(step[4:])
+            else:
+                str_dt = '%sT03:00:00Z' % dt.strftime('%Y-%m-%d')
+                step = 'step%02d' % int(step[4:])
         else:
             str_dt = '%sT12:00:00Z' % dt.strftime('%Y-%m-%d')
-
-        if signal_code == 'MTR':
-            pass
 
         query = 'SELECT value FROM %s WHERE location=\'%s\' AND signal=\'%s\' AND step=\'%s\' AND ' \
                 'time=\'%s\'' % (measurement, location, signal_code, step, str_dt)
@@ -329,17 +330,27 @@ class InputsGatherer:
         self.logger.info('Performing query: %s' % query)
         res = self.influxdb_client.query(query, epoch='s')
 
-        try:
-            # The training of Meteosuisse temperatures were done in Kelvin degrees
-            if signal_code in ['TD_2M', 'T_2M']:
-                val = float(res.raw['series'][0]['values'][0][1]) + 273.1
-            else:
-                val = float(res.raw['series'][0]['values'][0][1])
-            self.io_data[signal_data] = val
-        except Exception as e:
-            self.logger.error('Forecast not available')
-            self.logger.error('No data from query %s' % query)
+        if 'series' in res.raw.keys():
+            try:
+                # The training of Meteosuisse temperatures were done in Kelvin degrees
+                # todo this thing just below is a shame
+                if signal_code in ['TD_2M', 'T_2M']:
+                    val = float(res.raw['series'][0]['values'][0][1]) + 273.1
+                else:
+                    val = float(res.raw['series'][0]['values'][0][1])
+                self.io_data[signal_data] = val
+            except Exception as e:
+                self.logger.error('Data not available')
+                self.io_data[signal_data] = np.nan
+        else:
+            # Data retrieving from measures
+            # SELECT value FROM inputs_forecasts WHERE location='TICIA' AND signal='GLOB_c2' AND step='step036' AND time='2021-06-01T00:00:00Z'
+            # SELECT mean(value) FROM inputs_measurements WHERE location='CHI' AND signal='Gl' AND time>='2021-06-02T09:00:00Z' AND time<'2021-06-02T12:00:00Z'
+
+            self.logger.warning('Forecast not available')
+            self.logger.warning('No data from query %s' % query)
             self.io_data[signal_data] = np.nan
+
 
     def do_chunk_query(self, signal_data, measurement):
         (location, signal_code, day, chunk, func) = signal_data.split('__')
@@ -657,9 +668,9 @@ class InputsGatherer:
             signals.append(measurementStation + '__' + measuredSignal + '__m' + str(i))
         return signals
 
-    def hourly_forecasted_signals(self, forecastStation, forecastedSignal):
+    def hourly_forecasted_signals(self, forecastStation, forecastedSignal, start, end, step):
         signals = []
-        for i in range(34):
+        for i in range(start, end, step):
             signals.append(forecastStation + '__' + forecastedSignal + '__step' + str(i))
         return signals
 
@@ -693,16 +704,19 @@ class InputsGatherer:
 
     def artificial_features_forecasted_signals(self, forecastStation):
         signals = []
-        signals.append(forecastStation + '__CLCT__mean_mor')
-        signals.append(forecastStation + '__CLCT__mean_eve')
-        signals.append(forecastStation + '__GLOB__mean_mor')
-        signals.append(forecastStation + '__GLOB__mean_eve')
-        signals.append(forecastStation + '__TOT_PREC__sum')
-        signals.append(forecastStation + '__T_2M__12h_mean')
-        signals.append(forecastStation + '__T_2M__12h_mean_squared')
-        signals.append(forecastStation + '__T_2M__MAX')
-        signals.append(forecastStation + '__TD_2M__MAX')
-        signals.append(forecastStation + '__TD_2M__transf')
+
+        # for cosmo_case in ['', '_c2']:
+        for cosmo_case in ['']:
+            signals.append(forecastStation + '__CLCT%s__mean_mor' % cosmo_case)
+            signals.append(forecastStation + '__CLCT%s__mean_eve' % cosmo_case)
+            signals.append(forecastStation + '__GLOB%s__mean_mor' % cosmo_case)
+            signals.append(forecastStation + '__GLOB%s__mean_eve' % cosmo_case)
+            signals.append(forecastStation + '__TOT_PREC%s__sum' % cosmo_case)
+            signals.append(forecastStation + '__T_2M%s__12h_mean' % cosmo_case)
+            signals.append(forecastStation + '__T_2M%s__12h_mean_squared' % cosmo_case)
+            signals.append(forecastStation + '__T_2M%s__MAX' % cosmo_case)
+            signals.append(forecastStation + '__TD_2M%s__MAX' % cosmo_case)
+            signals.append(forecastStation + '__TD_2M%s__transf' % cosmo_case)
 
         return signals
 
@@ -735,8 +749,16 @@ class InputsGatherer:
         for forecastStation in self.cfg["regions"][region]["ForecastStations"]:
             signal_list.extend(self.artificial_features_forecasted_signals(forecastStation))
             for forecastedSignal in self.cfg["forecastedSignalsStations"][forecastStation]:
-                signal_list.extend(self.hourly_forecasted_signals(forecastStation, forecastedSignal))
-                signal_list.extend(self.chunks_forecasted_signals(forecastStation, forecastedSignal))
+                # Check if there is a COSMO1 signal (COSMO2s have the _c2 suffix)
+                if forecastedSignal[-2:] == 'c2':
+                    # COSMO2 goes until 120 hours ahead with a resolution of 3 hours
+                    # The first 33 hours are not considered because they are already covered by COSMO1
+                    signal_list.extend(self.hourly_forecasted_signals(forecastStation, forecastedSignal, 33, 120+1, 3))
+                else:
+                    # COSMO2 goes until 33 hours ahead with a resolution of 1 hour
+                    signal_list.extend(self.hourly_forecasted_signals(forecastStation, forecastedSignal, 0, 33+1, 1))
+                    # Chunk aggregation
+                    signal_list.extend(self.chunks_forecasted_signals(forecastStation, forecastedSignal))
         signal_list.extend(self.cfg['globalSignals'])
 
         return signal_list
