@@ -77,11 +77,11 @@ def notify_summary(prediction_results):
     str_err = ''
     str_info = ''
     for result in prediction_results:
-        threshold = result['location']['alarms']['thresholds'][forecast_type]
+        threshold = cfg['regions'][result['region']]['alarms']['thresholds'][forecast_type]
         if result['flag_prediction'] is True:
             if result['perc_available_features'] <= threshold:
                 str_err = '%s%s_%s_%s: model %s -> predicted max(O3) = %.1f, probabilities: %s, ' \
-                          'available features %.1f%%, threshold %.1f%%, quantiles %.1f%%, ' \
+                          'quantiles %s, available features %.1f%%, alert_threshold %.1f%%, ' \
                           'flag best=%s\n\n' % (str_info,
                                                 result['region'],
                                                 result['forecast_type'],
@@ -99,7 +99,7 @@ def notify_summary(prediction_results):
                 str_err = '%s\n\n' % str_err
             else:
                 str_info = '%s%s_%s_%s: model %s -> predicted max(O3) = %.1f, probabilities: %s, ' \
-                           'available features %.1f%%, threshold %.1f%%, quantiles %.1f%%, ' \
+                           'quantiles %s, available features %.1f%%, alert_threshold %.1f%%, ' \
                            'flag best=%s\n\n' % (str_info,
                                                  result['region'],
                                                  result['forecast_type'],
@@ -179,7 +179,7 @@ def perform_single_forecast(inputs_gatherer, input_cfg_file, forecast_type, regi
                             output_signal=output_signal, model_name=model_name, cfg=cfg, logger=logger)
 
     # Create the inputs dataframe
-    forecaster.build_model_input_dataset(inputs_gatherer, input_cfg_file)
+    forecaster.build_model_input_dataset(inputs_gatherer, input_cfg_file, output_signal)
 
     # Perform the prediction
     forecaster.predict(input_cfg_file.replace('inputs', 'predictor').replace('json', 'pkl'), region_data)
@@ -201,8 +201,8 @@ def perform_forecast(day_case, forecast_type):
     # Create the inputs gatherer instance
     inputs_gatherer = InputsGatherer(influxdb_client=influx_client, forecast_type=forecast_type, cfg=cfg, logger=logger, artificial_features=artificial_features)
     # Calculate the day_case-1d O3 values and insert them in the DB
-    for kr in cfg['regions'].keys():
-        inputs_gatherer.calc_yesterday_output_daily_values(region=kr, os='O3')
+    # for kr in cfg['regions'].keys():
+    #     inputs_gatherer.calc_yesterday_output_daily_values(region=kr, os='O3')
 
     # Calculate the inputs required by all the models of the configured locations
     inputs_gatherer.build_global_input_dataset()
@@ -222,7 +222,8 @@ def perform_forecast(day_case, forecast_type):
 
             # Check if the current folder refers to a location configured for the prediction
             if region in input_cfg_file.split(os.sep)[-2]:
-                output_signal, model_name = input_cfg_file.split('inputs_')[-1].split('.json')[0].split('_')
+                output_signal, weights, id = input_cfg_file.split('inputs_')[-1].split('.json')[0].split('_')
+                model_name = '%s_%s' % (id, weights)
 
                 region_info = {'code': region, 'data': cfg['regions'][region]}
                 if cfg['predictionGeneralSettings']['operationMode'] == 'parallel':

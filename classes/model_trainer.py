@@ -132,6 +132,33 @@ class ModelTrainer:
 
         return prediction, measured
 
+    @staticmethod
+    def calc_prob_interval(pred_dataset, lower_limit, upper_limit):
+        mask = np.logical_and(pred_dataset > lower_limit, pred_dataset < upper_limit)
+        return len(pred_dataset[mask]) / len(pred_dataset)
+
+    @staticmethod
+    def handle_qrf_output(cfg, qrf, input_vals, region_code):
+        qntls = np.array(cfg['regions'][region_code]['forecaster']['quantiles'])
+        pred_qntls, pred_dataset = qrf.predict(input_vals, qntls)
+        pred_dataset = pred_dataset[0]
+        pred_qntls = pred_qntls[0]
+
+        ths = cfg['regions'][region_code]['forecaster']['thresholds']
+        eps = np.finfo(np.float32).eps
+        dict_probs = {'thresholds': {}, 'quantiles': {}}
+
+        # Get probabilities to be in configured thresholds
+        for i in range(1, len(ths)):
+            dict_probs['thresholds']['[%i:%i]' % (ths[i-1], ths[i])] = ModelTrainer.calc_prob_interval(pred_dataset, ths[i-1], ths[i]-eps)
+        dict_probs['thresholds']['[%i:%f]' % (ths[i], np.inf)] = ModelTrainer.calc_prob_interval(pred_dataset, ths[i], np.inf)
+
+        # Get probabilities to be in the configured quantiles
+        for i in range(0, len(qntls)):
+            dict_probs['quantiles']['perc%.0f' % (qntls[i]*100)] = pred_qntls[i]
+
+        return dict_probs
+
     def fold_training(self, region, train_index, test_index, X, Y, weights):
         """
         For each fold and/or tran/test separation, create the model and calculate KPIs to establish the best weights
@@ -155,7 +182,7 @@ class ModelTrainer:
         assert len(Xtrain) == len(Ytrain)
         assert len(Xtest) == len(Ytest)
 
-        ngb = self.train_NGB_model(region, Xtrain, Ytrain, weights)[0]
+        ngb  = self.train_NGB_model(region, Xtrain, Ytrain, weights)[0]
 
         return ngb.predict(Xtest)
 
@@ -356,7 +383,8 @@ class ModelTrainer:
                 rfqr_w.fit(X, np.array(Y).ravel(), sample_weight=weight)
                 self.logger.info('pyquantrf RFQR model training end')
 
-                files_noext = weights_folder + os.sep + 'predictor_' + target_data['label'] + '_w' + target_data['str_weights']
+                files_noext = weights_folder + os.sep + 'predictor_' + target_data['label'] + '_w' + \
+                              target_data['str_weights'] + '_' + self.cfg['regions'][k_region]['finalModelCreator']['identifier']
                 pickle.dump([ngb, rfqr, rfqr_w], open('%s.pkl' % files_noext, 'wb'))
                 json.dump({"signals": list(selected_features)}, open('%s.json' % files_noext.replace('predictor', 'inputs'), 'w'))
 

@@ -6,6 +6,7 @@ import numpy as np
 import math
 import pickle
 from influxdb import InfluxDBClient
+from classes.model_trainer import ModelTrainer
 
 class Forecaster:
     """
@@ -48,12 +49,16 @@ class Forecaster:
         self.qrf_output = 0
         self.perc_available_features = 0
 
-    def build_model_input_dataset(self, inputs_gatherer, input_cfg_file):
+    def build_model_input_dataset(self, inputs_gatherer, input_cfg_file, output_signal):
         """
         Build the dataset
         """
         self.day_to_predict = inputs_gatherer.day_to_predict
         self.cfg_signals = json.loads(open(input_cfg_file).read())
+
+        # Go ahead accordingly to the output signal name
+        days_ahead = int(output_signal.split('-d')[-1])
+        self.day_to_predict += days_ahead*86400
 
         input_data_values = []
         for signal in self.cfg_signals['signals']:
@@ -126,40 +131,15 @@ class Forecaster:
                    if qrf1_percentiles[i] > threshold:
                        return float(100-(i+1))
 
-    def calc_prob_interval(self, pred_dataset, lower_limit, upper_limit):
-        mask = np.logical_and(pred_dataset > lower_limit, pred_dataset < upper_limit)
-        return len(pred_dataset[mask]) / len(pred_dataset)
-
-    def handle_qrf_output(self, qrf, region_code):
-        qntls = np.array(self.cfg['regions'][region_code]['forecaster']['quantiles'])
-        pred_qntls, pred_dataset = qrf.predict(self.input_df, qntls)
-        pred_dataset = pred_dataset[0]
-        pred_qntls = pred_qntls[0]
-
-        ths = self.cfg['regions'][region_code]['forecaster']['thresholds']
-        eps = np.finfo(np.float32).eps
-        dict_probs = {'thresholds': {}, 'quantiles': {}}
-
-        # Get probabilities to be in configured thresholds
-        for i in range(1, len(ths)):
-            dict_probs['thresholds']['[%i:%i]' % (ths[i-1], ths[i])] = self.calc_prob_interval(pred_dataset, ths[i-1], ths[i]-eps)
-        dict_probs['thresholds']['[%i:%f]' % (ths[i], np.inf)] = self.calc_prob_interval(pred_dataset, ths[i], np.inf)
-
-        # Get probabilities to be in the configured quantiles
-        for i in range(0, len(qntls)):
-            dict_probs['quantiles']['perc%.0f' % (qntls[i]*100)] = pred_qntls[i]
-
-        return dict_probs
-
     def predict(self, predictor_file, region_data):
         if self.do_prediction is True:
             # Unload the model (qrf is not used because it does not consider the weights)
-            ngb, qrf, qrf_w = pickle.load(open(predictor_file, 'rb'))
+            ngb, _, qrf_w = pickle.load(open(predictor_file, 'rb'))
 
             # Perform the prediction
             res_ngb = ngb.pred_dist(self.input_df)
             self.ngb_output = float(res_ngb.loc[0])
-            self.qrf_output = self.handle_qrf_output(qrf_w, region_data['code'])
+            self.qrf_output = ModelTrainer.handle_qrf_output(self.cfg, qrf_w, self.input_df, region_data['code'])
             self.perc_available_features = round(self.available_features * 100 / len(self.input_df.columns), 0)
             self.logger.info('Performed prediction: model=%s ' % predictor_file)
 
