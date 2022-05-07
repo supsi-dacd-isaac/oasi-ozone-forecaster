@@ -34,7 +34,7 @@ class GridSearcher:
     def get_datasets(self):
         self.dataFrames = self.features_analyzer.dataFrames
 
-    def search_weights(self, region, target_column):
+    def search_weights(self, region, target_column, cfg_file_name):
         """
         Iterate over the weights as specified in the config file, and for each iteration save the KPIs and all the
         prediction of the algorithm performed on the test set
@@ -45,13 +45,16 @@ class GridSearcher:
         for key, df in self.dataFrames.items():
 
             fp = self.input_gatherer.output_folder_creator(key)
-            fn = fp + fp.split(os.sep)[1] + '_grid_search_KPIs_' + target_column + '.csv'
-            fn_pred = fp + fp.split(os.sep)[1] + '_grid_search_all_errors_' + target_column + '.csv'
+            fn = fp + 'GS_KPIs_' + target_column + '_' + cfg_file_name.split(os.sep)[-1].replace('.json', '') + '.csv'
+            fn_pred = fp + 'GS_all_errs_' + target_column + '_' + cfg_file_name.split(os.sep)[-1].replace('.json', '') + '.csv'
 
             # Initialize empty files in folder. Data will be inserted at each iteration step
             pd.DataFrame([],
-                         columns=['w1', 'w2', 'w3', 'Accuracy_1', 'Accuracy_2', 'Accuracy_3', 'Accuracy', 'RMSE',
-                                  'MAE', 'ConfMat']).to_csv(fn, mode='w', header=True, index=False)
+                         columns=['w1', 'w2', 'w3',
+                                  'Accuracy_1', 'Accuracy_2', 'Accuracy_3', 'Accuracy',
+                                  'RMSE1', 'RMSE2', 'RMSE3', 'RMSE',
+                                  'MAE1', 'MAE2', 'MAE3', 'MAE',
+                                  'ConfMat']).to_csv(fn, mode='w', header=True, index=False)
             pd.DataFrame([],
                          columns=['w1', 'w2', 'w3', 'Fold', 'Measurements', 'Prediction']).to_csv(fn_pred, mode='w', header=True, index=False)
 

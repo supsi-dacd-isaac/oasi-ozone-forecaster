@@ -66,6 +66,12 @@ class ModelTrainer:
                                      self.get_classes(measured.loc[measured > threshold]))
         return lcl_acc
 
+    @staticmethod
+    def calc_mae_rmse_threshold(meas, pred, th):
+        mask = meas.values >= th
+        return round(mean_absolute_error(meas[mask], pred[mask]), 3), \
+               round(np.sqrt(mean_squared_error(meas[mask], pred[mask])), 3)
+
     def calculate_KPIs(self, region, prediction, measured, weights):
         """
         For each fold and/or train/test separation, return the KPIs to establish the best weights combination
@@ -93,10 +99,14 @@ class ModelTrainer:
         lcl_mae = round(mean_absolute_error(measured, prediction), 3)
         lcl_cm = confusion_matrix(self.get_classes(prediction), self.get_classes(measured))
 
-        df_KPIs = pd.DataFrame([[w1, w2, w3, lcl_acc_1, lcl_acc_2, lcl_acc_3, lcl_acc, lcl_rmse, lcl_mae,
-                                 str(lcl_cm.flatten().tolist())]],
+        mae1, rmse1 = self.calc_mae_rmse_threshold(meas=measured, pred=prediction, th=threshold1)
+        mae2, rmse2= self.calc_mae_rmse_threshold(meas=measured, pred=prediction, th=threshold2)
+        mae3, rmse3= self.calc_mae_rmse_threshold(meas=measured, pred=prediction, th=threshold3)
+
+        df_KPIs = pd.DataFrame([[w1, w2, w3, lcl_acc_1, lcl_acc_2, lcl_acc_3, lcl_acc, rmse1, rmse2, rmse3, lcl_rmse,
+                                 mae1, mae2, mae3, lcl_mae, str(lcl_cm.flatten().tolist())]],
                                columns=['w1', 'w2', 'w3', 'Accuracy_1', 'Accuracy_2', 'Accuracy_3', 'Accuracy',
-                                        'RMSE', 'MAE', 'ConfMat'])
+                                        'RMSE1', 'RMSE2', 'RMSE3', 'RMSE', 'MAE1', 'MAE2', 'MAE3', 'MAE', 'ConfMat'])
 
         return df_KPIs
 
@@ -279,16 +289,17 @@ class ModelTrainer:
         :return: pandas DF with KPIs for each dataset provided
         :rtype: pandas.DataFrame
         """
-        self.logger.info('Region: %s, target: %s, weights: %s -> Started FS on whole dataset' % (region, target_column,
-                                                                                                 weights))
-        x_data, y_data = self.get_numpy_df(df_x, df_y)
-        selected_features, important_features = self.features_analyzer.important_features(region, x_data, y_data, features[1:], weights)
-        X, Y = self.get_reduced_dataset(df_x, df_y, selected_features)
-        self.logger.info('Region: %s, target: %s, weights: %s -> Ended FS on whole dataset' % (region, target_column,
-                                                                                               weights))
-
-        output_folder = self.get_weights_folder_results(region, target_column, weights)
-        self.features_analyzer.save_csv(important_features, target_column, selected_features, output_folder)
+        # self.logger.info('Region: %s, target: %s, weights: %s -> Started FS on whole dataset' % (region, target_column,
+        #                                                                                          weights))
+        # x_data, y_data = self.get_numpy_df(df_x, df_y)
+        # selected_features, important_features = self.features_analyzer.important_features(region, x_data, y_data, features[1:], weights)
+        # X, Y = self.get_reduced_dataset(df_x, df_y, selected_features)
+        # X, Y = self.remove_date(X, Y)
+        # self.logger.info('Region: %s, target: %s, weights: %s -> Ended FS on whole dataset' % (region, target_column,
+        #                                                                                        weights))
+        #
+        # output_folder = self.get_weights_folder_results(region, target_column, weights)
+        # self.features_analyzer.save_csv(important_features, target_column, selected_features, output_folder)
 
         cv_folds = []
         years = sorted(list(set(df_x.date.str[0:4])))
@@ -304,23 +315,25 @@ class ModelTrainer:
 
         assert (sum([len(fold[1]) for fold in cv_folds]) == len(df_x))
 
-        X, Y = self.remove_date(X, Y)
         ngb_prediction = np.empty(len(df_y))
         df_pred = pd.DataFrame(columns=['w1', 'w2', 'w3', 'Fold', 'Measurements', 'Prediction'])
 
         fold = 1
         for (train_index, test_index) in cv_folds:
-            # self.logger.info('Region: %s, target: %s, weights: %s -> Started FS fold %i/%i' % (region, target_column, weights, fold, len(cv_folds)))
-            # lcl_x, lcl_y = df_x.loc[train_index], df_y.loc[train_index]
-            # x_data, y_data = self.get_numpy_df(lcl_x, lcl_y)
-            # selected_features = self.features_analyzer.important_features(region, x_data, y_data, features[1:], weights)[0]
-            # X, Y = self.get_reduced_dataset(df_x, df_y, selected_features)
-            # X, Y = self.remove_date(X, Y)
+            self.logger.info('Region: %s, target: %s, weights: %s -> Started FS fold %i/%i' % (region, target_column, weights, fold, len(cv_folds)))
+            lcl_x, lcl_y = df_x.loc[train_index], df_y.loc[train_index]
+            x_data, y_data = self.get_numpy_df(lcl_x, lcl_y)
+            selected_features = self.features_analyzer.important_features(region, x_data, y_data, features[1:], weights)[0]
+            X, Y = self.get_reduced_dataset(df_x, df_y, selected_features)
+            X, Y = self.remove_date(X, Y)
+            self.logger.info('Region: %s, target: %s, weights: %s -> Ended FS fold %i/%i' % (region, target_column, weights, fold, len(cv_folds)))
 
             self.logger.info('Region: %s, target: %s, weights: %s -> Started model training fold %i/%i' % (region, target_column, weights, fold, len(cv_folds)))
             pred = self.fold_training(region, train_index, test_index, X, Y, weights)
             ngb_prediction[test_index] = pred
             df_pred = pd.concat([df_pred, self.error_data(pred, Y.loc[test_index], fold, weights)], ignore_index=True, axis=0)
+            self.logger.info('Region: %s, target: %s, weights: %s -> Ended model training fold %i/%i' % (region, target_column, weights, fold, len(cv_folds)))
+
             fold += 1
 
         prediction, measured = self.convert_to_series(ngb_prediction, Y)

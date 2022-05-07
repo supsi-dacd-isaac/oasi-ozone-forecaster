@@ -20,13 +20,13 @@ urllib3.disable_warnings()
 # --------------------------------------------------------------------------- #
 # Functions
 # --------------------------------------------------------------------------- #
-def gs_process(ig, k_region, target, cfg, logger):
+def gs_process(ig, k_region, target, cfg, logger, cfg_file_name):
     fa = FeaturesAnalyzer(ig, forecast_type, cfg, logger)
     mt = ModelTrainer(fa, ig, forecast_type, cfg, logger)
     gs = GridSearcher(fa, ig, mt, forecast_type, cfg, logger)
 
     fa.dataset_reader(k_region, [target])
-    gs.search_weights(k_region, target)
+    gs.search_weights(k_region, target, cfg_file_name)
 
 
 if __name__ == "__main__":
@@ -45,7 +45,8 @@ if __name__ == "__main__":
         print('\nATTENTION! Unable to open configuration file %s\n' % config_file)
         sys.exit(1)
 
-    cfg = json.loads(open(args.c).read())
+    cfg_file_name = args.c
+    cfg = json.loads(open(cfg_file_name).read())
 
     # Define the forecast type
     forecast_type = args.t
@@ -71,7 +72,7 @@ if __name__ == "__main__":
     # Cycle over the regions
     for k_region in cfg['regions'].keys():
         for target in cfg['regions'][k_region]['gridSearcher']['targetColumns']:
-            tmp_proc = Process(target=gs_process, args=[ig, k_region, target, cfg, logger])
+            tmp_proc = Process(target=gs_process, args=[ig, k_region, target, cfg, logger, cfg_file_name])
             tmp_proc.start()
             procs.append(tmp_proc)
 
