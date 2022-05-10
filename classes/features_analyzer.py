@@ -196,7 +196,7 @@ class FeaturesAnalyzer:
 
         return new_features, important_features
 
-    def perform_feature_selection(self, region, x_data, y_data, features, target_data):
+    def perform_feature_selection(self, region, x_data, y_data, features, target, target_data):
         """
         Obtain selected features and also save them in the output folder
 
@@ -209,8 +209,9 @@ class FeaturesAnalyzer:
         :return: list of new features and dataframe with relative importance of each single feature
         :rtype: list, pandas.DataFrame
         """
-        self.logger.info('Launched FS (%s variables to select, weights=[%s]), it can take a while...' % (self.cfg['regions'][region]['featuresAnalyzer']['numberSelectedFeatures'],
-                                                                                                         target_data['weights'][self.forecast_type]))
+        self.logger.info('Launched FS (%s variables to select, weights=[%s], samples=%i), '
+                         'it can take a while...' % (self.cfg['regions'][region]['featuresAnalyzer']['numberSelectedFeatures'],
+                                                     target_data['weights'][self.forecast_type], len(y_data)))
         new_features, important_features = self.important_features(region, x_data, y_data, features[1:],
                                                                    target_data['weights'][self.forecast_type])
 
@@ -224,7 +225,7 @@ class FeaturesAnalyzer:
                 self.logger.warning(f)
 
         output_folder_path = self.inputs_gatherer.output_folder_creator(region)
-        self.save_csv(important_features, target_data['signal'], new_features, output_folder_path)
+        self.save_csv(important_features, target, new_features, output_folder_path)
 
         return new_features, important_features
 

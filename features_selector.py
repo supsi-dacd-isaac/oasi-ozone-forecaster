@@ -18,12 +18,12 @@ urllib3.disable_warnings()
 # --------------------------------------------------------------------------- #
 # Functions
 # --------------------------------------------------------------------------- #
-def fa_process(ig, k_region, target_data, cfg, logger):
+def fa_process(ig, k_region, target, target_data, cfg, logger):
     fa = FeaturesAnalyzer(ig, forecast_type, cfg, logger)
-    fa.dataset_reader(k_region, target_column=[target_data['signal']])
+    fa.dataset_reader(k_region, target_column=[target])
     for key, df in fa.dataFrames.items():
-        x_data, y_data, features = fa.dataset_splitter(key, df, target_data['signal'])[:3]
-        fa.perform_feature_selection(key, x_data, y_data, features, target_data)
+        x_data, y_data, features = fa.dataset_splitter(key, df, target)[:3]
+        fa.perform_feature_selection(key, x_data, y_data, features, target, target_data)
 
 
 if __name__ == "__main__":
@@ -80,8 +80,8 @@ if __name__ == "__main__":
 
     procs = []
     for k_region in cfg['regions'].keys():
-        for target_data in cfg['regions'][k_region]['featuresAnalyzer']['targetColumns']:
-            tmp_proc = Process(target=fa_process, args=[ig, k_region, target_data, cfg, logger])
+        for target in cfg['regions'][k_region]['featuresAnalyzer']['targetColumns'].keys():
+            tmp_proc = Process(target=fa_process, args=[ig, k_region, target, cfg['regions'][k_region]['featuresAnalyzer']['targetColumns'][target], cfg, logger])
             tmp_proc.start()
             procs.append(tmp_proc)
 
