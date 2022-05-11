@@ -8,10 +8,11 @@ from ngboost import NGBRegressor
 from ngboost.distns import Normal
 from ngboost.learners import default_tree_learner
 from ngboost.scores import MLE
-from skgarden import RandomForestQuantileRegressor
+from sklearn.model_selection import KFold
 from sklearn.metrics import mean_squared_error, mean_absolute_error, accuracy_score, confusion_matrix
 
 from classes.qrfr import QuantileRandomForestRegressor as qfrfQuantileRandomForestRegressor
+
 
 class ModelTrainer:
     """
@@ -276,68 +277,61 @@ class ModelTrainer:
         return '%s%s%s%s%s%s%s' % (root_output_folder_path, 'gs', os.sep, target_column, os.sep, str_ws, os.sep)
 
     def training_cross_validated_fs(self, features, region, target_column, df_x, df_y, weights):
-        """
-        Calculates the KPIs for a set of weight with multiple Feature selection: First we create the folds of the cross
-        validation, then for each fold we do the feature selection and locally calculate the KPIs
-
-        :param features: list of selected features
-        :type features: list
-        :param df_x: design matrix
-        :type df_x: pandas.DataFrame
-        :param df_y: response vector
-        :type df_y: pandas.DataFrame
-        :return: pandas DF with KPIs for each dataset provided
-        :rtype: pandas.DataFrame
-        """
-        # self.logger.info('Region: %s, target: %s, weights: %s -> Started FS on whole dataset' % (region, target_column,
-        #                                                                                          weights))
-        # x_data, y_data = self.get_numpy_df(df_x, df_y)
-        # selected_features, important_features = self.features_analyzer.important_features(region, x_data, y_data, features[1:], weights)
-        # X, Y = self.get_reduced_dataset(df_x, df_y, selected_features)
-        # X, Y = self.remove_date(X, Y)
-        # self.logger.info('Region: %s, target: %s, weights: %s -> Ended FS on whole dataset' % (region, target_column,
-        #                                                                                        weights))
-        #
-        # output_folder = self.get_weights_folder_results(region, target_column, weights)
-        # self.features_analyzer.save_csv(important_features, target_column, selected_features, output_folder)
-
-        cv_folds = []
-        years = sorted(list(set(df_x.date.str[0:4])))
-
         df_x = df_x.reset_index(drop=True)
         df_y = df_y.reset_index(drop=True)
-
-        for year in years:
-            test_index = df_x.loc[df_x.date.str[0:4] == str(year), :].index
-            train_index = df_x.loc[df_x.date.str[0:4] != str(year), :].index
-            assert (len(test_index) + len(train_index) == len(df_x))
-            cv_folds.append((train_index, test_index))
-
-        assert (sum([len(fold[1]) for fold in cv_folds]) == len(df_x))
 
         ngb_prediction = np.empty(len(df_y))
         df_pred = pd.DataFrame(columns=['w1', 'w2', 'w3', 'Fold', 'Measurements', 'Prediction'])
 
+        # Dataset preparation for CV
+        df_x_tmp = df_x
+        df_y_tmp = df_y
+        df_x_tmp = df_x_tmp.drop(['date'], axis=1)
+        df_y_tmp = df_y_tmp.drop(['date'], axis=1)
+        cv_folds = self.cfg['regions'][region]['gridSearcher']['numFolds']
+        kf = KFold(n_splits=cv_folds, shuffle=self.cfg['regions'][region]['gridSearcher']['shuffle'],
+                   random_state=self.cfg['regions'][region]['gridSearcher']['randomState'])
+        np_x = df_x_tmp.to_numpy()
+        np_y = df_y_tmp.to_numpy()
+
         fold = 1
-        for (train_index, test_index) in cv_folds:
-            self.logger.info('Region: %s, target: %s, weights: %s -> Started FS fold %i/%i' % (region, target_column, weights, fold, len(cv_folds)))
-            lcl_x, lcl_y = df_x.loc[train_index], df_y.loc[train_index]
-            x_data, y_data = self.get_numpy_df(lcl_x, lcl_y)
-            selected_features = self.features_analyzer.important_features(region, x_data, y_data, features[1:], weights)[0]
+        for train_index, test_index in kf.split(np_x):
+            # Get the I/O datasets for the training and the test
+            X_train, X_test = np_x[train_index], np_x[test_index]
+            y_train, y_test = np_y[train_index], np_y[test_index]
+
+            # Perform the FS using the training folds
+            self.logger.info('Region: %s, target: %s, weights: %s -> Started FS fold %i/%i' % (region,
+                                                                                               target_column,
+                                                                                               weights,
+                                                                                               fold,
+                                                                                               cv_folds))
+            selected_features = self.features_analyzer.important_features(region, X_train, y_train, features[1:],
+                                                                          weights)[0]
             X, Y = self.get_reduced_dataset(df_x, df_y, selected_features)
             X, Y = self.remove_date(X, Y)
-            self.logger.info('Region: %s, target: %s, weights: %s -> Ended FS fold %i/%i' % (region, target_column, weights, fold, len(cv_folds)))
+            self.logger.info('Region: %s, target: %s, weights: %s -> Ended FS fold %i/%i' % (region, target_column,
+                                                                                             weights, fold, cv_folds))
 
-            self.logger.info('Region: %s, target: %s, weights: %s -> Started model training fold %i/%i' % (region, target_column, weights, fold, len(cv_folds)))
+            # Perform the training using the training folds and the prediction with the test fold
+            self.logger.info('Region: %s, target: %s, weights: %s -> Started model training fold %i/%i' % (region,
+                                                                                                           target_column,
+                                                                                                           weights,
+                                                                                                           fold,
+                                                                                                           cv_folds))
             pred = self.fold_training(region, train_index, test_index, X, Y, weights)
             ngb_prediction[test_index] = pred
-            df_pred = pd.concat([df_pred, self.error_data(pred, Y.loc[test_index], fold, weights)], ignore_index=True, axis=0)
-            self.logger.info('Region: %s, target: %s, weights: %s -> Ended model training fold %i/%i' % (region, target_column, weights, fold, len(cv_folds)))
-
+            self.logger.info('Region: %s, target: %s, weights: %s -> Ended model training fold %i/%i' % (region,
+                                                                                                         target_column,
+                                                                                                         weights,
+                                                                                                         fold,
+                                                                                                         cv_folds))
+            # Concat the prediction results
+            df_pred = pd.concat([df_pred, self.error_data(pred, Y.loc[test_index], fold, weights)], ignore_index=True,
+                                axis=0)
             fold += 1
 
         prediction, measured = self.convert_to_series(ngb_prediction, Y)
-
         return self.calculate_KPIs(region, prediction, measured, weights), df_pred
 
     def get_weights(self, input_file_name):
