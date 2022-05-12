@@ -356,44 +356,46 @@ class ModelTrainer:
         df = self.dataFrames[key]
 
         fp = self.input_gatherer.output_folder_creator(key)
-        fn = fp + fp.split(os.sep)[1] + '_' + target_signal
 
         _, _, _, df_x, df_y = self.features_analyzer.dataset_splitter(key, df, target_signal)
 
-        root_folder = '%sgs%s%s%s*' % (fp, os.sep, target_signal, os.sep)
         suffix = self.cfg['regions'][k_region]['finalModelCreator']['signalsFileSuffix']
-        for weights_folder in glob.glob(root_folder):
-            for input_file in glob.glob('%s%s*%s.json' % (weights_folder, os.sep, suffix)):
-                selected_features = json.loads(open(input_file).read())['signals']
-                X, Y = self.get_reduced_dataset(df_x, df_y, selected_features)
-                X, Y = self.remove_date(X, Y)
+        for input_file in glob.glob('%s*%s%s.json' % (fp, target_signal, suffix)):
+            selected_features = json.loads(open(input_file).read())['signals']
+            X, Y = self.get_reduced_dataset(df_x, df_y, selected_features)
+            X, Y = self.remove_date(X, Y)
 
-                target_data['weights'], target_data['str_weights'] = self.get_weights(input_file)
+            target_data['weights'] = self.cfg['regions'][k_region]['featuresAnalyzer']['targetColumns'][target_signal]['weights'][self.forecast_type]
 
-                self.logger.info('Train models for %s - %s, case %s, weights: %s' % (k_region, target_signal,
-                                                                                     self.forecast_type,
-                                                                                     target_data['weights']))
+            start_year = self.cfg['datasetSettings']['years'][0]
+            end_year = self.cfg['datasetSettings']['years'][-1]
+            self.logger.info('Train models for %s - %s; period [%s:%s], case %s, weights: %s' % (k_region,
+                                                                                                 target_signal,
+                                                                                                 start_year,
+                                                                                                 end_year,
+                                                                                                 self.forecast_type,
+                                                                                                 target_data['weights']))
 
-                # Train NGB model
-                self.logger.info('NGBoost model training start')
-                ngb, weight = self.train_NGB_model(k_region, X, Y, target_data['weights'])
-                self.logger.info('NGBoost model training end')
+            # Train NGB model
+            self.logger.info('Target %s -> NGBoost model training start' % target_signal)
+            ngb, weight = self.train_NGB_model(k_region, X, Y, target_data['weights'])
+            self.logger.info('Target %s -> NGBoost model training end' % target_signal)
 
-                # Train QRF model
-                rfqr = None
-                # self.logger.info('RFQR model training start')
-                # rfqr = RandomForestQuantileRegressor(n_estimators=1000).fit(X, np.array(Y).ravel())
-                # self.logger.info('RFQR model training end')
+            # Train QRF model
+            rfqr = None
+            # self.logger.info('RFQR model training start')
+            # rfqr = RandomForestQuantileRegressor(n_estimators=1000).fit(X, np.array(Y).ravel())
+            # self.logger.info('RFQR model training end')
 
-                self.logger.info('pyquantrf RFQR model training start')
-                rfqr_w = qfrfQuantileRandomForestRegressor(nthreads=4, n_estimators=1000, min_samples_leaf=10)
-                rfqr_w.fit(X, np.array(Y).ravel(), sample_weight=weight)
-                self.logger.info('pyquantrf RFQR model training end')
+            self.logger.info('Target %s -> pyquantrf RFQR model training start' % target_signal)
+            rfqr_w = qfrfQuantileRandomForestRegressor(nthreads=4, n_estimators=1000, min_samples_leaf=10)
+            rfqr_w.fit(X, np.array(Y).ravel(), sample_weight=weight)
+            self.logger.info('Target %s -> pyquantrf RFQR model training end' % target_signal)
 
-                files_noext = weights_folder + os.sep + 'predictor_' + target_data['label'] + '_w' + \
-                              target_data['str_weights'] + '_' + self.cfg['regions'][k_region]['finalModelCreator']['identifier']
-                pickle.dump([ngb, rfqr, rfqr_w], open('%s.pkl' % files_noext, 'wb'))
-                json.dump({"signals": list(selected_features)}, open('%s.json' % files_noext.replace('predictor', 'inputs'), 'w'))
+            file_name_noext = fp + 'predictor_' + target_data['label'] + '_' + \
+                              self.cfg['regions'][k_region]['finalModelCreator']['identifier']
+            pickle.dump([ngb, rfqr, rfqr_w], open('%s.pkl' % file_name_noext, 'wb'))
+            json.dump({"signals": list(selected_features)}, open('%s.json' % file_name_noext.replace('predictor', 'inputs'), 'w'))
 
     @staticmethod
     def get_reduced_dataset(df_x, df_y, selected_features):
