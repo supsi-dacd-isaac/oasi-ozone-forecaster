@@ -145,9 +145,9 @@ class Forecaster:
 
             # Define best tag: i.e. the current predictor is the best one for this case
             if self.cfg['regions'][region_data['code']]['forecaster']['bestLabels'][self.forecast_type] in predictor_file:
-                self.flag_best = 'true'
+                self.flag_best = True
             else:
-                self.flag_best = 'false'
+                self.flag_best = False
 
             dps = []
             # Define general tags

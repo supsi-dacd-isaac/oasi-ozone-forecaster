@@ -32,29 +32,38 @@ def upload_best_results(prediction_results):
     str_results = 'DAY,STATION,CASE,SIGNAL,PRED,PERC_AV_FEAT'
     for k in prediction_results[0]['qrf_prediction']['thresholds'].keys():
         str_results = '%s,PROB%s' % (str_results, k)
-    for k in prediction_results[0]['qrf_prediction']['quantiles'].keys():
-        str_results = '%s,QUANTILE_%s' % (str_results, k)
+    # for k in prediction_results[0]['qrf_prediction']['quantiles'].keys():
+    #     str_results = '%s,QUANTILE_%s' % (str_results, k)
     str_results = '%s\n' % str_results
 
     # Create first row (measure units)
     str_results = '%s,,,,[ug/m^3],[%%]' % str_results
-    for k in prediction_results[0]['qrf_prediction']['thresholds'].keys():
+    for _ in prediction_results[0]['qrf_prediction']['thresholds'].keys():
         str_results = '%s,[%%]' % str_results
-    for k in prediction_results[0]['qrf_prediction']['quantiles'].keys():
-        str_results = '%s,[ug/m^3]' % str_results
+    # for _ in prediction_results[0]['qrf_prediction']['quantiles'].keys():
+    #     str_results = '%s,[ug/m^3]' % str_results
     str_results = '%s\n' % str_results
 
+    ordered_res = []
+    res_data = {}
+    for pred_res in prediction_results:
+        k = '%s_%s' % (pred_res['region'], pred_res['output_signal'])
+        ordered_res.append(k)
+        res_data[k] = pred_res
+    ordered_res = sorted(ordered_res)
+
     # Create data rows
-    dt = datetime.fromtimestamp(prediction_results[0]['day_to_predict'])
-    for result in prediction_results:
-        if result['flag_best'] == 'true':
+    dt = datetime.fromtimestamp(res_data[ordered_res[0]]['day_to_predict'])
+    for k in ordered_res:
+        result = res_data[k]
+        if result['flag_best'] is True:
             str_results = '%s%s,%s,%s,%s,%.1f,%.0f' % (str_results, dt.strftime('%Y-%m-%d'), result['region'],
                                                        forecast_type, result['output_signal'],
                                                        result['ngb_prediction'], result['perc_available_features'])
             for k in result['qrf_prediction']['thresholds'].keys():
                 str_results = '%s,%.0f' % (str_results, result['qrf_prediction']['thresholds'][k]*100)
-            for k in result['qrf_prediction']['quantiles'].keys():
-                str_results = '%s,%.1f' % (str_results, result['qrf_prediction']['quantiles'][k])
+            # for k in result['qrf_prediction']['quantiles'].keys():
+            #     str_results = '%s,%.1f' % (str_results, result['qrf_prediction']['quantiles'][k])
             str_results = '%s\n' % str_results
 
     # Results file creation
