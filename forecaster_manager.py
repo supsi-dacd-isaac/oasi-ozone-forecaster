@@ -23,9 +23,20 @@ from classes.data_manager import DataManager
 
 queue_results = Queue()
 
+
 #  --------------------------------------------------------------------------- #
 # Functions
 # -----------------------------------------------------------------------------#
+def sort_results(prediction_results):
+    ordered_res = []
+    res_data = {}
+    for pred_res in prediction_results:
+        k = '%s_%s' % (pred_res['region'], pred_res['output_signal'])
+        ordered_res.append(k)
+        res_data[k] = pred_res
+    return sorted(ordered_res), res_data
+
+
 def upload_best_results(prediction_results):
     logger.info('Send best results to remote FTP server')
     # Create first row (header)
@@ -44,13 +55,8 @@ def upload_best_results(prediction_results):
     #     str_results = '%s,[ug/m^3]' % str_results
     str_results = '%s\n' % str_results
 
-    ordered_res = []
-    res_data = {}
-    for pred_res in prediction_results:
-        k = '%s_%s' % (pred_res['region'], pred_res['output_signal'])
-        ordered_res.append(k)
-        res_data[k] = pred_res
-    ordered_res = sorted(ordered_res)
+    # Order the results
+    ordered_res, res_data = sort_results(prediction_results)
 
     # Create data rows
     dt = datetime.fromtimestamp(res_data[ordered_res[0]]['day_to_predict'])
@@ -61,7 +67,7 @@ def upload_best_results(prediction_results):
                                                        forecast_type, result['output_signal'],
                                                        result['ngb_prediction'], result['perc_available_features'])
             for k in result['qrf_prediction']['thresholds'].keys():
-                str_results = '%s,%.0f' % (str_results, result['qrf_prediction']['thresholds'][k]*100)
+                str_results = '%s,%.1f' % (str_results, result['qrf_prediction']['thresholds'][k]*100)
             # for k in result['qrf_prediction']['quantiles'].keys():
             #     str_results = '%s,%.1f' % (str_results, result['qrf_prediction']['quantiles'][k])
             str_results = '%s\n' % str_results
@@ -85,7 +91,12 @@ def notify_summary(prediction_results):
     logger.info('Alert checking')
     str_err = ''
     str_info = ''
-    for result in prediction_results:
+
+    # Order the results
+    ordered_res, res_data = sort_results(prediction_results)
+
+    for k in ordered_res:
+        result = res_data[k]
         threshold = cfg['regions'][result['region']]['alarms']['thresholds'][forecast_type]
         if result['flag_prediction'] is True:
             if result['perc_available_features'] <= threshold:
@@ -107,21 +118,16 @@ def notify_summary(prediction_results):
                     str_err = '%s\n%s' % (str_err, uf)
                 str_err = '%s\n\n' % str_err
             else:
-                str_info = '%s%s_%s_%s: model %s -> predicted max(O3) = %.1f, probabilities: %s, ' \
-                           'quantiles %s, available features %.1f%%, alert_threshold %.1f%%, ' \
-                           'flag best=%s\n\n' % (str_info,
-                                                 result['region'],
-                                                 result['forecast_type'],
-                                                 result['output_signal'],
-                                                 result['predictor'],
-                                                 result['ngb_prediction'],
-                                                 result['qrf_prediction']['thresholds'],
-                                                 result['qrf_prediction']['quantiles'],
-                                                 result['perc_available_features'],
-                                                 threshold,
-                                                 result['flag_best'])
-
-
+                # Only d0 results are notified if there are no problems
+                if 'd0' in result['output_signal']:
+                    str_info = '%s%s_%s_%s, predictor %s: PRED=%.1f ug/m^3; PROB: ' % (str_info, result['region'],
+                                                                                       result['forecast_type'],
+                                                                                       result['output_signal'],
+                                                                                       result['predictor'],
+                                                                                       result['ngb_prediction'])
+                    for kt in result['qrf_prediction']['thresholds'].keys():
+                        str_info = '%s %s=%.1f%%,' % (str_info, kt, result['qrf_prediction']['thresholds'][kt]*100)
+                    str_info = '%s; flag best=%s\n' % (str_info[:-1], result['flag_best'])
         else:
             str_err = '%s%s_%s_%s: model %s -> prediction not performed' % (str_err,
                                                                             result['region'],
