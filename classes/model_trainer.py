@@ -4,10 +4,11 @@ import pickle
 import os
 import json
 import glob
+import scipy
 from ngboost import NGBRegressor
 from ngboost.distns import Normal
 from ngboost.learners import default_tree_learner
-from ngboost.scores import MLE
+from ngboost.scores import MLE, LogScore
 from sklearn.model_selection import KFold
 from sklearn.metrics import mean_squared_error, mean_absolute_error, accuracy_score, confusion_matrix
 
@@ -170,6 +171,34 @@ class ModelTrainer:
 
         return dict_probs
 
+    @staticmethod
+    def handle_ngb_normal_dist_output(cfg, mu, sigma, region_code):
+        dist = scipy.stats.norm(loc=mu, scale=sigma)
+        # QUANTILES
+        # dist.ppf(0.1)
+        # dist.ppf([0.1, 0.5])
+        # VALUES FOR PROB
+        # dist.ppf(0.1)
+        # dist.ppf([0.1, 0.5])
+        samples = []
+        for i in range(1, 1000):
+            samples.append(dist.ppf(float(i / 1000)))
+        samples = np.array(samples)
+
+        ths = cfg['regions'][region_code]['forecaster']['thresholds']
+        eps = np.finfo(np.float32).eps
+        dict_probs = {'thresholds': {}, 'quantiles': {}}
+
+        for i in range(1, len(ths)):
+            dict_probs['thresholds']['[%i:%i]' % (ths[i-1], ths[i])] = ModelTrainer.calc_prob_interval(samples, ths[i-1], ths[i]-eps)
+        dict_probs['thresholds']['[%i:%f]' % (ths[i], np.inf)] = ModelTrainer.calc_prob_interval(samples, ths[i], np.inf)
+
+        # Get probabilities to be in the configured quantiles
+        for q in cfg['regions'][region_code]['forecaster']['quantiles']:
+            dict_probs['quantiles']['perc%.0f' % (q*100)] = dist.ppf(q)
+
+        return dict_probs
+
     def fold_training(self, region, train_index, test_index, X, Y, weights):
         """
         For each fold and/or tran/test separation, create the model and calculate KPIs to establish the best weights
@@ -197,7 +226,7 @@ class ModelTrainer:
 
         return ngb.predict(Xtest)
 
-    def train_NGB_model(self, region, Xtrain, Ytrain, weights):
+    def train_NGB_model(self, region, Xtrain, Ytrain, weights, ngbPars=None):
         """
         Return the NGB model trained on the available data
 
@@ -209,8 +238,15 @@ class ModelTrainer:
         :rtype: ngboost.NGBRegressor
         """
 
-        n_est = self.cfg['regions'][region]['featuresAnalyzer']['numberEstimatorsNGB']
-        l_rate = self.cfg['regions'][region]['featuresAnalyzer']['learningRate']
+        if ngbPars is None:
+            # Usage of the configured parameters
+            n_est = self.cfg['regions'][region]['featuresAnalyzer']['numberEstimatorsNGB']
+            l_rate = self.cfg['regions'][region]['featuresAnalyzer']['learningRate']
+        else:
+            # Usage of the parameters passed as arguments
+            n_est = ngbPars['numberEstimators']
+            l_rate = ngbPars['learningRate']
+
         threshold1 = self.cfg['regions'][region]['featuresAnalyzer']['threshold1']  # 240
         threshold2 = self.cfg['regions'][region]['featuresAnalyzer']['threshold2']  # 180
         threshold3 = self.cfg['regions'][region]['featuresAnalyzer']['threshold3']  # 135
@@ -343,7 +379,7 @@ class ModelTrainer:
             str_w += val + '-'
         return w, str_w[:-1]
 
-    def train_final_models(self, k_region, target_signal):
+    def train_final_models(self, k_region, target_signal, hps=None):
         """
         Calculates the KPIs for a set of weight with multiple Feature selection: First we create the folds of the cross
         validation, then for each fold we do the feature selection and locally calculate the KPIs
@@ -359,8 +395,16 @@ class ModelTrainer:
 
         _, _, _, df_x, df_y = self.features_analyzer.dataset_splitter(key, df, target_signal)
 
-        suffix = self.cfg['regions'][k_region]['finalModelCreator']['signalsFileSuffix']
-        for input_file in glob.glob('%s*%s%s.json' % (fp, target_signal, suffix)):
+        # Check if there is a hyperparameters optimization or not
+        if hps is None:
+            suffix = self.cfg['regions'][k_region]['finalModelCreator']['signalsFileSuffix']
+            input_files = glob.glob('%s*%s%s.json' % (fp, target_signal, suffix))
+        else:
+            str_hpars = 'ne%i-lr%s' % (hps['numberEstimators'], str(hps['learningRate']).replace('.', ''))
+            suffix = str_hpars
+            input_files = glob.glob('%shpo%s%s%s*%s*.json' % (fp, os.sep, suffix, os.sep, target_signal))
+
+        for input_file in input_files:
             selected_features = json.loads(open(input_file).read())['signals']
             X, Y = self.get_reduced_dataset(df_x, df_y, selected_features)
             X, Y = self.remove_date(X, Y)
@@ -378,7 +422,7 @@ class ModelTrainer:
 
             # Train NGB model
             self.logger.info('Target %s -> NGBoost model training start' % target_signal)
-            ngb, weight = self.train_NGB_model(k_region, X, Y, target_data['weights'])
+            ngb, weight = self.train_NGB_model(k_region, X, Y, target_data['weights'], hps)
             self.logger.info('Target %s -> NGBoost model training end' % target_signal)
 
             # Train QRF model
@@ -392,8 +436,14 @@ class ModelTrainer:
             rfqr_w.fit(X, np.array(Y).ravel(), sample_weight=weight)
             self.logger.info('Target %s -> pyquantrf RFQR model training end' % target_signal)
 
-            file_name_noext = fp + 'predictor_' + target_data['label'] + '_' + \
-                              self.cfg['regions'][k_region]['finalModelCreator']['identifier']
+            # Check if there is a hyperparameters optimization or not
+            if hps is None:
+                file_name_noext = fp + 'predictor_' + target_data['label'] + '_' + \
+                                  self.cfg['regions'][k_region]['finalModelCreator']['identifier']
+            else:
+                file_name_noext = '%shpo%s%s%spredictor_%s_%s' % (fp, os.sep, suffix, os.sep,target_data['label'],
+                                                                  str_hpars)
+
             pickle.dump([ngb, rfqr, rfqr_w], open('%s.pkl' % file_name_noext, 'wb'))
             json.dump({"signals": list(selected_features)}, open('%s.json' % file_name_noext.replace('predictor', 'inputs'), 'w'))
 
