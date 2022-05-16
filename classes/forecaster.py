@@ -137,8 +137,15 @@ class Forecaster:
             ngb, _, qrf_w = pickle.load(open(predictor_file, 'rb'))
 
             # Perform the prediction
+            # NGB
             res_ngb = ngb.pred_dist(self.input_df)
             self.ngb_output = float(res_ngb.loc[0])
+            mean_ngb_dist = res_ngb.dist.mean()[0]
+            std_ngb_dist = res_ngb.dist.std()[0]
+            self.ngb_output_dist = ModelTrainer.handle_ngb_normal_dist_output(self.cfg, mean_ngb_dist, std_ngb_dist,
+                                                                              region_data['code'])
+
+            # QRF
             self.qrf_output = ModelTrainer.handle_qrf_output(self.cfg, qrf_w, self.input_df, region_data['code'])
             self.perc_available_features = round(self.available_features * 100 / len(self.input_df.columns), 0)
             self.logger.info('Performed prediction: model=%s ' % predictor_file)
@@ -150,6 +157,8 @@ class Forecaster:
                 self.flag_best = False
 
             dps = []
+
+            # NGBoost section
             point = {
                 'time': self.day_to_predict,
                 'measurement': self.cfg['influxDB']['measurementOutputSingleForecast'],
@@ -160,46 +169,32 @@ class Forecaster:
             }
             dps.append(point)
 
-            mean = res_ngb.dist.mean()[0]
-            std = res_ngb.dist.std()[0]
-            fields = {
-                "Mean": mean,
-                "StdDev": std,
-                "UpperK1": mean + std,
-                "LowerK1": mean - std,
-                "UpperK2": mean + std * 2,
-                "LowerK2": mean - std * 2,
-                "UpperK3": mean + std * 3,
-                "LowerK3": mean - std * 3,
-            }
             point = {
                 'time': self.day_to_predict,
                 'measurement': self.cfg['influxDB']['measurementOutputNormDistForecast'],
-                'fields': fields,
+                'fields': {
+                    "Mean": mean_ngb_dist,
+                    "StdDev": std_ngb_dist,
+                    "UpperK1": mean_ngb_dist + std_ngb_dist,
+                    "LowerK1": mean_ngb_dist - std_ngb_dist,
+                    "UpperK2": mean_ngb_dist + std_ngb_dist * 2,
+                    "LowerK2": mean_ngb_dist - std_ngb_dist * 2,
+                    "UpperK3": mean_ngb_dist + std_ngb_dist * 3,
+                    "LowerK3": mean_ngb_dist - std_ngb_dist * 3,
+                },
                 'tags': dict(location=region_data['code'], case=self.forecast_type, flag_best=self.flag_best,
                              predictor=self.model_name, signal=self.output_signal)
             }
             dps.append(point)
 
-            for interval in self.qrf_output['thresholds'].keys():
-                point = {
-                    'time': self.day_to_predict,
-                    'measurement': self.cfg['influxDB']['measurementOutputThresholdsForecast'],
-                    'fields': dict(Probability=float(self.qrf_output['thresholds'][interval])),
-                    'tags': dict(location=region_data['code'], case=self.forecast_type, flag_best=self.flag_best,
-                                 predictor=self.model_name, signal=self.output_signal, interval=interval)
-                }
-                dps.append(point)
+            dps = self.append_predictor_results(dps, self.ngb_output_dist, region_data,
+                                                self.cfg['influxDB']['measurementOutputThresholdsForecastNGB'],
+                                                self.cfg['influxDB']['measurementOutputQuantilesForecastNGB'])
 
-            for quantile in self.qrf_output['quantiles'].keys():
-                point = {
-                    'time': self.day_to_predict,
-                    'measurement': self.cfg['influxDB']['measurementOutputQuantilesForecast'],
-                    'fields': dict(PredictedValue=float(self.qrf_output['quantiles'][quantile])),
-                    'tags': dict(location=region_data['code'], case=self.forecast_type, flag_best=self.flag_best,
-                                 predictor=self.model_name, signal=self.output_signal, quantile=quantile)
-                }
-                dps.append(point)
+            # QRF section
+            dps = self.append_predictor_results(dps, self.qrf_output, region_data,
+                                                self.cfg['influxDB']['measurementOutputThresholdsForecast'],
+                                                self.cfg['influxDB']['measurementOutputQuantilesForecast'])
 
             # Write results on InfluxDB
             self.influxdb_client.write_points(dps, time_precision='s')
@@ -207,3 +202,25 @@ class Forecaster:
             self.logger.error('Model %s can not perform prediction, some features cannot be surrogated' % predictor_file)
             self.ngb_output = None
             self.perc_available_features = None
+
+    def append_predictor_results(self, dps, predictor_results, region_data, meas_ths, meas_qs):
+        for interval in predictor_results['thresholds'].keys():
+            point = {
+                'time': self.day_to_predict,
+                'measurement': meas_ths,
+                'fields': dict(Probability=float(predictor_results['thresholds'][interval])),
+                'tags': dict(location=region_data['code'], case=self.forecast_type, flag_best=self.flag_best,
+                             predictor=self.model_name, signal=self.output_signal, interval=interval)
+            }
+            dps.append(point)
+
+        for quantile in predictor_results['quantiles'].keys():
+            point = {
+                'time': self.day_to_predict,
+                'measurement': meas_qs,
+                'fields': dict(PredictedValue=float(predictor_results['quantiles'][quantile])),
+                'tags': dict(location=region_data['code'], case=self.forecast_type, flag_best=self.flag_best,
+                             predictor=self.model_name, signal=self.output_signal, quantile=quantile)
+            }
+            dps.append(point)
+        return dps

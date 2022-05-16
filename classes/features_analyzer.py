@@ -8,7 +8,7 @@ import json
 from ngboost import NGBRegressor
 from ngboost.distns import Normal
 from ngboost.learners import default_tree_learner
-from ngboost.scores import MLE
+from ngboost.scores import MLE, LogScore
 
 from classes.inputs_gatherer import InputsGatherer
 
@@ -153,7 +153,7 @@ class FeaturesAnalyzer:
 
         return x_data_np, y_data_np, features, x_data, y_data
 
-    def important_features(self, region, x_data, y_data, features, weights):
+    def important_features(self, region, x_data, y_data, features, weights, ngbPars=None):
         """
         Calculate the important features given design matrix, target vector and full list of features
 
@@ -169,8 +169,15 @@ class FeaturesAnalyzer:
 
         assert x_data.shape[1] == len(features)
 
-        n_est = self.cfg['regions'][region]['featuresAnalyzer']['numberEstimatorsNGB']
-        l_rate = self.cfg['regions'][region]['featuresAnalyzer']['learningRate']
+        if ngbPars is None:
+            # Usage of the configured parameters
+            n_est = self.cfg['regions'][region]['featuresAnalyzer']['numberEstimatorsNGB']
+            l_rate = self.cfg['regions'][region]['featuresAnalyzer']['learningRate']
+        else:
+            # Usage of the parameters passed as arguments
+            n_est = ngbPars['numberEstimators']
+            l_rate = ngbPars['learningRate']
+
         n_feat = self.cfg['regions'][region]['featuresAnalyzer']['numberSelectedFeatures']
         threshold1 = self.cfg['regions'][region]['featuresAnalyzer']['threshold1']
         threshold2 = self.cfg['regions'][region]['featuresAnalyzer']['threshold2']
@@ -182,6 +189,7 @@ class FeaturesAnalyzer:
 
         NGB_model = NGBRegressor(learning_rate=l_rate, Base=default_tree_learner, Dist=Normal, Score=MLE,
                                  n_estimators=n_est, random_state=500, verbose=False)
+
         weights = np.array(
             [w1 if x >= threshold1 else w2 if x >= threshold2 else w3 if x >= threshold3 else 1.0 for x in y_data],
             dtype='float64')
@@ -196,7 +204,7 @@ class FeaturesAnalyzer:
 
         return new_features, important_features
 
-    def perform_feature_selection(self, region, x_data, y_data, features, target, target_data):
+    def perform_feature_selection(self, region, x_data, y_data, features, target, target_data, hps=None):
         """
         Obtain selected features and also save them in the output folder
 
@@ -209,11 +217,14 @@ class FeaturesAnalyzer:
         :return: list of new features and dataframe with relative importance of each single feature
         :rtype: list, pandas.DataFrame
         """
+        if hps is not None:
+            self.logger.info('HPO STEP: %s' % hps)
+
         self.logger.info('Launched FS (%s variables to select, weights=[%s], samples=%i), '
                          'it can take a while...' % (self.cfg['regions'][region]['featuresAnalyzer']['numberSelectedFeatures'],
                                                      target_data['weights'][self.forecast_type], len(y_data)))
         new_features, important_features = self.important_features(region, x_data, y_data, features[1:],
-                                                                   target_data['weights'][self.forecast_type])
+                                                                   target_data['weights'][self.forecast_type], hps)
 
 
         important_nan_features = [f for f in self.nan_features if f in new_features]
@@ -224,7 +235,15 @@ class FeaturesAnalyzer:
             for f in important_nan_features:
                 self.logger.warning(f)
 
-        output_folder_path = self.inputs_gatherer.output_folder_creator(region)
+        # Check if there is a hyperparameters optimization or not
+        if hps is None:
+            output_folder_path = self.inputs_gatherer.output_folder_creator(region)
+        else:
+            str_pars = 'ne%i-lr%s' % (hps['numberEstimators'], str(hps['learningRate']).replace('.', ''))
+            output_folder_path = '%shpo%s%s%s' % (self.inputs_gatherer.output_folder_creator(region), os.sep, str_pars,
+                                                  os.sep)
+            if os.path.exists(output_folder_path) is False:
+                os.mkdir(output_folder_path)
         self.save_csv(important_features, target, new_features, output_folder_path)
 
         return new_features, important_features
