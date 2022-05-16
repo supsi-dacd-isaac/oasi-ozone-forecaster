@@ -150,12 +150,32 @@ class Forecaster:
                 self.flag_best = False
 
             dps = []
-            # Define general tags
             point = {
                 'time': self.day_to_predict,
                 'measurement': self.cfg['influxDB']['measurementOutputSingleForecast'],
                 'fields': dict(PredictedValue=float(self.ngb_output),
                                AvailableFeatures=float(self.perc_available_features)),
+                'tags': dict(location=region_data['code'], case=self.forecast_type, flag_best=self.flag_best,
+                             predictor=self.model_name, signal=self.output_signal)
+            }
+            dps.append(point)
+
+            mean = res_ngb.dist.mean()[0]
+            std = res_ngb.dist.std()[0]
+            fields = {
+                "Mean": mean,
+                "StdDev": std,
+                "UpperK1": mean + std,
+                "LowerK1": mean - std,
+                "UpperK2": mean + std * 2,
+                "LowerK2": mean - std * 2,
+                "UpperK3": mean + std * 3,
+                "LowerK3": mean - std * 3,
+            }
+            point = {
+                'time': self.day_to_predict,
+                'measurement': self.cfg['influxDB']['measurementOutputNormDistForecast'],
+                'fields': fields,
                 'tags': dict(location=region_data['code'], case=self.forecast_type, flag_best=self.flag_best,
                              predictor=self.model_name, signal=self.output_signal)
             }
