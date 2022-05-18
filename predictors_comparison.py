@@ -1,0 +1,213 @@
+import json
+import logging
+import os
+import sys
+import argparse
+
+import numpy as np
+import matplotlib.pyplot as plt
+import urllib3
+from influxdb import DataFrameClient
+from sklearn.metrics import mean_absolute_error, mean_squared_error
+
+import warnings
+warnings.filterwarnings("ignore")
+
+urllib3.disable_warnings()
+from classes.comparison_utils import ComparisonUtils as cu
+from classes.model_trainer import ModelTrainer as mt
+
+
+def calc_ngb_prediction(meas, region, predictor, case, signal, start_date, end_date):
+    query = "select mean(PredictedValue) as prediction from %s " \
+            "where signal='%s' and location='%s' and " \
+            "predictor='%s' and case='%s' and time>='%sT00:00:00Z' and " \
+            "time<='%sT23:59:59Z' " \
+            "group by time(1d), location, predictor" % (meas, signal, region, predictor,
+                                                        case, start_date, end_date)
+    # logger.info(query)
+    return influx_client.query(query)
+
+
+def calc_median(meas, region, predictor, case, signal, start_date, end_date):
+    query = "select mean(PredictedValue) as prediction from %s " \
+            "where signal='%s' and location='%s' and predictor='%s' and case='%s' and quantile='perc50' " \
+            "and time>='%sT00:00:00Z' and time<='%sT23:59:59Z' " \
+            "group by time(1d), location, predictor, quantile" % (meas, signal, region, predictor, case,
+                                                                  start_date, end_date)
+    # logger.info(query)
+    res = influx_client.query(query)
+    return res[(meas, (('location', region), ('predictor', predictor), ('quantile', 'perc50')))]
+
+
+def calc_quantiles(meas, region, predictor, case, signal, start_date, end_date):
+    query = "select mean(PredictedValue) as prediction " \
+            "from %s " \
+            "where signal='%s' and location='%s' and " \
+            "predictor='%s' and case='%s' and time>='%sT00:00:00Z' and " \
+            "time<='%sT23:59:59Z' " \
+            "group by time(1d), location, predictor, quantile" % (meas, signal, region,
+                                                                  predictor, case, start_date, end_date)
+    # logger.info(query)
+    res = influx_client.query(query)
+    return cu.handle_quantiles(res, meas, region, predictor, quantiles)
+
+
+def do_plot(model, qs, desc, plot_folder):
+    fig, ax = plt.subplots(figsize=(8, 8))
+    ax.set_title('%s - %s' % (desc, model))
+    ax.set_xlim([0, 1])
+    ax.set_ylim([0, 1])
+    ax.plot(quantiles_vals, qs['reliability'], marker='o', markerSize=6)
+    ax.plot(quantiles_vals, quantiles_vals, marker='o', markerSize=6)
+    plt.xticks(np.arange(0, 1, step=0.1))
+    plt.yticks(np.arange(0, 1, step=0.1))
+    plt.xlabel('QUANTILES')
+    plt.ylabel('ESTIMATED')
+    plt.grid()
+    plt.savefig('%s/%s_%s.png' % (plot_folder, desc[1:-1].replace(':', '_'), model), dpi=300)
+    plt.close()
+
+    fig, ax = plt.subplots(figsize=(8, 8))
+    ax.set_title('%s - %s' % (desc, model))
+    ax.set_xlim([0, 1])
+    ax.plot(np.arange(0.1, 1, step=0.1), qs['skill'], marker='o', markerSize=6)
+    plt.xticks(np.arange(0, 1, step=0.1))
+    plt.xlabel('QUANTILES')
+    plt.ylabel('QUANTILE SCORE')
+    plt.grid()
+    plt.savefig('%s/%s_%s_qs.png' % (plot_folder, desc[1:-1].replace(':', '_'), model), dpi=300)
+    plt.close()
+    plt.show()
+
+
+if __name__ == "__main__":
+    # --------------------------------------------------------------------------- #
+    # Configuration file
+    # --------------------------------------------------------------------------- #
+    arg_parser = argparse.ArgumentParser()
+    arg_parser.add_argument("-c", help="configuration file")
+    arg_parser.add_argument("-l", help="log file (optional, if empty log redirected on stdout)")
+    args = arg_parser.parse_args()
+
+    # Load the main parameters
+    config_file = args.c
+    if os.path.isfile(config_file) is False:
+        print('\nATTENTION! Unable to open configuration file %s\n' % config_file)
+        sys.exit(1)
+
+    cfg = json.loads(open(args.c).read())
+
+    # Load the connections parameters and update the config dict with the related values
+    cfg_conns = json.loads(open(cfg['connectionsFile']).read())
+    cfg.update(cfg_conns)
+
+    # --------------------------------------------------------------------------- #
+    # Set logging object
+    # --------------------------------------------------------------------------- #
+    if not args.l:
+        log_file = None
+    else:
+        log_file = args.l
+
+    logger = logging.getLogger()
+    logging.basicConfig(format='%(asctime)-15s::%(levelname)s::%(funcName)s::%(message)s', level=logging.INFO,
+                        filename=log_file)
+
+    try:
+        influx_client = DataFrameClient(host=cfg['influxDB']['host'], port=cfg['influxDB']['port'],
+                                        password=cfg['influxDB']['password'], username=cfg['influxDB']['user'],
+                                        database=cfg['influxDB']['database'], ssl=cfg['influxDB']['ssl'])
+    except Exception as e:
+        logger.error('EXCEPTION: %s' % str(e))
+        sys.exit(3)
+
+    # Set the main variables
+    # Example:
+    # measured_signals = ['YO3', 'YO3']
+    # predicted_signals = ['O3-d0', 'O3-d1']
+    measured_signals = cfg['measuredSignals']
+    predicted_signals = cfg['predictedSignals']
+
+    regions = cfg['regions']
+    cases = cfg['cases']
+
+    start_date = cfg['period']['startDate']
+    end_date = cfg['period']['endDate']
+
+    # Get the available predictors
+    query = 'SHOW TAG VALUES FROM predictions_ngb WITH KEY="predictor"'
+    res = influx_client.query(query)
+    predictors = []
+    for elem in res.raw['series'][0]['values']:
+        predictors.append(elem[1])
+    # predictors = predictors[0:2]
+
+    quantiles = ['perc10', 'perc20', 'perc30', 'perc40', 'perc50', 'perc60', 'perc70', 'perc80', 'perc90']
+    quantiles_vals = [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9]
+
+    print('Case,Region,Predictor,StartDate,EndDate,MAE,RMSE,MAE3,RMSE3,QS50_NGB,MAE_QR_NGB,QS50_QRF,MAE_QR_QRF')
+    for region in regions:
+        for i in range(0, len(measured_signals)):
+            for case in cases:
+                # Get measured output
+                query = "select mean(value) as measure from inputs_measurements " \
+                        "where signal='%s' and location='%s' and " \
+                        "time>='%sT00:00:00Z' and time<='%sT23:59:59Z' " \
+                        "group by time(1d), location" % (measured_signals[i], region, start_date, end_date)
+                # logger.info(query)
+                res = influx_client.query(query)
+                df_measure = res[('inputs_measurements', (('location', region),))]
+
+                df_predictors = {}
+                df_median_predictors_ngb = {}
+                df_quantiles_predictors_ngb = {}
+                df_median_predictors_qrf = {}
+                df_quantiles_predictors_qrf = {}
+                for predictor in predictors:
+                    # Get forecasts
+                    res = calc_ngb_prediction('predictions_ngb', region, predictor, case, predicted_signals[i], start_date, end_date)
+                    key = ('predictions_ngb', (('location', region), ('predictor', predictor)))
+                    if key in res.keys():
+                        df_predictors[predictor] = res[key]
+
+                        # Get NGB quantile forecasts
+                        df_quantiles_predictors_ngb[predictor] = calc_quantiles('predictions_ngb_quantiles', region,
+                                                                                predictor, case, predicted_signals[i],
+                                                                                start_date, end_date)
+
+                        # Get QRF quantile forecasts
+                        df_quantiles_predictors_qrf[predictor] = calc_quantiles('predictions_qrf_quantiles', region,
+                                                                                predictor, case, predicted_signals[i],
+                                                                                start_date, end_date)
+
+                        mae = mean_absolute_error(df_measure['measure'].values, df_predictors[predictor].values)
+                        rmse = np.sqrt(mean_squared_error(df_measure['measure'].values, df_predictors[predictor].values))
+                        mae3, rmse3 = mt.calc_mae_rmse_threshold(df_measure['measure'],
+                                                                 df_predictors[predictor], 120)
+
+
+                        qs_ngb = cu.quantile_scores(df_quantiles_predictors_ngb[predictor].values,
+                                                    df_measure['measure'].values, quantiles_vals)
+                        qs_qrf = cu.quantile_scores(df_quantiles_predictors_qrf[predictor].values,
+                                                    df_measure['measure'].values, quantiles_vals)
+
+
+                        print('%s,%s,%s,%s,%s,%.1f,%.1f,%.1f,%.1f,%.1f,%.1f,%.1f,%.1f' % (case,
+                                                                                          region,
+                                                                                          predictor,
+                                                                                          start_date,
+                                                                                          end_date,
+                                                                                          mae,
+                                                                                          rmse,
+                                                                                          mae3,
+                                                                                          rmse3,
+                                                                                          qs_ngb['qs_50'],
+                                                                                          qs_ngb['mae_rel']*1e2,
+                                                                                          qs_qrf['qs_50'],
+                                                                                          qs_qrf['mae_rel'] * 1e2))
+
+                        if cfg['doPlot'] is True:
+                            desc = '[%s:%s:%s:%s]' % (region, case, predicted_signals[i], predictor)
+                            do_plot('NGB', qs_ngb, desc, cfg['plotFolder'])
+                            do_plot('QRF', qs_qrf, desc, cfg['plotFolder'])
