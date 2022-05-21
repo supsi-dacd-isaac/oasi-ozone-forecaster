@@ -71,10 +71,21 @@ class ModelTrainer:
     @staticmethod
     def calc_mae_rmse_threshold(meas, pred, th):
         mask = meas.values >= th
-        return round(mean_absolute_error(meas[mask], pred[mask]), 3), \
-               round(np.sqrt(mean_squared_error(meas[mask], pred[mask])), 3)
+        if len(pred[mask]) > 0:
+            return round(mean_absolute_error(meas[mask], pred[mask]), 3), \
+                   round(np.sqrt(mean_squared_error(meas[mask], pred[mask])), 3)
+        else:
+            return -1.0, -1.0
 
-    def calculate_KPIs(self, region, prediction, measured, weights):
+    @staticmethod
+    def calc_mape_threshold(meas, pred, th):
+        mask = meas.values >= th
+        if len(pred[mask]) > 0:
+            return round(np.mean(np.abs((meas[mask].values - pred[mask].values) / meas[mask].values)) * 100, 1)
+        else:
+            return -1.0
+
+    def calculate_KPIs(self, region, prediction, measured, weights, ngbPars=None):
         """
         For each fold and/or train/test separation, return the KPIs to establish the best weights combination
 
@@ -105,10 +116,18 @@ class ModelTrainer:
         mae2, rmse2= self.calc_mae_rmse_threshold(meas=measured, pred=prediction, th=threshold2)
         mae3, rmse3= self.calc_mae_rmse_threshold(meas=measured, pred=prediction, th=threshold3)
 
-        df_KPIs = pd.DataFrame([[w1, w2, w3, lcl_acc_1, lcl_acc_2, lcl_acc_3, lcl_acc, rmse1, rmse2, rmse3, lcl_rmse,
-                                 mae1, mae2, mae3, lcl_mae, str(lcl_cm.flatten().tolist())]],
-                               columns=['w1', 'w2', 'w3', 'Accuracy_1', 'Accuracy_2', 'Accuracy_3', 'Accuracy',
-                                        'RMSE1', 'RMSE2', 'RMSE3', 'RMSE', 'MAE1', 'MAE2', 'MAE3', 'MAE', 'ConfMat'])
+        if ngbPars is None:
+            df_KPIs = pd.DataFrame([[w1, w2, w3, lcl_acc_1, lcl_acc_2, lcl_acc_3, lcl_acc, rmse1, rmse2, rmse3, lcl_rmse,
+                                     mae1, mae2, mae3, lcl_mae, str(lcl_cm.flatten().tolist())]],
+                                   columns=['w1', 'w2', 'w3', 'Accuracy_1', 'Accuracy_2', 'Accuracy_3', 'Accuracy',
+                                            'RMSE1', 'RMSE2', 'RMSE3', 'RMSE', 'MAE1', 'MAE2', 'MAE3', 'MAE', 'ConfMat'])
+        else:
+            df_KPIs = pd.DataFrame([[w1, w2, w3, ngbPars['numberEstimators'], ngbPars['learningRate'], lcl_acc_1,
+                                     lcl_acc_2, lcl_acc_3, lcl_acc, rmse1, rmse2, rmse3, lcl_rmse,
+                                     mae1, mae2, mae3, lcl_mae, str(lcl_cm.flatten().tolist())]],
+                                   columns=['w1', 'w2', 'w3', 'ne', 'lr', 'Accuracy_1', 'Accuracy_2', 'Accuracy_3', 'Accuracy',
+                                            'RMSE1', 'RMSE2', 'RMSE3', 'RMSE', 'MAE1', 'MAE2', 'MAE3', 'MAE', 'ConfMat'])
+
 
         return df_KPIs
 
@@ -199,7 +218,7 @@ class ModelTrainer:
 
         return dict_probs
 
-    def fold_training(self, region, train_index, test_index, X, Y, weights):
+    def fold_training(self, region, train_index, test_index, X, Y, weights, ngbPars=None):
         """
         For each fold and/or tran/test separation, create the model and calculate KPIs to establish the best weights
         combination
@@ -222,7 +241,7 @@ class ModelTrainer:
         assert len(Xtrain) == len(Ytrain)
         assert len(Xtest) == len(Ytest)
 
-        ngb  = self.train_NGB_model(region, Xtrain, Ytrain, weights)[0]
+        ngb  = self.train_NGB_model(region, Xtrain, Ytrain, weights, ngbPars)[0]
 
         return ngb.predict(Xtest)
 
@@ -316,9 +335,6 @@ class ModelTrainer:
         df_x = df_x.reset_index(drop=True)
         df_y = df_y.reset_index(drop=True)
 
-        ngb_prediction = np.empty(len(df_y))
-        df_pred = pd.DataFrame(columns=['w1', 'w2', 'w3', 'Fold', 'Measurements', 'Prediction'])
-
         # Dataset preparation for CV
         df_x_tmp = df_x
         df_y_tmp = df_y
@@ -331,44 +347,118 @@ class ModelTrainer:
         np_y = df_y_tmp.to_numpy()
 
         fold = 1
-        for train_index, test_index in kf.split(np_x):
-            # Get the I/O datasets for the training and the test
-            X_train, X_test = np_x[train_index], np_x[test_index]
-            y_train, y_test = np_y[train_index], np_y[test_index]
+        if self.cfg['regions'][region]['gridSearcher']['hyperParsOptimizationNGB'] is not None:
+            df_pred = pd.DataFrame(columns=['w1', 'w2', 'w3', 'ne', 'lr', 'Measurements', 'Prediction'])
+            for train_index, test_index in kf.split(np_x):
+                # Consider only the last fold
+                if fold == cv_folds:
+                    # HPOPT only on the last fold
+                    ngb_prediction = np.empty(len(test_index))
+                    df_pred = pd.DataFrame(columns=['w1', 'w2', 'w3', 'Fold', 'ne', 'lr', 'Measurements', 'Prediction'])
 
-            # Perform the FS using the training folds
-            self.logger.info('Region: %s, target: %s, weights: %s -> Started FS fold %i/%i' % (region,
-                                                                                               target_column,
-                                                                                               weights,
-                                                                                               fold,
-                                                                                               cv_folds))
-            selected_features = self.features_analyzer.important_features(region, X_train, y_train, features[1:],
-                                                                          weights)[0]
-            X, Y = self.get_reduced_dataset(df_x, df_y, selected_features)
-            X, Y = self.remove_date(X, Y)
-            self.logger.info('Region: %s, target: %s, weights: %s -> Ended FS fold %i/%i' % (region, target_column,
-                                                                                             weights, fold, cv_folds))
+                    # Get the I/O datasets for the training and the test
+                    X_train, X_test = np_x[train_index], np_x[test_index]
+                    y_train, y_test = np_y[train_index], np_y[test_index]
 
-            # Perform the training using the training folds and the prediction with the test fold
-            self.logger.info('Region: %s, target: %s, weights: %s -> Started model training fold %i/%i' % (region,
-                                                                                                           target_column,
-                                                                                                           weights,
-                                                                                                           fold,
-                                                                                                           cv_folds))
-            pred = self.fold_training(region, train_index, test_index, X, Y, weights)
-            ngb_prediction[test_index] = pred
-            self.logger.info('Region: %s, target: %s, weights: %s -> Ended model training fold %i/%i' % (region,
-                                                                                                         target_column,
-                                                                                                         weights,
-                                                                                                         fold,
-                                                                                                         cv_folds))
+                    # Reduce the dataset to consider only to the current fold
+                    df_x = df_x.iloc[test_index[0]:test_index[-1] + 1]
+                    df_y = df_y.iloc[test_index[0]:test_index[-1] + 1]
+
+                    df_kpis = None
+                    for ne in self.cfg['regions'][region]['gridSearcher']['hyperParsOptimizationNGB']['numEstimators']:
+                        for lr in self.cfg['regions'][region]['gridSearcher']['hyperParsOptimizationNGB']['learningRate']:
+                            self.logger.info('HPOPT -> region: %s, target: %s, weights: %s -> '
+                                             'Started FS fold %i/%i; (ne=%i, lr=%s)' % (region, target_column, weights,
+                                                                                        fold, cv_folds, ne, str(lr)))
+                            ngbPars = { 'numberEstimators': ne, 'learningRate': lr }
+
+                            selected_features = self.features_analyzer.important_features(region,
+                                                                                          X_train,
+                                                                                          y_train,
+                                                                                          features[1:],
+                                                                                          weights,
+                                                                                          ngbPars)[0]
+                            X, Y = self.get_reduced_dataset(df_x, df_y, selected_features)
+                            X, Y = self.remove_date(X, Y)
+                            self.logger.info('HPOPT -> region: %s, target: %s, weights: %s -> '
+                                             'Ended FS fold %i/%i; (ne=%i, lr=%s)' % (region, target_column, weights,
+                                                                                      fold, cv_folds, ne, str(lr)))
+
+                            # Perform the training using the training folds and the prediction with the test fold
+                            self.logger.info('HPOPT -> region: %s, target: %s, weights: %s -> '
+                                             'Started model training fold %i/%i; (ne=%i, lr=%s)' % (region,
+                                                                                                    target_column,
+                                                                                                    weights,
+                                                                                                    fold,
+                                                                                                    cv_folds,
+                                                                                                    ne, str(lr)))
+
+                            # todo this part below should be investigated
+                            ngb = self.train_NGB_model(region, X_train, y_train, weights, ngbPars)[0]
+                            ngb_prediction = ngb.predict(X_test)
+                            # pred = self.fold_training(region, train_index, test_index, X, Y, weights, ngbPars)
+                            # ngb_prediction = pred
+
+                            self.logger.info('HPOPT -> region: %s, target: %s, weights: %s -> '
+                                             'Ended model training fold %i/%i; (ne=%i, lr=%s)' % (region,
+                                                                                                  target_column,
+                                                                                                  weights,
+                                                                                                  fold,
+                                                                                                  cv_folds,
+                                                                                                  ne, str(lr)))
+
+                            prediction, measured = self.convert_to_series(ngb_prediction, Y)
+                            if df_kpis is None:
+                                df_kpis = self.calculate_KPIs(region, prediction, measured, weights, ngbPars)
+                            else:
+                                kpis = self.calculate_KPIs(region, prediction, measured, weights, ngbPars)
+                                df_kpis = df_kpis.append(kpis)
+
+                    return df_kpis, None
+                fold += 1
+        else:
+            ngb_prediction = np.empty(len(df_y))
+            df_pred = pd.DataFrame(columns=['w1', 'w2', 'w3', 'Fold', 'Measurements', 'Prediction'])
+
+            for train_index, test_index in kf.split(np_x):
+                # Get the I/O datasets for the training and the test
+                X_train, X_test = np_x[train_index], np_x[test_index]
+                y_train, y_test = np_y[train_index], np_y[test_index]
+
+                # Perform the FS using the training folds
+                self.logger.info('Region: %s, target: %s, weights: %s -> Started FS fold %i/%i' % (region,
+                                                                                                   target_column,
+                                                                                                   weights,
+                                                                                                   fold,
+                                                                                                   cv_folds))
+                selected_features = self.features_analyzer.important_features(region, X_train, y_train, features[1:],
+                                                                              weights)[0]
+                X, Y = self.get_reduced_dataset(df_x, df_y, selected_features)
+                X, Y = self.remove_date(X, Y)
+
+                self.logger.info('Region: %s, target: %s, weights: %s -> Ended FS fold %i/%i' % (region, target_column,
+                                                                                                 weights, fold, cv_folds))
+
+                # Perform the training using the training folds and the prediction with the test fold
+                self.logger.info('Region: %s, target: %s, weights: %s -> Started model training fold %i/%i' % (region,
+                                                                                                               target_column,
+                                                                                                               weights,
+                                                                                                               fold,
+                                                                                                               cv_folds))
+                pred = self.fold_training(region, train_index, test_index, X, Y, weights)
+                ngb_prediction[test_index] = pred
+                self.logger.info('Region: %s, target: %s, weights: %s -> Ended model training fold %i/%i' % (region,
+                                                                                                             target_column,
+                                                                                                             weights,
+                                                                                                             fold,
+                                                                                                             cv_folds))
             # Concat the prediction results
             df_pred = pd.concat([df_pred, self.error_data(pred, Y.loc[test_index], fold, weights)], ignore_index=True,
                                 axis=0)
             fold += 1
 
-        prediction, measured = self.convert_to_series(ngb_prediction, Y)
-        return self.calculate_KPIs(region, prediction, measured, weights), df_pred
+            prediction, measured = self.convert_to_series(ngb_prediction, Y)
+            return self.calculate_KPIs(region, prediction, measured, weights), df_pred
 
     def get_weights(self, input_file_name):
         w = {}
@@ -441,8 +531,8 @@ class ModelTrainer:
                 file_name_noext = fp + 'predictor_' + target_data['label'] + '_' + \
                                   self.cfg['regions'][k_region]['finalModelCreator']['identifier']
             else:
-                file_name_noext = '%shpo%s%s%spredictor_%s_%s' % (fp, os.sep, suffix, os.sep,target_data['label'],
-                                                                  str_hpars)
+                file_name_noext = '%shpo%spredictor_%s_%s' % (fp, os.sep,target_data['label'],
+                                                              str_hpars.replace('-', ''))
 
             pickle.dump([ngb, rfqr, rfqr_w], open('%s.pkl' % file_name_noext, 'wb'))
             json.dump({"signals": list(selected_features)}, open('%s.json' % file_name_noext.replace('predictor', 'inputs'), 'w'))

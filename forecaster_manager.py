@@ -237,8 +237,7 @@ def perform_forecast(day_case, forecast_type):
 
             # Check if the current folder refers to a location configured for the prediction
             if region in input_cfg_file.split(os.sep)[-2]:
-                output_signal, weights, id = input_cfg_file.split('inputs_')[-1].split('.json')[0].split('_')
-                model_name = '%s_%s' % (id, weights)
+                output_signal, model_name = input_cfg_file.split('inputs_')[-1].split('.json')[0].split('_')
 
                 region_info = {'code': region, 'data': cfg['regions'][region]}
                 if cfg['predictionGeneralSettings']['operationMode'] == 'parallel':

@@ -49,14 +49,20 @@ class GridSearcher:
             fn_pred = fp + 'GS_all_errs_' + target_column + '_' + cfg_file_name.split(os.sep)[-1].replace('.json', '') + '.csv'
 
             # Initialize empty files in folder. Data will be inserted at each iteration step
-            pd.DataFrame([],
-                         columns=['w1', 'w2', 'w3',
-                                  'Accuracy_1', 'Accuracy_2', 'Accuracy_3', 'Accuracy',
-                                  'RMSE1', 'RMSE2', 'RMSE3', 'RMSE',
-                                  'MAE1', 'MAE2', 'MAE3', 'MAE',
-                                  'ConfMat']).to_csv(fn, mode='w', header=True, index=False)
-            pd.DataFrame([],
-                         columns=['w1', 'w2', 'w3', 'Fold', 'Measurements', 'Prediction']).to_csv(fn_pred, mode='w', header=True, index=False)
+            if self.cfg['regions'][region]['gridSearcher']['hyperParsOptimizationNGB'] is None:
+                pd.DataFrame([], columns=['w1', 'w2', 'w3', 'Accuracy_1', 'Accuracy_2',
+                                          'Accuracy_3', 'Accuracy', 'RMSE1', 'RMSE2',
+                                          'RMSE3', 'RMSE', 'MAE1', 'MAE2', 'MAE3', 'MAE','ConfMat']).to_csv(fn, mode='w', header=True, index=False)
+                pd.DataFrame([], columns=['w1', 'w2', 'w3', 'Fold', 'Measurements', 'Prediction']).to_csv(fn_pred, mode='w',
+                                                                                                          header=True, index=False)
+            else:
+                pd.DataFrame([], columns=['w1', 'w2', 'w3', 'ne', 'le', 'Accuracy_1', 'Accuracy_2',
+                                          'Accuracy_3', 'Accuracy', 'RMSE1', 'RMSE2',
+                                          'RMSE3', 'RMSE', 'MAE1', 'MAE2', 'MAE3', 'MAE','ConfMat']).to_csv(fn, mode='w', header=True, index=False)
+                pd.DataFrame([], columns=['w1', 'w2', 'w3', 'ne', 'le', 'Fold', 'Measurements', 'Prediction']).to_csv(fn_pred,
+                                                                                                                      mode='w',
+                                                                                                                      header=True,
+                                                                                                                      index=False)
 
             l1 = np.arange(self.cfg['regions'][region]['gridSearcher']['w1_start'],
                            self.cfg['regions'][region]['gridSearcher']['w1_end']+1,
@@ -86,4 +92,6 @@ class GridSearcher:
                                                                                                   weights)
 
                         lcl_kpis.to_csv(fn, mode='a', header=False, index=False, quoting=2)
-                        lcl_prediction.to_csv(fn_pred, mode='a', header=False, index=False)
+
+                        if lcl_prediction is not None:
+                            lcl_prediction.to_csv(fn_pred, mode='a', header=False, index=False)
