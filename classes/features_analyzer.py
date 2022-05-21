@@ -57,7 +57,11 @@ class FeaturesAnalyzer:
         file_path_df = folder_path + folder_path.split(os.sep)[1] + '_dataset.csv'
         if not os.path.isfile(file_path_df):
             self.logger.error('File %s does not exist' % file_path_df)
-        output_dfs[name] = {'dataset': pd.read_csv(file_path_df), 'targetColumns': target_columns}
+        tmp_df = pd.read_csv(file_path_df)
+
+        # Filtering on data -> only observations related to output values higher than the limit will be considered
+        mask = tmp_df[target_columns[0]] >= self.cfg['regions'][name]['dataToConsiderMinLimit']
+        output_dfs[name] = {'dataset': tmp_df[mask], 'targetColumns': target_columns}
 
         # Select only configured input signals
         input_signals = self.inputs_gatherer.generate_input_signals_codes(name)
@@ -133,11 +137,11 @@ class FeaturesAnalyzer:
         self.nan_features = x_data.loc[:, x_data.isnull().any()].columns.values
 
         if len(nan_rows) > 0:
-            self.logger.warning(
-                "Some NaN were found in the dataset at the following %s dates, which will be removed from the current "
-                "dataset:" % str(len(nan_rows)))
-            for row in nan_rows:
-                self.logger.warning(row)
+            self.logger.warning("NaN found in the dataset in %i dates on %i (%.1f%%). The days related to the nan "
+                                "will be removed from the dataset" % (len(nan_rows), len(x_data),
+                                                                      len(nan_rows)/len(x_data)*1e2))
+            # for row in nan_rows:
+            #     self.debug.warning(row)
 
         x_data = x_data.drop(nan_rows.index, axis=0)
         x_data_no_date = x_data.iloc[:, 1:]
@@ -237,6 +241,7 @@ class FeaturesAnalyzer:
 
         # Check if there is a hyperparameters optimization or not
         if hps is None:
+            str_pars = None
             output_folder_path = self.inputs_gatherer.output_folder_creator(region)
         else:
             str_pars = 'ne%i-lr%s' % (hps['numberEstimators'], str(hps['learningRate']).replace('.', ''))
@@ -244,9 +249,26 @@ class FeaturesAnalyzer:
                                                   os.sep)
             if os.path.exists(output_folder_path) is False:
                 os.mkdir(output_folder_path)
-        self.save_csv(important_features, target, new_features, output_folder_path)
+
+        # discard GLOB__step0 case
+        clean_new_features = self.clean_features_list(region, important_features, new_features, str_pars)
+        self.save_csv(important_features, target, clean_new_features, output_folder_path)
 
         return new_features, important_features
+
+    def clean_features_list(self, region, important_features, new_features, str_pars):
+        clean_new_features = []
+        # Irradiance forecast at step 0 have not be considered
+        for nf in new_features:
+            if '__GLOB__step0' not in nf:
+                clean_new_features.append(nf)
+            else:
+                if str_pars is not None:
+                    self.logger.warning('%s %s -> skipped %s' % (region, str_pars, nf))
+
+        for i in range(0, len(new_features) - len(clean_new_features)):
+            clean_new_features.append(important_features['feature'][i+self.cfg['regions'][region]['featuresAnalyzer']['numberSelectedFeatures']])
+        return clean_new_features
 
     def save_csv(self, important_features, target, new_features, output_folder_path):
         """
