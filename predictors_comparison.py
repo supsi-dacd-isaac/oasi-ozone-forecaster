@@ -39,6 +39,16 @@ def calc_median(meas, region, predictor, case, signal, start_date, end_date):
     res = influx_client.query(query)
     return res[(meas, (('location', region), ('predictor', predictor), ('quantile', 'perc50')))]
 
+def calc_mean_std(meas, region, predictor, case, signal, start_date, end_date):
+    query = "select mean(Mean) as Mean, mean(StdDev) as StdDev from %s " \
+            "where signal='%s' and location='%s' and predictor='%s' and case='%s' and " \
+            "time>='%sT00:00:00Z' and time<='%sT23:59:59Z' " \
+            "group by time(1d), location, predictor" % (meas, signal, region, predictor, case,
+                                                        start_date, end_date)
+    # logger.info(query)
+    res = influx_client.query(query)
+    return res[(meas, (('location', region), ('predictor', predictor)))]
+
 
 def calc_quantiles(meas, region, predictor, case, signal, start_date, end_date):
     query = "select mean(PredictedValue) as prediction " \
@@ -141,12 +151,13 @@ if __name__ == "__main__":
     predictors = []
     for elem in res.raw['series'][0]['values']:
         predictors.append(elem[1])
-    # predictors = predictors[0:2]
+    # predictors = predictors[0:1]
 
     quantiles = ['perc10', 'perc20', 'perc30', 'perc40', 'perc50', 'perc60', 'perc70', 'perc80', 'perc90']
     quantiles_vals = [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9]
 
-    print('Case,Region,Predictor,StartDate,EndDate,MAE,RMSE,MAE3,RMSE3,QS50_NGB,MAE_QR_NGB,QS50_QRF,MAE_QR_QRF')
+    print('CASE,REGION,PREDICTOR,START,END,MAE,RMSE,MAE3,RMSE3,AVG_STD_NGB,MAX_STD_NGB,MAPE3,'
+          'QS50_NGB,MAE_QR_NGB,QS50_QRF,MAE_QR_QRF')
     for region in regions:
         for i in range(0, len(measured_signals)):
             for case in cases:
@@ -160,7 +171,7 @@ if __name__ == "__main__":
                 df_measure = res[('inputs_measurements', (('location', region),))]
 
                 df_predictors = {}
-                df_median_predictors_ngb = {}
+                df_mean_std_predictors_ngb = {}
                 df_quantiles_predictors_ngb = {}
                 df_median_predictors_qrf = {}
                 df_quantiles_predictors_qrf = {}
@@ -169,6 +180,7 @@ if __name__ == "__main__":
                     res = calc_ngb_prediction('predictions_ngb', region, predictor, case, predicted_signals[i], start_date, end_date)
                     key = ('predictions_ngb', (('location', region), ('predictor', predictor)))
                     if key in res.keys():
+                        # print('%s,%s,%s' % (case, region, predictor))
                         df_predictors[predictor] = res[key]
 
                         # Get NGB quantile forecasts
@@ -181,11 +193,20 @@ if __name__ == "__main__":
                                                                                 predictor, case, predicted_signals[i],
                                                                                 start_date, end_date)
 
+                        df_mean_std_predictors_ngb[predictor] = calc_mean_std('predictions_ngb_norm_dist',
+                                                                              region, predictor, case,
+                                                                              predicted_signals[i],
+                                                                              start_date, end_date)
+
                         mae = mean_absolute_error(df_measure['measure'].values, df_predictors[predictor].values)
                         rmse = np.sqrt(mean_squared_error(df_measure['measure'].values, df_predictors[predictor].values))
                         mae3, rmse3 = mt.calc_mae_rmse_threshold(df_measure['measure'],
-                                                                 df_predictors[predictor], 120)
+                                                                 df_predictors[predictor], cfg['threshold'])
 
+                        mean_std = np.mean(df_mean_std_predictors_ngb[predictor]['StdDev'].values)
+                        max_std = np.max(df_mean_std_predictors_ngb[predictor]['StdDev'].values)
+
+                        mape3 = mt.calc_mape_threshold(df_measure['measure'], df_predictors[predictor], cfg['threshold'])
 
                         qs_ngb = cu.quantile_scores(df_quantiles_predictors_ngb[predictor].values,
                                                     df_measure['measure'].values, quantiles_vals)
@@ -193,19 +214,11 @@ if __name__ == "__main__":
                                                     df_measure['measure'].values, quantiles_vals)
 
 
-                        print('%s,%s,%s,%s,%s,%.1f,%.1f,%.1f,%.1f,%.1f,%.1f,%.1f,%.1f' % (case,
-                                                                                          region,
-                                                                                          predictor,
-                                                                                          start_date,
-                                                                                          end_date,
-                                                                                          mae,
-                                                                                          rmse,
-                                                                                          mae3,
-                                                                                          rmse3,
-                                                                                          qs_ngb['qs_50'],
-                                                                                          qs_ngb['mae_rel']*1e2,
-                                                                                          qs_qrf['qs_50'],
-                                                                                          qs_qrf['mae_rel'] * 1e2))
+                        print('%s,%s,%s,%s,%s,%.1f,%.1f,%.1f,%.1f,%.1f,%.1f,'
+                              '%.1f,%.1f,%.1f,%.1f,%.1f' % (case, region, predictor, start_date, end_date,
+                                                            mae, rmse, mae3, rmse3, mean_std, max_std, mape3,
+                                                            qs_ngb['qs_50'], qs_ngb['mae_rel']*1e2, qs_qrf['qs_50'],
+                                                            qs_qrf['mae_rel'] * 1e2))
 
                         if cfg['doPlot'] is True:
                             desc = '[%s:%s:%s:%s]' % (region, case, predicted_signals[i], predictor)
