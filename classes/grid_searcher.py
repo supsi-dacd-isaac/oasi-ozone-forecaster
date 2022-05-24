@@ -72,7 +72,7 @@ class GridSearcher:
                 # pd.DataFrame([], columns=['w1', 'w2', 'w3', 'Fold', 'Measurements', 'Prediction']).to_csv(fn_pred, mode='w',
                 #                                                                                           header=True, index=False)
             else:
-                pd.DataFrame([], columns=['w1', 'w2', 'w3', 'ne', 'le', 'Accuracy_1', 'Accuracy_2',
+                pd.DataFrame([], columns=['w1', 'w2', 'w3', 'ne', 'lr', 'Accuracy_1', 'Accuracy_2',
                                           'Accuracy_3', 'Accuracy', 'RMSE1', 'RMSE2',
                                           'RMSE3', 'RMSE', 'MAE1', 'MAE2', 'MAE3', 'MAE','ConfMat']).to_csv(fn, mode='a', header=True, index=False)
                 # pd.DataFrame([], columns=['w1', 'w2', 'w3', 'ne', 'le', 'Fold', 'Measurements', 'Prediction']).to_csv(fn_pred,
