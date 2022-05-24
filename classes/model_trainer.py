@@ -266,9 +266,9 @@ class ModelTrainer:
             n_est = ngbPars['numberEstimators']
             l_rate = ngbPars['learningRate']
 
-        threshold1 = self.cfg['regions'][region]['featuresAnalyzer']['threshold1']  # 240
-        threshold2 = self.cfg['regions'][region]['featuresAnalyzer']['threshold2']  # 180
-        threshold3 = self.cfg['regions'][region]['featuresAnalyzer']['threshold3']  # 135
+        threshold1 = self.cfg['regions'][region]['featuresAnalyzer']['threshold1']  # It should be 240
+        threshold2 = self.cfg['regions'][region]['featuresAnalyzer']['threshold2']  # It should be 180
+        threshold3 = self.cfg['regions'][region]['featuresAnalyzer']['threshold3']  # It should be 120 (old but wrong 135)
         w1 = weights['w1']
         w2 = weights['w2']
         w3 = weights['w3']
@@ -341,8 +341,12 @@ class ModelTrainer:
         df_x_tmp = df_x_tmp.drop(['date'], axis=1)
         df_y_tmp = df_y_tmp.drop(['date'], axis=1)
         cv_folds = self.cfg['regions'][region]['gridSearcher']['numFolds']
-        kf = KFold(n_splits=cv_folds, shuffle=self.cfg['regions'][region]['gridSearcher']['shuffle'],
-                   random_state=self.cfg['regions'][region]['gridSearcher']['randomState'])
+        if self.cfg['regions'][region]['gridSearcher']['shuffle'] is True:
+            kf = KFold(n_splits=cv_folds, shuffle=self.cfg['regions'][region]['gridSearcher']['shuffle'],
+                       random_state=self.cfg['regions'][region]['gridSearcher']['randomState'])
+        else:
+            kf = KFold(n_splits=cv_folds, shuffle=False, random_state=None)
+
         np_x = df_x_tmp.to_numpy()
         np_y = df_y_tmp.to_numpy()
 

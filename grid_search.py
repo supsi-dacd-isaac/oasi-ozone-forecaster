@@ -75,6 +75,7 @@ if __name__ == "__main__":
             tmp_proc = Process(target=gs_process, args=[ig, k_region, target, cfg, logger, cfg_file_name])
             tmp_proc.start()
             procs.append(tmp_proc)
+            # gs_process(ig, k_region, target, cfg, logger, cfg_file_name)
 
     for proc in procs:
         proc.join()
