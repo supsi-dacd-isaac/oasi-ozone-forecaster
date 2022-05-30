@@ -536,13 +536,13 @@ class ModelTrainer:
             # Check if there is a hyperparameters optimization or not
             if hps is None:
                 str_lr = str('%.3f' % target_data['learningRateNGB'][self.forecast_type]).replace('.','')
-                str_hp = 'w1%iw2%iw3%ine%ilr%s' % (target_data['weights'][self.forecast_type]['w1'],
-                                                   target_data['weights'][self.forecast_type]['w2'],
-                                                   target_data['weights'][self.forecast_type]['w3'],
-                                                   target_data['numberEstimatorsNGB'][self.forecast_type],
-                                                   str_lr)
+                # str_hp = 'w1%iw2%iw3%ine%ilr%s' % (target_data['weights'][self.forecast_type]['w1'],
+                #                                    target_data['weights'][self.forecast_type]['w2'],
+                #                                    target_data['weights'][self.forecast_type]['w3'],
+                #                                    target_data['numberEstimatorsNGB'][self.forecast_type],
+                #                                    str_lr)
                 file_name_noext = fp + 'predictor_' + target_data['label'] + '_' + \
-                                  self.cfg['regions'][k_region]['finalModelCreator']['identifier'] + '-' + str_hp
+                                  self.cfg['regions'][k_region]['finalModelCreator']['identifier']
             else:
                 file_name_noext = '%shpo%spredictor_%s_%s' % (fp, os.sep,target_data['label'],
                                                               str_hpars.replace('-', ''))
