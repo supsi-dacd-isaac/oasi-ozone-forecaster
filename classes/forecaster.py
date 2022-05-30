@@ -151,7 +151,7 @@ class Forecaster:
             self.logger.info('Performed prediction: model=%s ' % predictor_file)
 
             # Define best tag: i.e. the current predictor is the best one for this case
-            if self.cfg['regions'][region_data['code']]['forecaster']['bestLabels'][self.forecast_type] in predictor_file:
+            if self.cfg['regions'][region_data['code']]['forecaster']['bestLabels'][self.forecast_type][self.output_signal] in predictor_file:
                 self.flag_best = True
             else:
                 self.flag_best = False

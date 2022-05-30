@@ -1,5 +1,6 @@
 # import section
 import glob
+import math
 import json
 import os
 from datetime import datetime, timedelta
@@ -44,6 +45,7 @@ class InputsGatherer:
         self.cfg = cfg
         self.logger = logger
         self.io_data = None
+        self.io_data_sub = None
         self.day_to_predict = None
         self.cfg_signals = None
         self.artificial_features = artificial_features
@@ -53,6 +55,7 @@ class InputsGatherer:
         Build the dataset
         """
         self.io_data = dict()
+        self.io_data_sub = dict()
         self.day_to_predict = None
 
         # Create the signals list considering all the couples location-model
@@ -208,7 +211,7 @@ class InputsGatherer:
             self.logger.error('Impossible to calculate the mean of the past values')
             return np.nan
 
-    def add_input_value(self, signal, forecast_substitution=False):
+    def add_input_value(self, signal, forecast_substitution=False, force_substitution=False):
         """
         Add the value related to a given input signal
 
@@ -230,10 +233,10 @@ class InputsGatherer:
                 measurement = self.cfg['influxDB']['measurementInputsForecasts']
 
                 if '__step' in signal:
-                    self.do_forecast_step_query(signal, measurement, forecast_substitution)
+                    self.do_forecast_step_query(signal, measurement, forecast_substitution, force_substitution)
 
                 else:
-                    self.do_forecast_period_query(signal, measurement, forecast_substitution)
+                    self.do_forecast_period_query(signal, measurement, forecast_substitution, force_substitution)
 
             # Measurement data
             else:
@@ -269,7 +272,7 @@ class InputsGatherer:
         self.do_daily_query(signal, measurement, flag_output_signal=True)
 
 
-    def do_forecast_period_query(self, signal_data, measurement, forecast_substitution):
+    def do_forecast_period_query(self, signal_data, measurement, forecast_substitution, force_substitution=False):
         (location, signal_code, chunk, func) = signal_data.split('__')
 
         dt = self.set_forecast_day()
@@ -286,7 +289,7 @@ class InputsGatherer:
         query = 'SELECT value FROM %s WHERE location=\'%s\' AND signal=\'%s\' AND %s AND ' \
                 'time=\'%s\'' % (measurement, location, signal_code, str_steps, str_dt)
         self.calc_data(query=query, signal_data=signal_data, func=func, forecast_substitution=forecast_substitution,
-                       str_steps=str_steps, str_dt=str_dt)
+                       str_steps=str_steps, str_dt=str_dt, force_substitution=force_substitution)
 
     @staticmethod
     def create_forecast_chunk_steps_string(chunk, case):
@@ -300,7 +303,7 @@ class InputsGatherer:
         str_steps = '%s)' % str_steps[:-4]
         return str_steps
 
-    def do_forecast_step_query(self, signal_data, measurement, forecast_substitution):
+    def do_forecast_step_query(self, signal_data, measurement, forecast_substitution, force_substitution=False):
         # todo to change when wordings like 'TICIA__CLCT__chunk2__step10' will not be used anymore
         if len(signal_data.split('__')) == 4:
             (location, signal_code, case, step) = signal_data.split('__')
@@ -331,43 +334,54 @@ class InputsGatherer:
 
         str_dt = dt.strftime('%Y-%m-%dT%H:%M:%SZ')
 
-        query = 'SELECT value FROM %s WHERE location=\'%s\' AND signal=\'%s\' AND step=\'%s\' AND ' \
-                'time=\'%s\'' % (measurement, location, signal_code, step, str_dt)
+        if force_substitution is False:
+            query = 'SELECT value FROM %s WHERE location=\'%s\' AND signal=\'%s\' AND step=\'%s\' AND ' \
+                    'time=\'%s\'' % (measurement, location, signal_code, step, str_dt)
 
-        self.logger.info('Performing query: %s' % query)
-        res = self.influxdb_client.query(query, epoch='s')
+            self.logger.info('Performing query: %s' % query)
+            res = self.influxdb_client.query(query, epoch='s')
 
-        if 'series' in res.raw.keys():
-            try:
-                # The training of Meteosuisse temperatures were done in Kelvin degrees
-                # todo this thing just below is a shame, the data in the DB to use for the training are in Celsius!!
-                # if signal_code in ['TD_2M', 'T_2M']:
-                #     val = float(res.raw['series'][0]['values'][0][1]) + 273.1
-                # else:
-                #     val = float(res.raw['series'][0]['values'][0][1])
-                val = float(res.raw['series'][0]['values'][0][1])
-                self.io_data[signal_data] = val
-            except Exception as e:
-                self.logger.error('Data not available')
-                self.io_data[signal_data] = np.nan
-        else:
-            self.logger.warning('Forecast not available')
-            if forecast_substitution is True:
-                # Manage the substitution
-                self.logger.warning('The forecast will be substituted by a correspondent measured value')
-                dt_start_meas = dt + timedelta(hours=int(step.replace('step', '')))
-                dt_end_meas = dt_start_meas + timedelta(hours=time_interval)
-
-                res_meas = self.do_forecast_substitution(location, signal_code, dt_start_meas, dt_end_meas, None)
+            if 'series' in res.raw.keys():
                 try:
-                    val = float(res_meas.raw['series'][0]['values'][0][1])
+                    # The training of Meteosuisse temperatures were done in Kelvin degrees
+                    # todo this thing just below is a shame, the data in the DB to use for the training are in Celsius!!
+                    # if signal_code in ['TD_2M', 'T_2M']:
+                    #     val = float(res.raw['series'][0]['values'][0][1]) + 273.1
+                    # else:
+                    #     val = float(res.raw['series'][0]['values'][0][1])
+                    val = float(res.raw['series'][0]['values'][0][1])
                     self.io_data[signal_data] = val
                 except Exception as e:
                     self.logger.error('Data not available')
                     self.io_data[signal_data] = np.nan
             else:
-                self.logger.warning('No data from query %s' % query)
-                self.io_data[signal_data] = np.nan
+                self.logger.warning('Forecast not available')
+                if forecast_substitution is True:
+                    # Manage the substitution
+                    self.logger.warning('The forecast will be substituted by a correspondent measured value')
+                    dt_start_meas = dt + timedelta(hours=int(step.replace('step', '')))
+                    dt_end_meas = dt_start_meas + timedelta(hours=time_interval)
+
+                    res_meas = self.do_forecast_substitution(location, signal_code, dt_start_meas, dt_end_meas, None)
+                    try:
+                        val = float(res_meas.raw['series'][0]['values'][0][1])
+                        self.io_data[signal_data] = val
+                    except Exception as e:
+                        self.logger.error('Data not available')
+                        self.io_data[signal_data] = np.nan
+                else:
+                    self.logger.warning('No data from query %s' % query)
+                    self.io_data[signal_data] = np.nan
+        else:
+            self.logger.warning('FORCED SUBSTITUTION: The forecast will be substituted by a correspondent measured value')
+            dt_start_meas = dt + timedelta(hours=int(step.replace('step', '')))
+            dt_end_meas = dt_start_meas + timedelta(hours=time_interval)
+            res_meas = self.do_forecast_substitution(location, signal_code, dt_start_meas, dt_end_meas, None)
+            if res_meas is not None and 'series' in res_meas.raw.keys():
+                val = float(res_meas.raw['series'][0]['values'][0][1])
+                self.io_data_sub[signal_data] = val
+            else:
+                self.io_data_sub[signal_data] = np.nan
 
 
     def do_chunk_query(self, signal_data, measurement):
@@ -511,75 +525,96 @@ class InputsGatherer:
             self.logger.error('No data from query %s' % query)
             self.io_data[signal_data] = np.nan
 
-    def calc_data(self, query, signal_data, func, forecast_substitution, str_steps, str_dt):
-        self.logger.info('Performing query: %s' % query)
-        res = self.influxdb_client.query(query, epoch='s')
-
+    def calc_data(self, query, signal_data, func, forecast_substitution, str_steps, str_dt, force_substitution=False):
         vals = []
         tmp = signal_data.split('__')
 
-        try:
-            for i in range(0, len(res.raw['series'][0]['values'])):
-                if res.raw['series'][0]['values'][i][1] is not None:
+        if force_substitution is False:
+            self.logger.info('Performing query: %s' % query)
+            res = self.influxdb_client.query(query, epoch='s')
 
-                    # The training of Meteosuisse temperatures were done in Kelvin degrees
-                    # if tmp[1] in ['TD_2M', 'T_2M']:
-                    #     val = float(res.raw['series'][0]['values'][i][1]) + 273.1
-                    # else:
-                    #     val = float(res.raw['series'][0]['values'][i][1])
-                    val = float(res.raw['series'][0]['values'][i][1])
-                    vals.append(val)
+            try:
+                for i in range(0, len(res.raw['series'][0]['values'])):
+                    if res.raw['series'][0]['values'][i][1] is not None:
 
-            if func == 'min':
-                self.io_data[signal_data] = np.min(vals)
-            elif func == 'max':
-                self.io_data[signal_data] = np.max(vals)
-            elif func == 'mean':
-                self.io_data[signal_data] = np.mean(vals)
-        except Exception as e:
-            if forecast_substitution is True:
-                # Manage the substitution
-                self.logger.warning('The forecast will be substituted by a correspondent measured value')
-                steps_sub = str_steps.replace(' OR ', '').replace('(', '').replace(')', '').replace('\'', '').split('step=step')
-                dt_sub = datetime.strptime(str_dt, '%Y-%m-%dT%H:%M:%SZ')
-                step_sub_start = int(steps_sub[1])
-                step_sub_end = int(steps_sub[-1])
-                dt_start_meas = dt_sub + timedelta(hours=step_sub_start)
-                dt_end_meas = dt_sub + timedelta(hours=step_sub_end)
+                        # The training of Meteosuisse temperatures were done in Kelvin degrees
+                        # if tmp[1] in ['TD_2M', 'T_2M']:
+                        #     val = float(res.raw['series'][0]['values'][i][1]) + 273.1
+                        # else:
+                        #     val = float(res.raw['series'][0]['values'][i][1])
+                        val = float(res.raw['series'][0]['values'][i][1])
+                        vals.append(val)
 
-                res_meas = self.do_forecast_substitution(tmp[0], tmp[1], dt_start_meas, dt_end_meas, tmp[-1])
-                try:
-                    val = float(res_meas.raw['series'][0]['values'][0][1])
-                    self.io_data[signal_data] = val
-                except Exception as e:
-                    self.logger.error('Data not available')
+                if func == 'min':
+                    self.io_data[signal_data] = np.min(vals)
+                elif func == 'max':
+                    self.io_data[signal_data] = np.max(vals)
+                elif func == 'mean':
+                    self.io_data[signal_data] = np.mean(vals)
+            except Exception as e:
+                if forecast_substitution is True:
+                    # Manage the substitution
+                    self.logger.warning('The forecast will be substituted by a correspondent measured value')
+                    steps_sub = str_steps.replace(' OR ', '').replace('(', '').replace(')', '').replace('\'', '').split('step=step')
+                    dt_sub = datetime.strptime(str_dt, '%Y-%m-%dT%H:%M:%SZ')
+                    step_sub_start = int(steps_sub[1])
+                    step_sub_end = int(steps_sub[-1])
+                    dt_start_meas = dt_sub + timedelta(hours=step_sub_start)
+                    dt_end_meas = dt_sub + timedelta(hours=step_sub_end)
+
+                    res_meas = self.do_forecast_substitution(tmp[0], tmp[1], dt_start_meas, dt_end_meas, tmp[-1])
+                    try:
+                        val = float(res_meas.raw['series'][0]['values'][0][1])
+                        self.io_data[signal_data] = val
+                    except Exception as e:
+                        self.logger.error('Data not available')
+                        self.io_data[signal_data] = np.nan
+                else:
+                    self.logger.error('Forecast not available')
+                    self.logger.error('No data from query %s' % query)
                     self.io_data[signal_data] = np.nan
-            else:
-                self.logger.error('Forecast not available')
-                self.logger.error('No data from query %s' % query)
-                self.io_data[signal_data] = np.nan
+        else:
+            self.logger.warning('FORCE SUBSTITUTION: The forecast will be substituted by a correspondent measured value')
+            steps_sub = str_steps.replace(' OR ', '').replace('(', '').replace(')', '').replace('\'', '').split('step=step')
+            dt_sub = datetime.strptime(str_dt, '%Y-%m-%dT%H:%M:%SZ')
+            step_sub_start = int(steps_sub[1])
+            step_sub_end = int(steps_sub[-1])
+            dt_start_meas = dt_sub + timedelta(hours=step_sub_start)
+            dt_end_meas = dt_sub + timedelta(hours=step_sub_end)
+
+            res_meas = self.do_forecast_substitution(tmp[0], tmp[1], dt_start_meas, dt_end_meas, tmp[-1])
+            try:
+                val = float(res_meas.raw['series'][0]['values'][0][1])
+                self.io_data_sub[signal_data] = val
+            except Exception as e:
+                self.logger.error('Data not available')
+                self.io_data_sub[signal_data] = np.nan
+
 
     def do_forecast_substitution(self, location, signal, dt_start_meas, dt_end_meas, func_override):
         # Manage the substitution
-        loc_sub = self.cfg['forecastedSubstitutes']['stations'][location]
-        if self.cfg['forecastedSubstitutes']['signals'][signal]['func'] != 'none':
-            if func_override is None:
-                str_func_sub = '%s(value)' % self.cfg['forecastedSubstitutes']['signals'][signal]['func']
+        if location in self.cfg['forecastedSubstitutes']['stations'].keys():
+            loc_sub = self.cfg['forecastedSubstitutes']['stations'][location]
+            if self.cfg['forecastedSubstitutes']['signals'][signal]['func'] != 'none':
+                if func_override is None:
+                    str_func_sub = '%s(value)' % self.cfg['forecastedSubstitutes']['signals'][signal]['func']
+                else:
+                    str_func_sub = '%s(value)' % func_override
             else:
-                str_func_sub = '%s(value)' % func_override
-        else:
-            str_func_sub = 'value'
-        sig_sub = self.cfg['forecastedSubstitutes']['signals'][signal]['id']
+                str_func_sub = 'value'
+            sig_sub = self.cfg['forecastedSubstitutes']['signals'][signal]['id']
 
-        query_meas = 'SELECT %s FROM %s WHERE location=\'%s\' AND signal=\'%s\' AND ' \
-                     'time>=\'%s\' AND time<\'%s\'' % (str_func_sub,
-                                                       self.cfg['influxDB']['measurementInputsMeasurements'],
-                                                       loc_sub, sig_sub,
-                                                       dt_start_meas.strftime('%Y-%m-%dT%H:%M:%SZ'),
-                                                       dt_end_meas.strftime('%Y-%m-%dT%H:%M:%SZ'))
-        self.logger.info('Performing query to substitute the forecast: %s' % query_meas)
-        res_meas = self.influxdb_client.query(query_meas, epoch='s')
-        return res_meas
+            query_meas = 'SELECT %s FROM %s WHERE location=\'%s\' AND signal=\'%s\' AND ' \
+                         'time>=\'%s\' AND time<\'%s\'' % (str_func_sub,
+                                                           self.cfg['influxDB']['measurementInputsMeasurements'],
+                                                           loc_sub, sig_sub,
+                                                           dt_start_meas.strftime('%Y-%m-%dT%H:%M:%SZ'),
+                                                           dt_end_meas.strftime('%Y-%m-%dT%H:%M:%SZ'))
+            self.logger.info('Performing query to substitute the forecast: %s' % query_meas)
+            res_meas = self.influxdb_client.query(query_meas, epoch='s')
+            return res_meas
+        else:
+            return None
 
     def handle_exception_signal(self, signal_data):
 
@@ -854,3 +889,116 @@ class InputsGatherer:
             name = dataset['filename'].split('.')[0]
             fn = self.cfg['datasetSettings']["loadSignalsFolder"] + dataset['filename']
             self.build_dataset(name=name, signals_file=fn)
+
+    def get_ngb_prediction(self, region, predictor, case, signal, start_date, end_date):
+        query = "select mean(PredictedValue) as prediction from %s " \
+                "where signal='%s' and location='%s' and " \
+                "predictor='%s' and case='%s' and time>='%sT00:00:00Z' and " \
+                "time<='%sT23:59:59Z' " \
+                "group by time(1d), location, predictor" % (self.cfg['influxDB']['measurementOutputSingleForecast'],
+                                                            signal, region, predictor,
+                                                            case, start_date, end_date)
+        return self.influxdb_client.query(query)
+
+    def get_target_measure(self, region, signal, start_date, end_date):
+        query = "select mean(value) as measure from %s " \
+                "where signal='%s' and location='%s' and " \
+                "time>='%sT00:00:00Z' and time<='%sT23:59:59Z' " \
+                "group by time(1d), location" % (self.cfg['influxDB']['measurementInputsMeasurements'],
+                                                 signal, region, start_date, end_date)
+        # logger.info(query)
+        return self.influxdb_client.query(query)
+
+    def build_meteo_forecast_dataset_for_checking(self, fw_data):
+        """
+        Build the dataset
+        """
+        self.io_data = dict()
+        self.day_to_predict = None
+
+        # Create the signals list considering all the couples location-model
+        self.cfg_signals = dict(signals=[])
+
+        # Cycle over the folders
+        for tmp_folder in glob.glob('%s%s*%s' % (self.cfg['folders']['models'], os.sep, self.forecast_type)):
+
+            # Check if the current folder refers to a location configured for the prediction
+            region_code = tmp_folder.split(os.sep)[-1].split('_')[0]
+            if region_code in self.cfg['regions'].keys():
+
+                # Cycle over the input files in the folder (each files correspond to a model)
+                for input_cfg_file in glob.glob('%s%s/inputs_*.json' % (tmp_folder, os.sep)):
+
+                    tmp_cfg_signals, signals_rank = self.filter_forecast(input_cfg_file)
+                    self.cfg_signals['signals'] = tmp_cfg_signals['signals']
+
+                    # get the values in the DB
+                    i = 1
+                    for signal in self.cfg_signals['signals']:
+                        self.logger.info('Try to add input n. %02d/0%2d, %s' % (i, len(self.cfg_signals['signals']), signal))
+                        self.add_input_value(signal=signal, forecast_substitution=False, force_substitution=False)
+                        self.logger.info('Added input n. %02d/0%2d' % (i, len(self.cfg_signals['signals'])))
+                        i += 1
+
+                    self.io_data_sub = {}
+                    for k_fs in self.io_data.keys():
+                        self.add_input_value(signal=k_fs, forecast_substitution=False, force_substitution=True)
+
+                    diff_signals = {}
+                    diff_ranks = {}
+
+                    str_date = datetime.fromtimestamp(self.day_to_predict).date()
+
+                    for i in range(0, len(self.cfg_signals['signals'])):
+                        k_sig = self.cfg_signals['signals'][i]
+                        tmp = k_sig.split('__')
+                        sig_code = tmp[1]
+
+                        if sig_code not in diff_signals.keys():
+                            diff_signals[sig_code] = []
+                            diff_ranks[sig_code] = []
+
+                        if k_sig in list(self.io_data.keys()) and k_sig in list(self.io_data_sub.keys()):
+                            if math.isnan(self.io_data_sub[k_sig]) is False:
+                                diff = self.io_data[k_sig] - self.io_data_sub[k_sig]
+                                # print(signals_rank[i], k_sig, self.io_data[k_sig], self.io_data_sub[k_sig], diff)
+
+                                if i <= self.cfg['firstCasesToConsider']:
+                                    diff_signals[sig_code].append(diff)
+                                    diff_ranks[sig_code].append(signals_rank[i])
+
+                    # print(diff_signals)
+                    # print(diff_ranks)
+                    # Get the O3 predictions
+                    _ , target_signal, predictor =  input_cfg_file.split(os.sep)[-1].split('.')[0].split('_')
+                    res_pred = self.get_ngb_prediction(region_code, predictor, self.forecast_type, target_signal, str_date, str_date)
+                    res_meas = self.get_target_measure(region_code, self.cfg['measuredSignal'], str_date, str_date)
+                    pred = res_pred.raw['series'][0]['values']
+                    meas = res_meas.raw['series'][0]['values']
+                    err = meas[0][1] - pred[0][1]
+
+                    for ks in diff_signals.keys():
+                        if len(diff_signals[ks]) > 0:
+                            fw_data.write('%s,%s,%f,%f,%f,%f,%f\n' % (str_date, ks, err, abs(err),
+                                                                      np.mean(np.abs(diff_signals[ks])),
+                                                                      np.mean(diff_signals[ks]),
+                                                                      np.std(diff_signals[ks])))
+
+
+    def filter_forecast(self, sigs_file):
+        all_sig_data = json.loads(open(sigs_file).read())
+
+        forecasts = []
+        rank = []
+        i = 1
+        for sig in all_sig_data['signals']:
+            tmp = sig.split('__')
+            location = tmp[0]
+            k_sig = tmp[1]
+            if location in constants.METEO_FORECAST_STATIONS and '_c2' not in k_sig:
+                forecasts.append(sig)
+                rank.append(i)
+            i += 1
+
+        return {'signals': forecasts }, rank
+

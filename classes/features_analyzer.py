@@ -157,7 +157,7 @@ class FeaturesAnalyzer:
 
         return x_data_np, y_data_np, features, x_data, y_data
 
-    def important_features(self, region, x_data, y_data, features, weights, ngbPars=None):
+    def important_features(self, region, x_data, y_data, features, target_data, ngbPars=None):
         """
         Calculate the important features given design matrix, target vector and full list of features
 
@@ -172,11 +172,12 @@ class FeaturesAnalyzer:
         """
 
         assert x_data.shape[1] == len(features)
+        weights = target_data['weights'][self.forecast_type]
 
         if ngbPars is None:
             # Usage of the configured parameters
-            n_est = self.cfg['regions'][region]['featuresAnalyzer']['numberEstimatorsNGB']
-            l_rate = self.cfg['regions'][region]['featuresAnalyzer']['learningRate']
+            n_est = target_data['numberEstimatorsNGB'][self.forecast_type]
+            l_rate = target_data['learningRateNGB'][self.forecast_type]
         else:
             # Usage of the parameters passed as arguments
             n_est = ngbPars['numberEstimators']
@@ -228,7 +229,7 @@ class FeaturesAnalyzer:
                          'it can take a while...' % (self.cfg['regions'][region]['featuresAnalyzer']['numberSelectedFeatures'],
                                                      target_data['weights'][self.forecast_type], len(y_data)))
         new_features, important_features = self.important_features(region, x_data, y_data, features[1:],
-                                                                   target_data['weights'][self.forecast_type], hps)
+                                                                   target_data, hps)
 
 
         important_nan_features = [f for f in self.nan_features if f in new_features]

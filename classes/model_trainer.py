@@ -245,7 +245,7 @@ class ModelTrainer:
 
         return ngb.predict(Xtest)
 
-    def train_NGB_model(self, region, Xtrain, Ytrain, weights, ngbPars=None):
+    def train_NGB_model(self, region, Xtrain, Ytrain, target_data, ngbPars=None):
         """
         Return the NGB model trained on the available data
 
@@ -256,11 +256,12 @@ class ModelTrainer:
         :return: prediction model
         :rtype: ngboost.NGBRegressor
         """
+        weights = target_data['weights'][self.forecast_type]
 
         if ngbPars is None:
             # Usage of the configured parameters
-            n_est = self.cfg['regions'][region]['featuresAnalyzer']['numberEstimatorsNGB']
-            l_rate = self.cfg['regions'][region]['featuresAnalyzer']['learningRate']
+            n_est = target_data['numberEstimatorsNGB'][self.forecast_type]
+            l_rate = target_data['learningRateNGB'][self.forecast_type]
         else:
             # Usage of the parameters passed as arguments
             n_est = ngbPars['numberEstimators']
@@ -503,7 +504,9 @@ class ModelTrainer:
             X, Y = self.get_reduced_dataset(df_x, df_y, selected_features)
             X, Y = self.remove_date(X, Y)
 
-            target_data['weights'] = self.cfg['regions'][k_region]['featuresAnalyzer']['targetColumns'][target_signal]['weights'][self.forecast_type]
+            target_data['weights'] = self.cfg['regions'][k_region]['featuresAnalyzer']['targetColumns'][target_signal]['weights']
+            target_data['numberEstimatorsNGB'] = self.cfg['regions'][k_region]['featuresAnalyzer']['targetColumns'][target_signal]['numberEstimatorsNGB']
+            target_data['learningRateNGB'] = self.cfg['regions'][k_region]['featuresAnalyzer']['targetColumns'][target_signal]['learningRateNGB']
 
             start_year = self.cfg['datasetSettings']['years'][0]
             end_year = self.cfg['datasetSettings']['years'][-1]
@@ -516,7 +519,7 @@ class ModelTrainer:
 
             # Train NGB model
             self.logger.info('Target %s -> NGBoost model training start' % target_signal)
-            ngb, weight = self.train_NGB_model(k_region, X, Y, target_data['weights'], hps)
+            ngb, weight = self.train_NGB_model(k_region, X, Y, target_data, hps)
             self.logger.info('Target %s -> NGBoost model training end' % target_signal)
 
             # Train QRF model
@@ -532,14 +535,36 @@ class ModelTrainer:
 
             # Check if there is a hyperparameters optimization or not
             if hps is None:
+                str_lr = str('%.3f' % target_data['learningRateNGB'][self.forecast_type]).replace('.','')
+                str_hp = 'w1%iw2%iw3%ine%ilr%s' % (target_data['weights'][self.forecast_type]['w1'],
+                                                   target_data['weights'][self.forecast_type]['w2'],
+                                                   target_data['weights'][self.forecast_type]['w3'],
+                                                   target_data['numberEstimatorsNGB'][self.forecast_type],
+                                                   str_lr)
                 file_name_noext = fp + 'predictor_' + target_data['label'] + '_' + \
-                                  self.cfg['regions'][k_region]['finalModelCreator']['identifier']
+                                  self.cfg['regions'][k_region]['finalModelCreator']['identifier'] + '-' + str_hp
             else:
                 file_name_noext = '%shpo%spredictor_%s_%s' % (fp, os.sep,target_data['label'],
                                                               str_hpars.replace('-', ''))
 
             pickle.dump([ngb, rfqr, rfqr_w], open('%s.pkl' % file_name_noext, 'wb'))
             json.dump({"signals": list(selected_features)}, open('%s.json' % file_name_noext.replace('predictor', 'inputs'), 'w'))
+            metadata = {
+                "region": k_region,
+                "case": self.forecast_type,
+                "weights": {
+                    "w1": target_data['weights'][self.forecast_type]['w1'],
+                    "w2": target_data['weights'][self.forecast_type]['w2'],
+                    "w3": target_data['weights'][self.forecast_type]['w3'],
+                },
+                "NGBoostParameters": {
+                    "estimatorsNumber": target_data['numberEstimatorsNGB'][self.forecast_type],
+                    "learningRate": target_data['learningRateNGB'][self.forecast_type],
+                    "numberSelectedFeatures": len(selected_features)
+                }
+            }
+            json.dump(metadata, open('%s.json' % file_name_noext.replace('predictor', 'metadata'), 'w'))
+
 
     @staticmethod
     def get_reduced_dataset(df_x, df_y, selected_features):

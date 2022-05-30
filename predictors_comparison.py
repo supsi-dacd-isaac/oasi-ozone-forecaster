@@ -1,4 +1,5 @@
 import json
+import json
 import logging
 import os
 import sys
@@ -146,18 +147,21 @@ if __name__ == "__main__":
     end_date = cfg['period']['endDate']
 
     # Get the available predictors
-    query = 'SHOW TAG VALUES FROM predictions_ngb WITH KEY="predictor"'
-    res = influx_client.query(query)
-    predictors = []
-    for elem in res.raw['series'][0]['values']:
-        predictors.append(elem[1])
-    # predictors = predictors[0:1]
+    if cfg['predictorsFilter'] is None:
+        query = 'SHOW TAG VALUES FROM predictions_ngb WITH KEY="predictor"'
+        res = influx_client.query(query)
+        predictors = []
+        for elem in res.raw['series'][0]['values']:
+            predictors.append(elem[1])
+        # predictors = predictors[0:1]
+    else:
+        predictors = cfg['predictorsFilter']
 
     quantiles = ['perc10', 'perc20', 'perc30', 'perc40', 'perc50', 'perc60', 'perc70', 'perc80', 'perc90']
     quantiles_vals = [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9]
 
-    print('CASE,REGION,PREDICTOR,START,END,MAE,RMSE,MAE3,RMSE3,AVG_STD_NGB,MAX_STD_NGB,MAPE3,'
-          'QS50_NGB,MAE_QR_NGB,QS50_QRF,MAE_QR_QRF')
+    print('CASE,REGION,TARGET,PREDICTOR,START,END,MAE,RMSE,MAE_gt%s,RMSE_gt%s,AVG_STD_NGB,MAX_STD_NGB,MAPE_gt%s,'
+          'QS50_NGB,MAE_QR_NGB,QS50_QRF,MAE_QR_QRF' % (cfg['threshold'], cfg['threshold'], cfg['threshold']))
     for region in regions:
         for i in range(0, len(measured_signals)):
             for case in cases:
@@ -200,13 +204,14 @@ if __name__ == "__main__":
 
                         mae = mean_absolute_error(df_measure['measure'].values, df_predictors[predictor].values)
                         rmse = np.sqrt(mean_squared_error(df_measure['measure'].values, df_predictors[predictor].values))
-                        mae3, rmse3 = mt.calc_mae_rmse_threshold(df_measure['measure'],
-                                                                 df_predictors[predictor], cfg['threshold'])
+                        mae_th, rmse_th = mt.calc_mae_rmse_threshold(df_measure['measure'],
+                                                                     df_predictors[predictor], cfg['threshold'])
 
                         mean_std = np.mean(df_mean_std_predictors_ngb[predictor]['StdDev'].values)
                         max_std = np.max(df_mean_std_predictors_ngb[predictor]['StdDev'].values)
 
-                        mape3 = mt.calc_mape_threshold(df_measure['measure'], df_predictors[predictor], cfg['threshold'])
+                        mape_th = mt.calc_mape_threshold(df_measure['measure'], df_predictors[predictor],
+                                                         cfg['threshold'])
 
                         qs_ngb = cu.quantile_scores(df_quantiles_predictors_ngb[predictor].values,
                                                     df_measure['measure'].values, quantiles_vals)
@@ -214,9 +219,9 @@ if __name__ == "__main__":
                                                     df_measure['measure'].values, quantiles_vals)
 
 
-                        print('%s,%s,%s,%s,%s,%.1f,%.1f,%.1f,%.1f,%.1f,%.1f,'
-                              '%.1f,%.1f,%.1f,%.1f,%.1f' % (case, region, predictor, start_date, end_date,
-                                                            mae, rmse, mae3, rmse3, mean_std, max_std, mape3,
+                        print('%s,%s,%s,%s,%s,%s,%.1f,%.1f,%.1f,%.1f,%.1f,%.1f,'
+                              '%.1f,%.1f,%.1f,%.1f,%.1f' % (case, region, predicted_signals[i], predictor, start_date, end_date,
+                                                            mae, rmse, mae_th, rmse_th, mean_std, max_std, mape_th,
                                                             qs_ngb['qs_50'], qs_ngb['mae_rel']*1e2, qs_qrf['qs_50'],
                                                             qs_qrf['mae_rel'] * 1e2))
 
