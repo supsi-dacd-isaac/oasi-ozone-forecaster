@@ -31,9 +31,10 @@ def sort_results(prediction_results):
     ordered_res = []
     res_data = {}
     for pred_res in prediction_results:
-        k = '%s_%s' % (pred_res['region'], pred_res['output_signal'])
-        ordered_res.append(k)
-        res_data[k] = pred_res
+        if pred_res['flag_best'] is True:
+            k = '%s_%s' % (pred_res['region'], pred_res['output_signal'])
+            ordered_res.append(k)
+            res_data[k] = pred_res
     return sorted(ordered_res), res_data
 
 
