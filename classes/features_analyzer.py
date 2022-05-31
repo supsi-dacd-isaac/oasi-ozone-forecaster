@@ -172,7 +172,13 @@ class FeaturesAnalyzer:
         """
 
         assert x_data.shape[1] == len(features)
-        weights = target_data['weights'][self.forecast_type]
+
+        if 'weights' in target_data.keys():
+            # FS case
+            weights = target_data['weights'][self.forecast_type]
+        else:
+            # HPOPT case
+            weights = target_data
 
         if ngbPars is None:
             # Usage of the configured parameters
