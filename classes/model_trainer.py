@@ -256,7 +256,12 @@ class ModelTrainer:
         :return: prediction model
         :rtype: ngboost.NGBRegressor
         """
-        weights = target_data['weights'][self.forecast_type]
+        if 'weights' in target_data.keys():
+            # MT case
+            weights = target_data['weights'][self.forecast_type]
+        else:
+            # HPOPT case
+            weights = target_data
 
         if ngbPars is None:
             # Usage of the configured parameters
