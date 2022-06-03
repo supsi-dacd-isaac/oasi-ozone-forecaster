@@ -534,7 +534,9 @@ class ModelTrainer:
             # self.logger.info('RFQR model training end')
 
             self.logger.info('Target %s -> pyquantrf RFQR model training start' % target_signal)
-            rfqr_w = qfrfQuantileRandomForestRegressor(nthreads=4, n_estimators=1000, min_samples_leaf=10)
+            rfqr_w = qfrfQuantileRandomForestRegressor(nthreads=4,
+                                                       n_estimators=target_data['numberEstimatorsNGB'][self.forecast_type],
+                                                       min_samples_leaf=10)
             rfqr_w.fit(X, np.array(Y).ravel(), sample_weight=weight)
             self.logger.info('Target %s -> pyquantrf RFQR model training end' % target_signal)
 
