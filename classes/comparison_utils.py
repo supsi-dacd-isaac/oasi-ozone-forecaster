@@ -15,7 +15,10 @@ class ComparisonUtils:
         return pd.concat(df_list, axis=1)
 
     @staticmethod
-    def quantile_scores(q_hat: np.ndarray, y: np.ndarray, alphas):
+    def quantile_scores(q_hat_data: np.ndarray, y_data: np.ndarray, alphas, th):
+        y = y_data[y_data >= th]
+        q_hat = q_hat_data[y_data >= th]
+
         s_k_alpha, reliability_alpha = [[], []]
         for a, alpha in enumerate(alphas):
             # err = q_hat[:, a, :] - y
