@@ -64,30 +64,30 @@ def calc_quantiles(meas, region, predictor, case, signal, start_date, end_date):
     return cu.handle_quantiles(res, meas, region, predictor, quantiles)
 
 
-def do_plot(model, qs, desc, plot_folder):
+def do_plot(model, qs, desc, plot_folder, th):
     fig, ax = plt.subplots(figsize=(8, 8))
     ax.set_title('%s - %s' % (desc, model))
     ax.set_xlim([0, 1])
     ax.set_ylim([0, 1])
-    ax.plot(quantiles_vals, qs['reliability'], marker='o', markerSize=6)
+    ax.plot(quantiles_vals, qs[th]['reliability'], marker='o', markerSize=6)
     ax.plot(quantiles_vals, quantiles_vals, marker='o', markerSize=6)
     plt.xticks(np.arange(0, 1, step=0.1))
     plt.yticks(np.arange(0, 1, step=0.1))
     plt.xlabel('QUANTILES')
     plt.ylabel('ESTIMATED')
     plt.grid()
-    plt.savefig('%s/%s_%s.png' % (plot_folder, desc[1:-1].replace(':', '_'), model), dpi=300)
+    plt.savefig('%s/%s_%s_gt%s.png' % (plot_folder, desc[1:-1].replace(':', '_'), model, th), dpi=300)
     plt.close()
 
     fig, ax = plt.subplots(figsize=(8, 8))
     ax.set_title('%s - %s' % (desc, model))
     ax.set_xlim([0, 1])
-    ax.plot(np.arange(0.1, 1, step=0.1), qs['skill'], marker='o', markerSize=6)
+    ax.plot(np.arange(0.1, 1, step=0.1), qs[th]['skill'], marker='o', markerSize=6)
     plt.xticks(np.arange(0, 1, step=0.1))
     plt.xlabel('QUANTILES')
     plt.ylabel('QUANTILE SCORE')
     plt.grid()
-    plt.savefig('%s/%s_%s_qs.png' % (plot_folder, desc[1:-1].replace(':', '_'), model), dpi=300)
+    plt.savefig('%s/%s_%s_qs_gt%s.png' % (plot_folder, desc[1:-1].replace(':', '_'), model, th), dpi=300)
     plt.close()
     plt.show()
 
@@ -160,8 +160,8 @@ if __name__ == "__main__":
     quantiles = ['perc10', 'perc20', 'perc30', 'perc40', 'perc50', 'perc60', 'perc70', 'perc80', 'perc90']
     quantiles_vals = [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9]
 
-    print('CASE,REGION,TARGET,PREDICTOR,START,END,MAE,RMSE,MAE_gt%s,RMSE_gt%s,AVG_STD_NGB,MAX_STD_NGB,MAPE_gt%s,'
-          'QS50_NGB,MAE_QR_NGB,QS50_QRF,MAE_QR_QRF' % (cfg['threshold'], cfg['threshold'], cfg['threshold']))
+    print('CASE,REGION,TARGET,PREDICTOR,START,END,MAE,RMSE,MAE_gt%s,RMSE_gt%s,MAPE_gt%s,QS50_QRF,'
+          'QS50_QRF_gt%s' % (cfg['threshold'], cfg['threshold'], cfg['threshold'], cfg['threshold']))
     for region in regions:
         for i in range(0, len(measured_signals)):
             for case in cases:
@@ -213,19 +213,23 @@ if __name__ == "__main__":
                         mape_th = mt.calc_mape_threshold(df_measure['measure'], df_predictors[predictor],
                                                          cfg['threshold'])
 
-                        qs_ngb = cu.quantile_scores(df_quantiles_predictors_ngb[predictor].values,
-                                                    df_measure['measure'].values, quantiles_vals)
-                        qs_qrf = cu.quantile_scores(df_quantiles_predictors_qrf[predictor].values,
-                                                    df_measure['measure'].values, quantiles_vals)
+                        # qs_ngb = cu.quantile_scores(df_quantiles_predictors_ngb[predictor].values,
+                        #                             df_measure['measure'].values, quantiles_vals)
+                        qs_qrf = dict()
+                        qs_qrf[0] = cu.quantile_scores(df_quantiles_predictors_qrf[predictor].values,
+                                                    df_measure['measure'].values, quantiles_vals, 0)
+                        qs_qrf[cfg['threshold']] = cu.quantile_scores(df_quantiles_predictors_qrf[predictor].values,
+                                                    df_measure['measure'].values, quantiles_vals, cfg['threshold'])
 
 
-                        print('%s,%s,%s,%s,%s,%s,%.1f,%.1f,%.1f,%.1f,%.1f,%.1f,'
-                              '%.1f,%.1f,%.1f,%.1f,%.1f' % (case, region, predicted_signals[i], predictor, start_date, end_date,
-                                                            mae, rmse, mae_th, rmse_th, mean_std, max_std, mape_th,
-                                                            qs_ngb['qs_50'], qs_ngb['mae_rel']*1e2, qs_qrf['qs_50'],
-                                                            qs_qrf['mae_rel'] * 1e2))
+                        print('%s,%s,%s,%s,%s,%s,%.1f,%.1f,%.1f,%.1f,'
+                              '%.1f,%.1f,%.1f' % (case, region, predicted_signals[i], predictor, start_date, end_date,
+                                                  mae, rmse, mae_th, rmse_th, mape_th, qs_qrf[0]['qs_50'],
+                                                  qs_qrf[cfg['threshold']]['qs_50']))
+                                                  # qs_ngb['qs_50'], qs_ngb['mae_rel']*1e2)
 
                         if cfg['doPlot'] is True:
                             desc = '[%s:%s:%s:%s]' % (region, case, predicted_signals[i], predictor)
-                            do_plot('NGB', qs_ngb, desc, cfg['plotFolder'])
-                            do_plot('QRF', qs_qrf, desc, cfg['plotFolder'])
+                            # do_plot('NGB', qs_ngb, desc, cfg['plotFolder'])
+                            do_plot('QRF', qs_qrf, desc, cfg['plotFolder'], 0)
+                            do_plot('QRF', qs_qrf, desc, cfg['plotFolder'], cfg['threshold'])
