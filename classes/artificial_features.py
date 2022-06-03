@@ -180,10 +180,10 @@ class ArtificialFeatures:
         else:
             tmp = signal.split('__')
 
-            if 'T_2M' in tmp[1] and '12h_mean' in tmp[2]:
-                # E.g. P_BIO__T_2M__12h_mean, P_BIO__T_2M__12h_mean_squared
-                measurement = self.cfg['influxDB']['measurementInputsForecasts']
-                val = self.do_T_2M_query(signal, measurement)
+            # if 'T_2M' in tmp[1] and '12h_mean' in tmp[2]:
+            #     # E.g. P_BIO__T_2M__12h_mean, P_BIO__T_2M__12h_mean_squared
+            #     measurement = self.cfg['influxDB']['measurementInputsForecasts']
+            #     val = self.do_T_2M_query(signal, measurement)
 
             if 'MAX' in tmp[2]:
                 # E.g. P_BIO__T_2M__MAX
@@ -433,7 +433,7 @@ class ArtificialFeatures:
 
         (location, signal_code, aggregator) = signal_data.split('__', 2)
         dt = self.set_forecast_day()
-        func = 'mean'
+        func = signal_data.split('__')[-1]
 
         if '12h' in aggregator:
             if self.forecast_type == 'MOR':
@@ -490,16 +490,17 @@ class ArtificialFeatures:
         res = self.influxdb_client.query(query, epoch='s')
 
         vals = []
-        tmp = signal_data.split('__')
+        # tmp = signal_data.split('__')
         try:
             for i in range(0, len(res.raw['series'][0]['values'])):
                 if res.raw['series'][0]['values'][i][1] is not None:
 
                     # The training of Meteosuisse temperatures were done in Kelvin degrees
-                    if tmp[1] in ['TD_2M', 'T_2M'] and 'MAX' not in signal_data and 'transf' not in signal_data:
-                        val = float(res.raw['series'][0]['values'][i][1]) + 273.1
-                    else:
-                        val = float(res.raw['series'][0]['values'][i][1])
+                    # if tmp[1] in ['TD_2M', 'T_2M'] and 'MAX' not in signal_data and 'transf' not in signal_data:
+                    #     val = float(res.raw['series'][0]['values'][i][1]) + 273.1
+                    # else:
+                    #     val = float(res.raw['series'][0]['values'][i][1])
+                    val = float(res.raw['series'][0]['values'][i][1])
                     vals.append(val)
 
             if func == 'min':
@@ -510,6 +511,8 @@ class ArtificialFeatures:
                 return np.mean(vals)
             elif func == 'sum':
                 return np.sum(vals)
+            elif func == 'std':
+                return np.std(vals)
         except Exception as e:
             self.logger.error('Forecast not available')
             self.logger.error('No data from query %s' % query)
