@@ -796,6 +796,9 @@ class InputsGatherer:
 
         for i in choices:
             signals.append(measurementStation + '__' + measuredSignal + '__' + str(i) + '__mean')
+            signals.append(measurementStation + '__' + measuredSignal + '__' + str(i) + '__max')
+            signals.append(measurementStation + '__' + measuredSignal + '__' + str(i) + '__min')
+            signals.append(measurementStation + '__' + measuredSignal + '__' + str(i) + '__std')
         return signals
 
     def artificial_features_forecasted_signals(self, forecastStation):
