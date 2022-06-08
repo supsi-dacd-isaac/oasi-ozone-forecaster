@@ -932,6 +932,7 @@ class InputsGatherer:
                 # Cycle over the input files in the folder (each files correspond to a model)
                 for input_cfg_file in glob.glob('%s%s/inputs_*.json' % (tmp_folder, os.sep)):
 
+                    diff_all = dict()
                     tmp_cfg_signals, signals_rank = self.filter_forecast(input_cfg_file)
                     self.cfg_signals['signals'] = tmp_cfg_signals['signals']
 
@@ -963,7 +964,10 @@ class InputsGatherer:
 
                         if k_sig in list(self.io_data.keys()) and k_sig in list(self.io_data_sub.keys()):
                             if math.isnan(self.io_data_sub[k_sig]) is False:
-                                diff = self.io_data[k_sig] - self.io_data_sub[k_sig]
+
+                                # ERROR = MEASURE (substitute) - WEATHER FORECAST
+                                diff = self.io_data_sub[k_sig] - self.io_data[k_sig]
+                                diff_all[k_sig] = diff
                                 # print(signals_rank[i], k_sig, self.io_data[k_sig], self.io_data_sub[k_sig], diff)
 
                                 if i <= self.cfg['firstCasesToConsider']:
@@ -978,14 +982,32 @@ class InputsGatherer:
                     res_meas = self.get_target_measure(region_code, self.cfg['measuredSignal'], str_date, str_date)
                     pred = res_pred.raw['series'][0]['values']
                     meas = res_meas.raw['series'][0]['values']
-                    err = meas[0][1] - pred[0][1]
+
+                    # ERROR = MEASURE - OZONE FORECAST
+                    err_output = meas[0][1] - pred[0][1]
 
                     for ks in diff_signals.keys():
                         if len(diff_signals[ks]) > 0:
-                            fw_data.write('%s,%s,%f,%f,%f,%f,%f\n' % (str_date, ks, err, abs(err),
-                                                                      np.mean(np.abs(diff_signals[ks])),
-                                                                      np.mean(diff_signals[ks]),
-                                                                      np.std(diff_signals[ks])))
+                            fw_data.write('%s,%s,%.1f,%.1f,%.1f,%.1f\n' % (str_date, ks, err_output,
+                                                                           np.mean(np.abs(diff_signals[ks])),
+                                                                           np.mean(diff_signals[ks]),
+                                                                           np.std(diff_signals[ks])))
+
+                    tmp = input_cfg_file.replace('.json', '').split(os.sep)
+                    fw_all = open('%s%sresume_all.csv' % (self.cfg['outputFolder'], os.sep), 'a')
+                    region, case = tmp[-2].split('_')
+                    predictor = tmp[-1].split('_')[-1]
+                    cnt = 0
+                    for k_sig in diff_all.keys():
+                        fw_all.write('%s,%s,%s,%s,%s,%s,%.1f,%.1f\n' % (str_date, region, case, predictor, k_sig,
+                                                                        self.cfg_signals['signals'].index(k_sig)+1,
+                                                                        err_output, diff_all[k_sig]))
+                        if cnt >= self.cfg['firstCasesToConsider'] - 1:
+                            break
+                        cnt += 1
+                    fw_all.close()
+
+
 
 
     def filter_forecast(self, sigs_file):
