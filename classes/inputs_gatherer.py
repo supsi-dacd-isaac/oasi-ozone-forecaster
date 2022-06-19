@@ -175,7 +175,8 @@ class InputsGatherer:
 
         self.io_data_availability = dict()
         for k in self.io_data.keys():
-            if np.isnan(self.io_data[k]):
+            #  Check if the value is None or nan
+            if self.io_data[k] is None or np.isnan(self.io_data[k]):
                 self.io_data[k] = self.retrieve_past_mean(code=k)
                 self.io_data_availability[k] = False
             else:
