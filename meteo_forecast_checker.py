@@ -45,6 +45,7 @@ def checking_forecast(day_case, forecast_type, fw):
     # Calculate the inputs required by all the models of the configured locations
     inputs_gatherer.build_meteo_forecast_dataset_for_checking(fw)
 
+
 # --------------------------------------------------------------------------- #
 # Main
 # --------------------------------------------------------------------------- #
@@ -112,7 +113,7 @@ if __name__ == "__main__":
     end_dt = datetime.strptime(end_day, '%Y-%m-%d')
 
     # Cycle over the forecats types
-    for forecast_type in ['EVE', 'MOR']:
+    for forecast_type in cfg['cases']:
         curr_day = start_day
         while True:
             # perform the prediction
