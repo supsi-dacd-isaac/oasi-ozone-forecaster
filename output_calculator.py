@@ -8,6 +8,8 @@ import pandas as pd
 import urllib3
 from influxdb import DataFrameClient
 
+from classes.alerts import SlackClient
+
 import warnings
 warnings.filterwarnings("ignore")
 
@@ -104,6 +106,7 @@ if __name__ == "__main__":
     logger.info('Connection successful')
 
     measurement = cfg['influxDB']['measurementInputsMeasurements']
+    str_res = ''
     for output_cfg in cfg['output']:
         tags = {'signal': output_cfg['targetSignal'], 'location': output_cfg['region']}
 
@@ -114,6 +117,9 @@ if __name__ == "__main__":
             influx_client.write_points(pd.DataFrame({'value': ret_dataset}), measurement, tags=tags)
             logger.info('%s[%s][%s] = %.1f' % (tags['signal'], tags['location'], ret_dataset.index[0].date(),
                                                ret_dataset.values[0]))
+            str_res = '%s%s: %s[%s] = %.1f\n' % (str_res, tags['location'], tags['signal'], ret_dataset.index[0].date(),
+                                                 ret_dataset.values[0])
+
         elif period == 'yesterday':
             dt = datetime.datetime.now() - datetime.timedelta(days=1)
             ret_dataset = calc_output(measurement, output_cfg, dt.year, '%02d-%02d' % (dt.month, dt.day),
@@ -121,6 +127,8 @@ if __name__ == "__main__":
             influx_client.write_points(pd.DataFrame({'value': ret_dataset}), measurement, tags=tags)
             logger.info('%s[%s][%s] = %.1f' % (tags['signal'], tags['location'], ret_dataset.index[0].date(),
                                                ret_dataset.values[0]))
+            str_res = '%s%s: %s[%s] = %.1f\n' % (str_res, tags['location'], tags['signal'], ret_dataset.index[0].date(),
+                                                 ret_dataset.values[0])
         else:
             # Configuration variables
             start_day = cfg['period']['customSettings']['startDay']
@@ -132,5 +140,14 @@ if __name__ == "__main__":
 
                 logger.info('Finished year %s for output %s, region %s' % (year, output_cfg['targetSignal'],
                                                                            output_cfg['region']))
+
+    # Send results to Slack
+    if cfg['alerts']['slack']['enabled'] is True:
+        slack_client = SlackClient(logger, cfg)
+        slack_client.send_alert_message('%s RESULTS:' % period.upper(), '#000000')
+        if len(str_res) > 0:
+            slack_client.send_alert_message(str_res, '#00ff00')
+        else:
+            slack_client.send_alert_message('DATA NOT AVAILABLE', '#ff0000')
 
     logger.info('Ending program')
