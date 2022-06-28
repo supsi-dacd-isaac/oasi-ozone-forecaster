@@ -6,6 +6,7 @@ import sys
 import argparse
 
 import numpy as np
+import seaborn as sns
 import matplotlib.pyplot as plt
 import urllib3
 from influxdb import DataFrameClient
@@ -17,6 +18,24 @@ warnings.filterwarnings("ignore")
 urllib3.disable_warnings()
 from classes.comparison_utils import ComparisonUtils as cu
 from classes.model_trainer import ModelTrainer as mt
+
+sns.set_style("ticks")
+
+
+def do_hist(errs, desc, cfg):
+    fig, ax = plt.subplots(figsize=(12, 12))
+    ax.set_title(desc)
+    ax.set_xlim([-60, 60])
+    # ax.set_ylim([0, 10])
+    plt.xticks(np.arange(-60, 70, step=10))
+    plt.yticks(np.arange(0, 100, step=5))
+    plt.hist(errs, 20, facecolor='green', alpha=0.8)
+    plt.xlabel('ERROR [ug/m^3]')
+    plt.ylabel('OCCURENCES')
+    plt.grid()
+
+    plt.savefig('%s%s%s_err_hist.png' % (cfg['plotFolder'], os.sep, desc[1:-1].replace(':', '_')), dpi=300)
+    plt.close()
 
 
 def calc_ngb_prediction(meas, region, predictor, case, signal, start_date, end_date):
@@ -39,6 +58,7 @@ def calc_median(meas, region, predictor, case, signal, start_date, end_date):
     # logger.info(query)
     res = influx_client.query(query)
     return res[(meas, (('location', region), ('predictor', predictor), ('quantile', 'perc50')))]
+
 
 def calc_mean_std(meas, region, predictor, case, signal, start_date, end_date):
     query = "select mean(Mean) as Mean, mean(StdDev) as StdDev from %s " \
@@ -228,8 +248,11 @@ if __name__ == "__main__":
                                                   qs_qrf[cfg['threshold']]['qs_50']))
                                                   # qs_ngb['qs_50'], qs_ngb['mae_rel']*1e2)
 
+                        desc = '[%s:%s:%s:%s]' % (region, case, predicted_signals[i], predictor)
+                        do_hist(df_measure['measure'].values - df_predictors[predictor].values.ravel(), desc, cfg)
+
+                        # Additional plot
                         if cfg['doPlot'] is True:
-                            desc = '[%s:%s:%s:%s]' % (region, case, predicted_signals[i], predictor)
                             # do_plot('NGB', qs_ngb, desc, cfg['plotFolder'])
                             do_plot('QRF', qs_qrf, desc, cfg['plotFolder'], 0)
                             do_plot('QRF', qs_qrf, desc, cfg['plotFolder'], cfg['threshold'])
