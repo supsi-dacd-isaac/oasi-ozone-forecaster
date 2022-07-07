@@ -1,5 +1,4 @@
 import json
-import json
 import logging
 import os
 import sys
@@ -22,19 +21,25 @@ from classes.model_trainer import ModelTrainer as mt
 sns.set_style("ticks")
 
 
-def do_hist(errs, desc, cfg):
+def do_hist(errs, desc, cfg, hist_pars_code):
     fig, ax = plt.subplots(figsize=(12, 12))
     ax.set_title(desc)
-    ax.set_xlim([-60, 60])
-    # ax.set_ylim([0, 10])
-    plt.xticks(np.arange(-60, 70, step=10))
-    plt.yticks(np.arange(0, 100, step=5))
-    plt.hist(errs, 20, facecolor='green', alpha=0.8)
-    plt.xlabel('ERROR [ug/m^3]')
+    ax.set_xlim(cfg['histParams'][hist_pars_code]['xlim'])
+    ax.set_ylim(cfg['histParams'][hist_pars_code]['ylim'])
+    plt.xticks(np.arange(cfg['histParams'][hist_pars_code]['xtics']['start'],
+                         cfg['histParams'][hist_pars_code]['xtics']['end'],
+                         step=cfg['histParams'][hist_pars_code]['xtics']['step']))
+    plt.yticks(np.arange(cfg['histParams'][hist_pars_code]['ytics']['start'],
+                         cfg['histParams'][hist_pars_code]['ytics']['end'],
+                         step=cfg['histParams'][hist_pars_code]['ytics']['step']))
+    plt.hist(errs, cfg['histParams'][hist_pars_code]['bins'], facecolor=cfg['histParams'][hist_pars_code]['color'],
+             alpha=cfg['histParams'][hist_pars_code]['alpha'])
+    plt.xlabel(cfg['histParams'][hist_pars_code]['xlabel'])
     plt.ylabel('OCCURENCES')
     plt.grid()
 
-    plt.savefig('%s%s%s_err_hist.png' % (cfg['plotFolder'], os.sep, desc[1:-1].replace(':', '_')), dpi=300)
+    plt.savefig('%s%s%s_%s.png' % (cfg['plotFolder'], os.sep, desc.replace(':', '_').replace('[', '').replace(']', ''),
+                                   cfg['histParams'][hist_pars_code]['fileNameSuffix']), dpi=300)
     plt.close()
 
 
@@ -249,10 +254,12 @@ if __name__ == "__main__":
                                                   # qs_ngb['qs_50'], qs_ngb['mae_rel']*1e2)
 
                         desc = '[%s:%s:%s:%s]' % (region, case, predicted_signals[i], predictor)
-                        do_hist(df_measure['measure'].values - df_predictors[predictor].values.ravel(), desc, cfg)
+                        do_hist(df_measure['measure'].values - df_predictors[predictor].values.ravel(), desc, cfg, 'errHist')
 
                         # Additional plot
                         if cfg['doPlot'] is True:
                             # do_plot('NGB', qs_ngb, desc, cfg['plotFolder'])
                             do_plot('QRF', qs_qrf, desc, cfg['plotFolder'], 0)
                             do_plot('QRF', qs_qrf, desc, cfg['plotFolder'], cfg['threshold'])
+
+                do_hist(df_measure['measure'].values, region, cfg, 'measHist')
