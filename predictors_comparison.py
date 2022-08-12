@@ -188,6 +188,7 @@ if __name__ == "__main__":
     print('CASE,REGION,TARGET,PREDICTOR,START,END,MAE,RMSE,MAE_gt%s,RMSE_gt%s,MAPE_gt%s,QS50_QRF,'
           'QS50_QRF_gt%s' % (cfg['threshold'], cfg['threshold'], cfg['threshold'], cfg['threshold']))
     for region in regions:
+        flag_pers = False
         for i in range(0, len(measured_signals)):
             for case in cases:
                 # Get measured output
@@ -204,6 +205,17 @@ if __name__ == "__main__":
                 df_quantiles_predictors_ngb = {}
                 df_median_predictors_qrf = {}
                 df_quantiles_predictors_qrf = {}
+
+                # Persistence
+                if flag_pers is False:
+                    step = int(predicted_signals[i].split('-')[1][1:]) + 1
+                    mae_pers = mean_absolute_error(df_measure.values[step:], df_measure.values[0:-step])
+                    rmse_pers = np.sqrt(mean_squared_error(df_measure.values[step:], df_measure.values[0:-step]))
+
+                    print('%s,%s,%s,%s,%s,%s,%.1f,%.1f' % (case, region, predicted_signals[i], 'P03-22-PS',
+                                                           start_date, end_date, mae_pers, rmse_pers))
+                    flag_pers = True
+
                 for predictor in predictors:
                     # Get forecasts
                     res = calc_ngb_prediction('predictions_ngb', region, predictor, case, predicted_signals[i], start_date, end_date)
