@@ -369,14 +369,13 @@ if __name__ == "__main__":
                             qs_qrf[th] = cu.quantile_scores(df_quantiles_predictors_qrf[predictor].values,
                                                             df_measure['measure'].values, quantiles_vals, th)
 
-                        # desc = '[%s:%s:%s:%s]' % (region, case, predicted_signals[i], predictor)
-                        # do_hist_errors(df_predictors[predictor].values.ravel(), df_measure['measure'].values, desc, cfg, 'errHist')
-                        #
-                        # # Additional plot
-                        # do_qrf_plot(qs_qrf, desc, cfg)
-                        
+                        desc = '[%s:%s:%s:%s]' % (region, case, predicted_signals[i], predictor)
+                        do_hist_errors(df_predictors[predictor].values.ravel(), df_measure['measure'].values, desc, cfg, 'errHist')
 
-                # do_hist_targets(df_measure['measure'].values, region, cfg, 'measHist')
+                        # Additional plot
+                        do_qrf_plot(qs_qrf, desc, cfg)
+
+                do_hist_targets(df_measure['measure'].values, region, cfg, 'measHist')
 
     print_kpis(start_date, end_date, pred_kpis)
     plot_target_kpis(pred_kpis, cfg)
