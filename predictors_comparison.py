@@ -23,7 +23,7 @@ sns.set_style("ticks")
 
 def do_hist_targets(errs, desc, cfg, hist_pars_code):
     fig, ax = plt.subplots(figsize=(12, 12))
-    ax.set_title(desc)
+    ax.set_title(desc, fontsize=20)
     ax.set_xlim(cfg['histParams'][hist_pars_code]['xlim'])
     ax.set_ylim(cfg['histParams'][hist_pars_code]['ylim'])
     plt.xticks(np.arange(cfg['histParams'][hist_pars_code]['xtics']['start'],
@@ -34,8 +34,8 @@ def do_hist_targets(errs, desc, cfg, hist_pars_code):
                          step=cfg['histParams'][hist_pars_code]['ytics']['step']))
     plt.hist(errs, cfg['histParams'][hist_pars_code]['bins'], facecolor=cfg['histParams'][hist_pars_code]['color'],
              alpha=cfg['histParams'][hist_pars_code]['alpha'])
-    plt.xlabel(cfg['histParams'][hist_pars_code]['xlabel'])
-    plt.ylabel('OCCURENCES')
+    plt.xlabel(cfg['histParams'][hist_pars_code]['xlabel'], fontsize=18)
+    plt.ylabel('OCCURENCES', fontsize=18)
     plt.grid()
 
     plt.savefig('%s%s%s_%s.png' % (cfg['plotFolder'], os.sep, desc.replace(':', '_').replace('[', '').replace(']', ''),
@@ -51,7 +51,7 @@ def do_hist_errors(pred_all, meas_all, desc, cfg, hist_pars_code):
     for th in cfg['histParams'][hist_pars_code]['thresholds']:
         meas, pred = mask_dataset(meas_all, pred_all, th['limits'][0], th['limits'][1])
         err = pred - meas
-        ax.set_title(desc)
+        ax.set_title(desc, fontsize=20)
         plt.xticks(np.arange(cfg['histParams'][hist_pars_code]['xtics']['start'],
                              cfg['histParams'][hist_pars_code]['xtics']['end'],
                              step=cfg['histParams'][hist_pars_code]['xtics']['step']))
@@ -61,10 +61,10 @@ def do_hist_errors(pred_all, meas_all, desc, cfg, hist_pars_code):
         # plt.hist(err, cfg['histParams'][hist_pars_code]['bins'], facecolor=cfg['histParams'][hist_pars_code]['color'],
         plt.hist(err, cfg['histParams'][hist_pars_code]['bins'],
                  alpha=cfg['histParams'][hist_pars_code]['alpha'])
-        plt.xlabel(cfg['histParams'][hist_pars_code]['xlabel'])
+        plt.xlabel(cfg['histParams'][hist_pars_code]['xlabel'], fontsize=18)
         legend_data.append(th['label'])
-        plt.legend(legend_data)
-        plt.ylabel('OCCURENCES')
+        plt.legend(legend_data, fontsize=14)
+        plt.ylabel('OCCURENCES', fontsize=18)
         plt.grid()
 
     # plt.show()
@@ -193,9 +193,9 @@ def plot_target_kpis(pred_kpis, cfg):
             for kpis_set in pred_kpis[pred].keys():
                 if pred_kpis[pred][kpis_set]['stdev_pred'] - pred_kpis[pred][kpis_set]['stdev_meas'] >= 0:
                     plt.scatter(np.array(pred_kpis[pred][kpis_set]['ncrmse']), np.array([pred_kpis[pred][kpis_set]['nmbe']]),
-                                s=200, label='%s %s %s %s %s ncrmse' % (pred[0], pred[1], pred[2], pred[3], kpis_set))
+                                s=300, label='%s %s %s %s %s ncrmse' % (pred[0], pred[1], pred[2], pred[3], kpis_set))
                     plt.scatter(np.array(pred_kpis[pred][kpis_set]['ncmae']), np.array([pred_kpis[pred][kpis_set]['nmbe']]),
-                                s=200, label='%s %s %s %s %s ncmae' % (pred[0], pred[1], pred[2], pred[3], kpis_set))
+                                s=300, label='%s %s %s %s %s ncmae' % (pred[0], pred[1], pred[2], pred[3], kpis_set))
                 else:
                     plt.scatter(np.array(-pred_kpis[pred][kpis_set]['ncrmse']), np.array([pred_kpis[pred][kpis_set]['nmbe']]),
                                 s=200, label='%s %s %s %s %s ncrmse' % (pred[0], pred[1], pred[2], pred[3], kpis_set))
@@ -208,8 +208,8 @@ def plot_target_kpis(pred_kpis, cfg):
     ax.set_ylim([-1.5, 1.5])
     plt.xticks(np.arange(-1.5, 1.5, 0.25), fontsize=16)
     plt.yticks(np.arange(-1.5, 1.5, 0.25), fontsize=16)
-    plt.xlabel('NMAE | NCRMSE [-]', fontsize=18, fontweight='bold')
-    plt.ylabel('MBE [-]', fontsize=18, fontweight='bold')
+    plt.xlabel('NCMAE | NCRMSE [-]', fontsize=18, fontweight='bold')
+    plt.ylabel('NMBE [-]', fontsize=18, fontweight='bold')
     plt.grid()
     # plt.show()
     plt.savefig('%s/kpis_target.png' % (cfg['plotFolder']), dpi=300)
@@ -302,7 +302,6 @@ if __name__ == "__main__":
     quantiles = ['perc10', 'perc20', 'perc30', 'perc40', 'perc50', 'perc60', 'perc70', 'perc80', 'perc90']
     quantiles_vals = [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9]
 
-    print('CASE,REGION,TARGET,PREDICTOR,START,END,INTERVAL,MAE,RMSE,MBE,CMAE,CRMSE,NMAE,NRMSE,NMBE,NCMAE,NCRMSE')
     pred_kpis = dict()
     for region in regions:
         flag_pers = False
@@ -369,13 +368,16 @@ if __name__ == "__main__":
                             qs_qrf[th] = cu.quantile_scores(df_quantiles_predictors_qrf[predictor].values,
                                                             df_measure['measure'].values, quantiles_vals, th)
 
-                        desc = '[%s:%s:%s:%s]' % (region, case, predicted_signals[i], predictor)
-                        do_hist_errors(df_predictors[predictor].values.ravel(), df_measure['measure'].values, desc, cfg, 'errHist')
+                        if cfg['doPlot'] is True:
+                            desc = '[%s:%s:%s:%s]' % (region, case, predicted_signals[i], predictor)
+                            do_hist_errors(df_predictors[predictor].values.ravel(), df_measure['measure'].values, desc, cfg, 'errHist')
+                            do_qrf_plot(qs_qrf, desc, cfg)
 
-                        # Additional plot
-                        do_qrf_plot(qs_qrf, desc, cfg)
+                if cfg['doPlot'] is True:
+                    do_hist_targets(df_measure['measure'].values, region, cfg, 'measHist')
 
-                do_hist_targets(df_measure['measure'].values, region, cfg, 'measHist')
-
+    print('CASE,REGION,TARGET,PREDICTOR,START,END,INTERVAL,MAE,RMSE,MBE,CMAE,CRMSE,NMAE,NRMSE,NMBE,NCMAE,NCRMSE')
     print_kpis(start_date, end_date, pred_kpis)
-    plot_target_kpis(pred_kpis, cfg)
+
+    if cfg['doPlot'] is True:
+        plot_target_kpis(pred_kpis, cfg)
