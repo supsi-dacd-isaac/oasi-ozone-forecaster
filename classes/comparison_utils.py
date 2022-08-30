@@ -15,9 +15,9 @@ class ComparisonUtils:
         return pd.concat(df_list, axis=1)
 
     @staticmethod
-    def quantile_scores(q_hat_data: np.ndarray, y_data: np.ndarray, alphas, th):
-        y = y_data[y_data >= th]
-        q_hat = q_hat_data[y_data >= th]
+    def quantile_scores(q_hat_data: np.ndarray, y_data: np.ndarray, alphas):
+        y = y_data
+        q_hat = q_hat_data
 
         s_k_alpha, reliability_alpha = [[], []]
         for a, alpha in enumerate(alphas):
@@ -33,7 +33,7 @@ class ComparisonUtils:
             'reliability': reliability_alpha,
             'skill': s_k_alpha,
             'qs_50': s_k_alpha[int(len(alphas) / 2) + 1],
-            'mae_rel': mean_absolute_error(alphas, reliability_alpha),
-            'mae_rel_0-50': mean_absolute_error(alphas[0:int(len(alphas)/2)], reliability_alpha[0:int(len(alphas)/2)]),
-            'mae_rel_50-100': mean_absolute_error(alphas[int(len(alphas)/2):], reliability_alpha[int(len(alphas)/2):]),
+            # 'mae_rel': mean_absolute_error(alphas, reliability_alpha),
+            # 'mae_rel_0-50': mean_absolute_error(alphas[0:int(len(alphas)/2)], reliability_alpha[0:int(len(alphas)/2)]),
+            # 'mae_rel_50-100': mean_absolute_error(alphas[int(len(alphas)/2):], reliability_alpha[int(len(alphas)/2):]),
         }
