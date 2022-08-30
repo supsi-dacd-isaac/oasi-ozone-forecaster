@@ -170,7 +170,7 @@ def do_qrf_plot(qs, desc, cfg):
         plt.xlabel('QUANTILES')
         plt.ylabel('ESTIMATED')
         plt.grid()
-        plt.savefig('%s/%s_%s_gt%s.png' % (cfg['plotFolder'], desc[1:-1].replace(':', '_'), 'QRF', th), dpi=300)
+        plt.savefig('%s/%s_%s_%s.png' % (cfg['plotFolder'], desc[1:-1].replace(':', '_'), 'QRF', th), dpi=300)
         plt.close()
 
         fig, ax = plt.subplots(figsize=(8, 8))
@@ -181,7 +181,7 @@ def do_qrf_plot(qs, desc, cfg):
         plt.xlabel('QUANTILES')
         plt.ylabel('QUANTILE SCORE')
         plt.grid()
-        plt.savefig('%s/%s_%s_qs_gt%s.png' % (cfg['plotFolder'], desc[1:-1].replace(':', '_'), 'QRF', th), dpi=300)
+        plt.savefig('%s/%s_%s_qs_%s.png' % (cfg['plotFolder'], desc[1:-1].replace(':', '_'), 'QRF', th), dpi=300)
         plt.close()
 
 
