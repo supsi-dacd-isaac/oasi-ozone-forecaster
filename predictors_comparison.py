@@ -10,6 +10,7 @@ from matplotlib import pyplot as plt, patches
 import urllib3
 from influxdb import DataFrameClient
 from sklearn.metrics import mean_absolute_error, mean_squared_error
+from sklearn.utils.validation import check_consistent_length, check_array
 
 import warnings
 warnings.filterwarnings("ignore")
@@ -19,6 +20,65 @@ from classes.comparison_utils import ComparisonUtils as cu
 from classes.model_trainer import ModelTrainer as mt
 
 sns.set_style("ticks")
+
+
+def mean_absolute_percentage_error(y_true, y_pred,
+                                   sample_weight=None,
+                                   multioutput='uniform_average'):
+    y_type, y_true, y_pred, multioutput = _check_reg_targets(
+        y_true, y_pred, multioutput)
+    check_consistent_length(y_true, y_pred, sample_weight)
+    epsilon = np.finfo(np.float64).eps
+    mape = np.abs(y_pred - y_true) / np.maximum(np.abs(y_true), epsilon)
+    output_errors = np.average(mape,
+                               weights=sample_weight, axis=0)
+    if isinstance(multioutput, str):
+        if multioutput == 'raw_values':
+            return output_errors
+        elif multioutput == 'uniform_average':
+            # pass None as weights to np.average: uniform mean
+            multioutput = None
+
+    return np.average(output_errors, weights=multioutput)
+
+
+def _check_reg_targets(y_true, y_pred, multioutput, dtype="numeric"):
+    check_consistent_length(y_true, y_pred)
+    y_true = check_array(y_true, ensure_2d=False, dtype=dtype)
+    y_pred = check_array(y_pred, ensure_2d=False, dtype=dtype)
+
+    if y_true.ndim == 1:
+        y_true = y_true.reshape((-1, 1))
+
+    if y_pred.ndim == 1:
+        y_pred = y_pred.reshape((-1, 1))
+
+    if y_true.shape[1] != y_pred.shape[1]:
+        raise ValueError("y_true and y_pred have different number of output "
+                         "({0}!={1})".format(y_true.shape[1], y_pred.shape[1]))
+
+    n_outputs = y_true.shape[1]
+    allowed_multioutput_str = ('raw_values', 'uniform_average',
+                               'variance_weighted')
+    if isinstance(multioutput, str):
+        if multioutput not in allowed_multioutput_str:
+            raise ValueError("Allowed 'multioutput' string values are {}. "
+                             "You provided multioutput={!r}".format(
+                                 allowed_multioutput_str,
+                                 multioutput))
+    elif multioutput is not None:
+        multioutput = check_array(multioutput, ensure_2d=False)
+        if n_outputs == 1:
+            raise ValueError("Custom weights are useful only in "
+                             "multi-output cases.")
+        elif n_outputs != len(multioutput):
+            raise ValueError(("There must be equally many custom weights "
+                              "(%d) as outputs (%d).") %
+                             (len(multioutput), n_outputs))
+    y_type = 'continuous' if n_outputs == 1 else 'continuous-multioutput'
+
+    return y_type, y_true, y_pred, multioutput
+
 
 
 def do_hist_targets(errs, desc, cfg, hist_pars_code):
@@ -171,12 +231,14 @@ def calc_kpis(meas, pred, low, up):
     kpis['stdev_meas'] = np.std(meas)
     kpis['stdev_pred'] = np.std(pred)
 
-    kpis['nmae'] = kpis['mbe'] / kpis['stdev_meas']
+    kpis['nmae'] = kpis['mae'] / kpis['stdev_meas']
     kpis['nrmse'] = kpis['rmse'] / kpis['stdev_meas']
     kpis['nmbe'] = kpis['mbe'] / kpis['stdev_meas']
 
     kpis['ncmae'] = kpis['cmae'] / kpis['stdev_meas']
     kpis['ncrmse'] = kpis['crmse'] / kpis['stdev_meas']
+
+    kpis['mape'] = mean_absolute_percentage_error(meas, pred) * 1e2
 
     return kpis
 
@@ -222,7 +284,7 @@ def print_kpis(start_date, end_date, pred_kpis):
         for kpis_set in pred_kpis[pred].keys():
             str_data = '%s,%s,%s,%s,%s,%s,%s' % (pred[0], pred[1], pred[2], pred[3], start_date, end_date, kpis_set)
 
-            # MAE, RMSE, MBE, CMAE, CRMSE, NMAE, NRMSE, NMBE, NCMAE, NCRMSE
+            # MAE, RMSE, MBE, CMAE, CRMSE, NMAE, NRMSE, NMBE, NCMAE, NCRMSE, MAPE
             str_data = '%s,%.1f' % (str_data, pred_kpis[pred][kpis_set]['mae'])
             str_data = '%s,%.1f' % (str_data, pred_kpis[pred][kpis_set]['rmse'])
             str_data = '%s,%.1f' % (str_data, pred_kpis[pred][kpis_set]['mbe'])
@@ -233,6 +295,7 @@ def print_kpis(start_date, end_date, pred_kpis):
             str_data = '%s,%.3f' % (str_data, pred_kpis[pred][kpis_set]['nmbe'])
             str_data = '%s,%.3f' % (str_data, pred_kpis[pred][kpis_set]['ncmae'])
             str_data = '%s,%.3f' % (str_data, pred_kpis[pred][kpis_set]['ncrmse'])
+            str_data = '%s,%.1f' % (str_data, pred_kpis[pred][kpis_set]['mape'])
 
             print(str_data)
 
@@ -376,7 +439,7 @@ if __name__ == "__main__":
                 if cfg['doPlot'] is True:
                     do_hist_targets(df_measure['measure'].values, region, cfg, 'measHist')
 
-    print('CASE,REGION,TARGET,PREDICTOR,START,END,INTERVAL,MAE,RMSE,MBE,CMAE,CRMSE,NMAE,NRMSE,NMBE,NCMAE,NCRMSE')
+    print('CASE,REGION,TARGET,PREDICTOR,START,END,INTERVAL,MAE,RMSE,MBE,CMAE,CRMSE,NMAE,NRMSE,NMBE,NCMAE,NCRMSE,MAPE')
     print_kpis(start_date, end_date, pred_kpis)
 
     if cfg['doPlot'] is True:
