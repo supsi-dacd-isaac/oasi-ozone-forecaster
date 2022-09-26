@@ -552,6 +552,8 @@ class InputsGatherer:
                     self.io_data[signal_data] = np.max(vals)
                 elif func == 'mean':
                     self.io_data[signal_data] = np.mean(vals)
+                elif func == 'std':
+                    self.io_data[signal_data] = np.std(vals)
             except Exception as e:
                 if forecast_substitution is True:
                     # Manage the substitution
