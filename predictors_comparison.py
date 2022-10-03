@@ -9,7 +9,7 @@ import seaborn as sns
 from matplotlib import pyplot as plt, patches
 import urllib3
 from influxdb import DataFrameClient
-from sklearn.metrics import mean_absolute_error, mean_squared_error
+from sklearn.metrics import mean_absolute_error, mean_squared_error, confusion_matrix, ConfusionMatrixDisplay
 from sklearn.utils.validation import check_consistent_length, check_array
 
 import warnings
@@ -19,6 +19,39 @@ urllib3.disable_warnings()
 from classes.comparison_utils import ComparisonUtils as cu
 
 sns.set_style("ticks")
+
+
+def print_output_stat(region, start_date, end_date, values):
+    for interval in cfg['kpiTargetGraph']['intervals']:
+        masked_values, _ = mask_dataset(values, values, interval['limits'][0], interval['limits'][1])
+        print('%s,%s,%s,%s,AVG=%.1f,MED=%.1f,STD=%.1f,N=%1d' % (region, interval['label'], start_date, end_date,
+                                                                np.mean(masked_values), np.median(masked_values),
+                                                                np.std(masked_values), len(masked_values)))
+
+
+
+def print_confusion_matrix(meas, pred, desc, cfg):
+    class_meas = ['none'] * len(meas)
+    class_pred = ['none'] * len(pred)
+
+    labels = []
+    for interval in cfg['confusionMatrix']:
+        labels.append(interval['label'])
+
+    for i in range(0, len(meas)):
+        for interval in cfg['confusionMatrix']:
+            if interval['limits'][0] < meas[i] <= interval['limits'][1]:
+                class_meas[i] = interval['label']
+
+            if interval['limits'][0] < pred[i] <= interval['limits'][1]:
+                class_pred[i] = interval['label']
+
+    cm = confusion_matrix(class_meas, class_pred, labels=labels)
+    disp = ConfusionMatrixDisplay(confusion_matrix=cm, display_labels=labels)
+    disp.plot(cmap=plt.cm.Blues, values_format='g')
+    plt.title('CM %s' % desc)
+    plt.savefig('%s%s%s_cm.png' % (cfg['plotFolder'], os.sep, desc.replace(':', '_').replace('[', '').replace(']', '')), dpi=300)
+    plt.close()
 
 
 def mean_absolute_percentage_error(y_true, y_pred,
@@ -230,7 +263,7 @@ def calc_kpis(meas, pred_ngb, pred_qrf, low, up, quantiles_vals):
     return kpis
 
 
-def plot_target_kpis(pred_kpis, cfg):
+def plot_target_kpis(pred_kpis, cfg, cfg_file):
     fig = plt.figure(figsize=(16, 16))
     ax = fig.add_subplot()
     circle = patches.Circle((0.0, 0.0), radius=1.0, color='black', linestyle='dashed', linewidth=4, fill=False)
@@ -261,7 +294,7 @@ def plot_target_kpis(pred_kpis, cfg):
     plt.ylabel('NMBE [-]', fontsize=18, fontweight='bold')
     plt.grid()
     # plt.show()
-    plt.savefig('%s/kpis_target.png' % (cfg['plotFolder']), dpi=300)
+    plt.savefig('%s/kpis_target_%s.png' % (cfg['plotFolder'], config_file.split(os.sep)[-1].replace('.json', '')), dpi=300)
     plt.close()
     plt.show()
 
@@ -374,14 +407,17 @@ if __name__ == "__main__":
                 df_median_predictors_qrf = {}
                 df_quantiles_predictors_qrf = {}
 
+                print_output_stat(region, start_date, end_date, df_measure.values.ravel())
+
                 # Persistence
                 if cfg['printPersistence'] is True and flag_pers is False:
                     step = int(predicted_signals[i].split('-')[1][1:]) + 1
                     mae_pers = mean_absolute_error(df_measure.values[step:], df_measure.values[0:-step])
+                    mbe_pers = np.mean(df_measure.values[0:-step] - df_measure.values[step:])
                     rmse_pers = np.sqrt(mean_squared_error(df_measure.values[step:], df_measure.values[0:-step]))
 
-                    print('%s,%s,%s,%s,%s,%s,PERS,%.1f,%.1f' % (case, region, predicted_signals[i], 'P03-22-PS',
-                                                                start_date, end_date, mae_pers, rmse_pers))
+                    print('%s,%s,%s,%s,%s,%s,PERS,%.1f,%.1f,%.5f' % (case, region, predicted_signals[i], 'P03-22-PS',
+                                                                     start_date, end_date, mae_pers, rmse_pers, mbe_pers))
                     flag_pers = True
 
                 for predictor in predictors:
@@ -413,20 +449,29 @@ if __name__ == "__main__":
                             single_pred_kpis[interval['label']] = calc_kpis(meas, pred_ngb, pred_qrf,
                                                                             interval['limits'][0],
                                                                             interval['limits'][1], quantiles_vals)
+
                         # Save the results
                         pred_kpis[(case, region, predicted_signals[i], predictor)] = single_pred_kpis
+
 
                         # Plot the graph related to a single case (case, region, predicted_signals[i], predictor, interval)
                         if cfg['doPlot'] is True:
                             desc = '[%s:%s:%s:%s]' % (region, case, predicted_signals[i], predictor)
-                            do_hist_errors(pred_ngb, meas, desc, cfg, 'errHist')
-                            do_qrf_plot(single_pred_kpis, desc, cfg)
 
-            # Plot hystogram of the target
-            if cfg['doPlot'] is True:
-                do_hist_targets(meas, region, cfg, 'measHist')
+                            # Error histograms
+                            do_hist_errors(pred_ngb, meas, desc, cfg, 'errHist')
+
+                            # # QRF plots
+                            # do_qrf_plot(single_pred_kpis, desc, cfg)
+
+                            # # Confusion matrix
+                            # print_confusion_matrix(meas, pred_ngb, desc, cfg)
+
+            # # Plot hystogram of the target
+            # if cfg['doPlot'] is True:
+            #     do_hist_targets(meas, region, cfg, 'measHist')
 
     print_kpis(start_date, end_date, pred_kpis)
 
-    if cfg['doPlot'] is True:
-        plot_target_kpis(pred_kpis, cfg)
+    # if cfg['doPlot'] is True:
+    plot_target_kpis(pred_kpis, cfg, config_file)
