@@ -216,9 +216,6 @@ def perform_forecast(day_case, forecast_type):
 
     # Create the inputs gatherer instance
     inputs_gatherer = InputsGatherer(influxdb_client=influx_client, forecast_type=forecast_type, cfg=cfg, logger=logger, artificial_features=artificial_features)
-    # Calculate the day_case-1d O3 values and insert them in the DB
-    # for kr in cfg['regions'].keys():
-    #     inputs_gatherer.calc_yesterday_output_daily_values(region=kr, os='O3')
 
     # Calculate the inputs required by all the models of the configured locations
     inputs_gatherer.build_global_input_dataset()
