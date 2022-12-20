@@ -9,7 +9,7 @@ import logging
 import json
 
 from classes.alerts import SlackClient
-from influxdb import InfluxDBClient
+from influxdb import InfluxDBClient, DataFrameClient
 
 from classes.data_manager import DataManager
 
@@ -72,12 +72,16 @@ if __name__ == "__main__":
         influx_client = InfluxDBClient(host=cfg['influxDB']['host'], port=cfg['influxDB']['port'],
                                        password=cfg['influxDB']['password'], username=cfg['influxDB']['user'],
                                        database=cfg['influxDB']['database'], ssl=cfg['influxDB']['ssl'])
+
+        influx_df_client = DataFrameClient(host=cfg['influxDB']['host'], port=cfg['influxDB']['port'],
+                                           password=cfg['influxDB']['password'], username=cfg['influxDB']['user'],
+                                           database=cfg['influxDB']['database'], ssl=cfg['influxDB']['ssl'])
     except Exception as e:
         logger.error('EXCEPTION: %s' % str(e))
         sys.exit(3)
     logger.info('Connection successful')
 
-    dm = DataManager(influx_client, cfg, logger)
+    dm = DataManager(influx_client, cfg, logger, influx_df_client)
 
     # Download files from the FTP server
     if cfg['ftp']['enabled'] is True:
@@ -89,6 +93,10 @@ if __name__ == "__main__":
     if cfg['influxDB']['dataImporting'] is True:
         logger.info('Importing in InfluxDB of raw data related to files in %s' % cfg['ftp']['localFolders']['tmp'])
         dm.insert_data()
+
+    if cfg['calculatedInputsSection']['enabled'] is True:
+        logger.info('Calculate artificial data and insert it into input measurements')
+        dm.calculate_artificial_data()
 
     # Delete files correctly handled on the FTP server and close the FTP connection
     if cfg['ftp']['enabled'] is True:

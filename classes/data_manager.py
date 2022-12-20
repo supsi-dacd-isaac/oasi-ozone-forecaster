@@ -34,7 +34,7 @@ class DataManager:
     Generic interface for data (measures and forecasts) management
     """
 
-    def __init__(self, influxdb_client, cfg, logger):
+    def __init__(self, influxdb_client, cfg, logger, influx_df_client=None):
         """
         Constructor
 
@@ -47,6 +47,7 @@ class DataManager:
         """
         # set the variables
         self.influxdb_client = influxdb_client
+        self.influx_df_client = influx_df_client
         self.cfg = cfg
         self.logger = logger
         self.files_correctly_downloaded = []
@@ -602,3 +603,102 @@ class DataManager:
     @staticmethod
     def mean_absolute_percentage_error(y_true, y_pred):
         return np.mean(np.abs((y_true - y_pred) / y_true)) * 100
+
+    def get_start_end_dates(self):
+        if self.cfg['calculatedInputsSection']['period'] == 'custom':
+            start_date = self.cfg['calculatedInputsSection']['from']
+            end_date = self.cfg['calculatedInputsSection']['to']
+        else:
+            last_hours = int(self.cfg['calculatedInputsSection']['period'].replace('last', '').replace('h', ''))
+            start_date = (datetime.now() - timedelta(hours=last_hours)).strftime('%Y-%m-%dT%H:00:00Z')
+            end_date = datetime.now().strftime('%Y-%m-%dT%H:59:59Z')
+        return start_date, end_date
+
+    def calculate_artificial_data(self):
+        st_date, end_date = self.get_start_end_dates()
+
+        for asig_data in self.cfg['calculatedInputsSection']['inputs']:
+            if asig_data['forecast'] is False:
+                input1 = self.get_measure_data(asig_data['locations'][0], asig_data['signals'][0], st_date, end_date)
+                input2 = self.get_measure_data(asig_data['locations'][1], asig_data['signals'][1], st_date, end_date)
+                tag_loc, tag_sig = self.get_loc_sig(asig_data['locations'], asig_data['signals'], asig_data['function'])
+
+                if input1.index.equals(input2.index) is True:
+                    output = self.apply_function_to_measures(asig_data['function'], input1, input2)
+
+                    res = self.influx_df_client.write_points(output,
+                                                             self.cfg['influxDB']['measurementInputsMeasurements'],
+                                                             tags={'location': tag_loc, 'signal': tag_sig},
+                                                             protocol='line')
+                    if res is not True:
+                        self.logger.warning('Failed measure inserting for couple {%s;%s}' % (tag_loc, tag_sig))
+                    else:
+                        self.logger.info('Inserted measure data for couple {%s;%s}' % (tag_loc, tag_sig))
+                else:
+                    self.logger.warning('Index mismatch: measure not inserted for couple {%s;%s}' % (tag_loc, tag_sig))
+            else:
+                input1 = self.get_forecast_data(asig_data['locations'][0], asig_data['signals'][0], st_date, end_date)
+                input2 = self.get_forecast_data(asig_data['locations'][1], asig_data['signals'][1], st_date, end_date)
+                tag_loc, tag_sig = self.get_loc_sig(asig_data['locations'], asig_data['signals'], asig_data['function'])
+
+                if input1.index.equals(input2.index) is True:
+                    output = self.apply_function_to_forecast(asig_data['function'], input1, input2)
+                    res = self.influx_df_client.write_points(output, self.cfg['influxDB']['measurementInputsForecasts'],
+                                                             tags={'location': tag_loc, 'signal': tag_sig},
+                                                             tag_columns=['step'], protocol='line')
+                    if res is not True:
+                        self.logger.warning('Failed forecast inserting for couple {%s;%s}' % (tag_loc, tag_sig))
+                    else:
+                        self.logger.info('Inserted forecast data for couple {%s;%s}' % (tag_loc, tag_sig))
+                else:
+                    self.logger.warning('Index mismatch: forecast not inserted for couple {%s;%s}' % (tag_loc, tag_sig))
+
+
+
+    def get_measure_data(self, loc, sig, st_date, end_date):
+        query = 'SELECT mean(value) AS value FROM %s WHERE location=\'%s\' AND signal=\'%s\' AND time>=\'%s\' AND ' \
+                'time<=\'%s\' GROUP BY time(30m)' % (self.cfg['influxDB']['measurementInputsMeasurements'],
+                                                     loc, sig, st_date, end_date)
+        res = self.influx_df_client.query(query=query)
+        return res[self.cfg['influxDB']['measurementInputsMeasurements']]
+
+
+    def get_forecast_data(self, loc, sig, st_date, end_date):
+        query = 'SELECT value, step FROM %s WHERE location=\'%s\' AND signal=\'%s\' AND time>=\'%s\' AND ' \
+                'time<=\'%s\'' % (self.cfg['influxDB']['measurementInputsForecasts'], loc, sig, st_date, end_date)
+        res = self.influx_df_client.query(query=query)
+        df = res[self.cfg['influxDB']['measurementInputsForecasts']]
+        df.reset_index(inplace=True)
+        df['idx'] = df['index'].astype(str) + "-" + df['step'].astype(str)
+        df = df.set_index('idx')
+        return df
+
+    @staticmethod
+    def apply_function_to_measures(func, i1, i2):
+        if func == 'sum':
+            return i1+i2
+        elif func == 'diff':
+            return i1-i2
+        elif func == 'mul':
+            return i1*i2
+        elif func == 'ratio':
+            return i1/i2
+
+    @staticmethod
+    def apply_function_to_forecast(func, i1, i2):
+        if func == 'sum':
+            output_series = i1['value']+i2['value']
+        elif func == 'diff':
+            output_series = i1['value']-i2['value']
+        elif func == 'mul':
+            output_series = i1['value']*i2['value']
+        elif func == 'ratio':
+            output_series = i1['value']/i2['value']
+        output = copy.deepcopy(i1)
+        output['value'] = output_series
+        return output.set_index('index')
+
+    @staticmethod
+    def get_loc_sig(locations, signals, func):
+        return '%s_%s' % (locations[0], locations[1]), '%s_%s_%s' % (func[0].upper(), signals[0], signals[1])
+
