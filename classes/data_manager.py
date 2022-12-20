@@ -615,45 +615,68 @@ class DataManager:
         return start_date, end_date
 
     def calculate_artificial_data(self):
-        st_date, end_date = self.get_start_end_dates()
+        if self.cfg['calculatedInputsSection']['period'] == 'custom':
+            start_day = datetime.strptime(self.cfg['calculatedInputsSection']['from'], '%Y-%m-%d')
+            end_day = datetime.strptime(self.cfg['calculatedInputsSection']['to'], '%Y-%m-%d')
+
+            # Cycle over the days
+            curr_day = start_day
+            while curr_day <= end_day:
+                curr_str = curr_day.strftime('%Y-%m-%d')
+                self.calc_artificial_data_for_given_period(curr_str, curr_str)
+                curr_day += timedelta(days=1)
+        else:
+            last_hours = int(self.cfg['calculatedInputsSection']['period'].replace('last', '').replace('h', ''))
+            start_str = (datetime.now() - timedelta(hours=last_hours)).strftime('%Y-%m-%d')
+            end_str = datetime.now().strftime('%Y-%m-%d')
+            self.calc_artificial_data_for_given_period(start_str, end_str)
+
+    def calc_artificial_data_for_given_period(self, from_str, to_str):
+        self.logger.info('Calculate artifical data for period [%s:%s]' % (from_str, to_str))
+
+        # To be safe go from the beginning of the "from" date to the end of "to" date
+        from_str = '%sT00:00:00Z' % from_str
+        to_str = '%sT23:59:59Z' % to_str
 
         for asig_data in self.cfg['calculatedInputsSection']['inputs']:
-            if asig_data['forecast'] is False:
-                input1 = self.get_measure_data(asig_data['locations'][0], asig_data['signals'][0], st_date, end_date)
-                input2 = self.get_measure_data(asig_data['locations'][1], asig_data['signals'][1], st_date, end_date)
-                tag_loc, tag_sig = self.get_loc_sig(asig_data['locations'], asig_data['signals'], asig_data['function'])
+            try:
+                if asig_data['forecast'] is False:
+                    input1 = self.get_measure_data(asig_data['locations'][0], asig_data['signals'][0], from_str, to_str)
+                    input2 = self.get_measure_data(asig_data['locations'][1], asig_data['signals'][1], from_str, to_str)
+                    tag_loc, tag_sig = self.get_loc_sig(asig_data['locations'], asig_data['signals'], asig_data['function'])
 
-                if input1.index.equals(input2.index) is True:
-                    output = self.apply_function_to_measures(asig_data['function'], input1, input2)
+                    if input1.index.equals(input2.index) is True:
+                        output = self.apply_function_to_measures(asig_data['function'], input1, input2)
 
-                    res = self.influx_df_client.write_points(output,
-                                                             self.cfg['influxDB']['measurementInputsMeasurements'],
-                                                             tags={'location': tag_loc, 'signal': tag_sig},
-                                                             protocol='line')
-                    if res is not True:
-                        self.logger.warning('Failed measure inserting for couple {%s;%s}' % (tag_loc, tag_sig))
+                        res = self.influx_df_client.write_points(output,
+                                                                 self.cfg['influxDB']['measurementInputsMeasurements'],
+                                                                 tags={'location': tag_loc, 'signal': tag_sig},
+                                                                 protocol='line')
+                        if res is not True:
+                            self.logger.warning('Failed measure inserting for couple [%s:%s]' % (tag_loc, tag_sig))
+                        else:
+                            self.logger.info('Inserted measure data for couple [%s:%s]' % (tag_loc, tag_sig))
                     else:
-                        self.logger.info('Inserted measure data for couple {%s;%s}' % (tag_loc, tag_sig))
+                        self.logger.warning('Index mismatch: measure not inserted for couple [%s:%s]' % (tag_loc, tag_sig))
                 else:
-                    self.logger.warning('Index mismatch: measure not inserted for couple {%s;%s}' % (tag_loc, tag_sig))
-            else:
-                input1 = self.get_forecast_data(asig_data['locations'][0], asig_data['signals'][0], st_date, end_date)
-                input2 = self.get_forecast_data(asig_data['locations'][1], asig_data['signals'][1], st_date, end_date)
-                tag_loc, tag_sig = self.get_loc_sig(asig_data['locations'], asig_data['signals'], asig_data['function'])
+                    input1 = self.get_forecast_data(asig_data['locations'][0], asig_data['signals'][0], from_str, to_str)
+                    input2 = self.get_forecast_data(asig_data['locations'][1], asig_data['signals'][1], from_str, to_str)
+                    tag_loc, tag_sig = self.get_loc_sig(asig_data['locations'], asig_data['signals'], asig_data['function'])
 
-                if input1.index.equals(input2.index) is True:
-                    output = self.apply_function_to_forecast(asig_data['function'], input1, input2)
-                    res = self.influx_df_client.write_points(output, self.cfg['influxDB']['measurementInputsForecasts'],
-                                                             tags={'location': tag_loc, 'signal': tag_sig},
-                                                             tag_columns=['step'], protocol='line')
-                    if res is not True:
-                        self.logger.warning('Failed forecast inserting for couple {%s;%s}' % (tag_loc, tag_sig))
+                    if input1.index.equals(input2.index) is True:
+                        output = self.apply_function_to_forecast(asig_data['function'], input1, input2)
+                        res = self.influx_df_client.write_points(output, self.cfg['influxDB']['measurementInputsForecasts'],
+                                                                 tags={'location': tag_loc, 'signal': tag_sig},
+                                                                 tag_columns=['step'], protocol='line')
+                        if res is not True:
+                            self.logger.warning('Failed forecast inserting for couple [%s:%s]' % (tag_loc, tag_sig))
+                        else:
+                            self.logger.info('Inserted forecast data for couple [%s:%s]' % (tag_loc, tag_sig))
                     else:
-                        self.logger.info('Inserted forecast data for couple {%s;%s}' % (tag_loc, tag_sig))
-                else:
-                    self.logger.warning('Index mismatch: forecast not inserted for couple {%s;%s}' % (tag_loc, tag_sig))
-
-
+                        self.logger.warning('Index mismatch: forecast not inserted for couple [%s:%s]' % (tag_loc, tag_sig))
+            except Exception as e:
+                self.logger.error('EXCEPTION: %s' % str(e))
+                self.logger.info('Failed data calculation for couple [%s:%s]' % (tag_loc, tag_sig))
 
     def get_measure_data(self, loc, sig, st_date, end_date):
         query = 'SELECT mean(value) AS value FROM %s WHERE location=\'%s\' AND signal=\'%s\' AND time>=\'%s\' AND ' \
