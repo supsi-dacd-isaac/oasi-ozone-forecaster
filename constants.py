@@ -32,12 +32,17 @@ LOCATIONS = {
                 'mendrisio': 'MEN',
                 'sagno': 'SAG',
                 'tesserete': 'TES',
+
+                # OASI-NABEL locations
                 'nabel-lugano': 'LUG',
+                'nabel-magadino': 'NA-MAG',
 
                 # MeteoSvizzera locations
                 'meteosvizzera-acquarossacomprovasco': 'MS-COM',
+                'meteosvizzera-cimetta': 'MS-CIM',
                 'meteosvizzera-montegeneroso': 'MS-GEN',
                 'meteosvizzera-gutsch': 'MS-GUT',
+                'meteosvizzera-kloten': 'MS-KLO',
                 'meteosvizzera-locarnomonti': 'MS-OTL',
                 'meteosvizzera-magadino': 'MS-MAG',
                 'meteosvizzera-ludianomatro': 'MS-MAT',
