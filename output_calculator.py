@@ -22,12 +22,18 @@ def calc_output(measurement, output_cfg, year, start_day, end_day):
         str_locations = '%slocation=\'%s\' OR ' % (str_locations, location)
     str_locations = '%s)' % str_locations[0:-4]
 
-    # Query handling the hourly aggregation
-    query = "select %s(value) from %s where signal='%s' and %s AND " \
-            "time>='%s-%sT00:00:00Z' AND time<='%s-%sT23:59:59Z' " \
-            "GROUP BY time(1h), location" % (output_cfg['aggregations']['hourly'], measurement,
-                                             output_cfg['sourceSignal'],
-                                             str_locations, year, start_day, year, end_day)
+    if output_cfg['aggregations']['hourly'] is not False:
+        # Query handling the hourly aggregation
+        query = "select %s(value) from %s where signal='%s' and %s AND " \
+                "time>='%s-%sT00:00:00Z' AND time<='%s-%sT23:59:59Z' " \
+                "GROUP BY time(1h), location" % (output_cfg['aggregations']['hourly'], measurement,
+                                                 output_cfg['sourceSignal'],
+                                                 str_locations, year, start_day, year, end_day)
+    else:
+        # Query getting data without hourly aggregation
+        query = "select value from %s where signal='%s' and %s AND time>='%s-%sT00:00:00Z' AND " \
+                "time<='%s-%sT23:59:59Z' GROUP BY location" % (measurement, output_cfg['sourceSignal'], str_locations,
+                                                               year, start_day, year, end_day)
     logger.info('Query: %s' % query)
     res = influx_client.query(query)
 
