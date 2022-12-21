@@ -647,6 +647,9 @@ class DataManager:
 
                     if input1.index.equals(input2.index) is True:
                         output = self.apply_function_to_measures(asig_data['function'], input1, input2)
+                        if asig_data['digitalOutputThreshold'] is not False:
+                            output = self.digitalize_output(output, asig_data['digitalOutputThreshold'])
+                            tag_sig = 'B%s' % tag_sig
 
                         res = self.influx_df_client.write_points(output,
                                                                  self.cfg['influxDB']['measurementInputsMeasurements'],
@@ -677,6 +680,18 @@ class DataManager:
             except Exception as e:
                 self.logger.error('EXCEPTION: %s' % str(e))
                 self.logger.info('Failed data calculation for couple [%s:%s]' % (tag_loc, tag_sig))
+
+
+    @staticmethod
+    def digitalize_output(output, pars):
+        # Currently it works only with > and < operators
+        op = pars[0]
+        th = float(pars[1:])
+        if op == '>':
+            output['value'] = [1.0 if x > th else 0.0 for x in output['value']]
+        elif op == '<':
+            output['value'] = [1.0 if x < th else 0.0 for x in output['value']]
+        return output
 
     def get_measure_data(self, loc, sig, st_date, end_date):
         query = 'SELECT mean(value) AS value FROM %s WHERE location=\'%s\' AND signal=\'%s\' AND time>=\'%s\' AND ' \
