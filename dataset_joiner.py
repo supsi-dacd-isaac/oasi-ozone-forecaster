@@ -32,7 +32,7 @@ if __name__ == "__main__":
     logger.info('END INPUT FILES READING')
 
     # Drop the targets columns from df1
-    logger.info('DATASETS INIZIALIZATION')
+    logger.info('DATASETS INITIALIZATION')
     cols_to_drop = []
     for col in df1.columns:
         if y in col:
