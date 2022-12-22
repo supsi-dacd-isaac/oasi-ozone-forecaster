@@ -632,7 +632,7 @@ class DataManager:
             self.calc_artificial_data_for_given_period(start_str, end_str)
 
     def calc_artificial_data_for_given_period(self, from_str, to_str):
-        self.logger.info('Calculate artifical data for period [%s:%s]' % (from_str, to_str))
+        self.logger.info('Calculate artificial data for period [%s:%s]' % (from_str, to_str))
 
         # To be safe go from the beginning of the "from" date to the end of "to" date
         from_str = '%sT00:00:00Z' % from_str
@@ -645,10 +645,11 @@ class DataManager:
                     input2 = self.get_measure_data(asig_data['locations'][1], asig_data['signals'][1], from_str, to_str)
                     tag_loc, tag_sig = self.get_loc_sig(asig_data['locations'], asig_data['signals'], asig_data['function'])
 
-                    if input1.index.equals(input2.index) is True:
+                    # Check if input data are meaningful
+                    if input1 is not None and input2 is not None and input1.index.equals(input2.index) is True:
                         output = self.apply_function_to_measures(asig_data['function'], input1, input2)
-                        if asig_data['digitalOutputThreshold'] is not False:
-                            output = self.digitalize_output(output, asig_data['digitalOutputThreshold'])
+                        if asig_data['booleanOutputThreshold'] is not False:
+                            output = self.digitalize_output(output, asig_data['booleanOutputThreshold'])
                             tag_sig = 'B%s' % tag_sig
 
                         res = self.influx_df_client.write_points(output,
@@ -660,13 +661,14 @@ class DataManager:
                         else:
                             self.logger.info('Inserted measure data for couple [%s:%s]' % (tag_loc, tag_sig))
                     else:
-                        self.logger.warning('Index mismatch: measure not inserted for couple [%s:%s]' % (tag_loc, tag_sig))
+                        self.logger.warning('Data missing or index mismatch: measure not inserted for couple [%s:%s]' % (tag_loc, tag_sig))
                 else:
                     input1 = self.get_forecast_data(asig_data['locations'][0], asig_data['signals'][0], from_str, to_str)
                     input2 = self.get_forecast_data(asig_data['locations'][1], asig_data['signals'][1], from_str, to_str)
                     tag_loc, tag_sig = self.get_loc_sig(asig_data['locations'], asig_data['signals'], asig_data['function'])
 
-                    if input1.index.equals(input2.index) is True:
+                    # Check if input data are meaningful
+                    if input1 is not None and input2 is not None and input1.index.equals(input2.index) is True:
                         output = self.apply_function_to_forecast(asig_data['function'], input1, input2)
                         res = self.influx_df_client.write_points(output, self.cfg['influxDB']['measurementInputsForecasts'],
                                                                  tags={'location': tag_loc, 'signal': tag_sig},
@@ -676,7 +678,7 @@ class DataManager:
                         else:
                             self.logger.info('Inserted forecast data for couple [%s:%s]' % (tag_loc, tag_sig))
                     else:
-                        self.logger.warning('Index mismatch: forecast not inserted for couple [%s:%s]' % (tag_loc, tag_sig))
+                        self.logger.warning('Data missing or index mismatch: forecast not inserted for couple [%s:%s]' % (tag_loc, tag_sig))
             except Exception as e:
                 self.logger.error('EXCEPTION: %s' % str(e))
                 self.logger.info('Failed data calculation for couple [%s:%s]' % (tag_loc, tag_sig))
@@ -698,8 +700,10 @@ class DataManager:
                 'time<=\'%s\' GROUP BY time(30m)' % (self.cfg['influxDB']['measurementInputsMeasurements'],
                                                      loc, sig, st_date, end_date)
         res = self.influx_df_client.query(query=query)
-        return res[self.cfg['influxDB']['measurementInputsMeasurements']]
-
+        if self.cfg['influxDB']['measurementInputsMeasurements'] in res.keys():
+            return res[self.cfg['influxDB']['measurementInputsMeasurements']]
+        else:
+            return None
 
     def get_forecast_data(self, loc, sig, st_date, end_date):
         query = 'SELECT value, step FROM %s WHERE location=\'%s\' AND signal=\'%s\' AND time>=\'%s\' AND ' \
