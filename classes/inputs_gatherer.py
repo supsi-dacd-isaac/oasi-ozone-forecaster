@@ -95,14 +95,6 @@ class InputsGatherer:
         self.io_data = dict()
         fp = self.output_folder_creator(name)
         file_name_df = fp + fp.split(os.sep)[1] + '_dataset.csv'
-        file_name_tc = fp + fp.split(os.sep)[1] + '_target_columns.csv'
-
-        # Set the signal list
-        # self.input_signals = dict()
-        # self.cfg_signals['signals'] = signal_list
-
-        # # destroy repetitions but preserve the order
-        # input_signals = list(dict.fromkeys(self.cfg_signals['signals']))
 
         # initialize the Pandas dataframe that will contain the final dataset
         output_signals = self.cfg['regions'][name]['targetColumns']
@@ -119,11 +111,16 @@ class InputsGatherer:
             start_dt = datetime.strptime(start_day, '%Y-%m-%d')
             end_dt = datetime.strptime(end_day, '%Y-%m-%d')
 
-            # In 2020 we lost part of the forecasted signal, so we're forced to discard most days until the 17th August
-            if year == 2020 and start_dt < datetime.strptime('2020-08-17', '%Y-%m-%d'):
-                start_day = '2020-08-17'
+            # Check if you have to jump to the next year
+            if start_dt > end_dt:
+                end_day = str(year+1) + '-' + self.cfg['datasetSettings']['endDay']
+                end_dt = datetime.strptime(end_day, '%Y-%m-%d')
 
-            if year == 2020 and end_dt < datetime.strptime('2020-08-17', '%Y-%m-%d'):
+            # todo this code should be checked carefully
+            # In 2020 we lost part of the forecasted signal, so we're forced to discard most days until the 17th August
+            if 'O3' in output_signals[0] and year == 2020 and start_dt < datetime.strptime('2020-08-17', '%Y-%m-%d'):
+                start_day = '2020-08-17'
+            if 'O3' in output_signals[0] and year == 2020 and end_dt < datetime.strptime('2020-08-17', '%Y-%m-%d'):
                 continue
 
             curr_day = start_day
@@ -342,7 +339,7 @@ class InputsGatherer:
             self.logger.info('Performing query: %s' % query)
             res = self.influxdb_client.query(query, epoch='s')
 
-            if 'series' in res.raw.keys():
+            if 'series' in res.raw.keys() and len(res.raw['series']) > 0:
                 try:
                     # The training of Meteosuisse temperatures were done in Kelvin degrees
                     # todo this thing just below is a shame, the data in the DB to use for the training are in Celsius!!
@@ -869,13 +866,20 @@ class InputsGatherer:
         """
         Get the address of the output folder for the current case
         """
+        # Check if start day > end date (it means they are related to different years)
+        start_dt = datetime.strptime('1970-%s' % self.cfg['datasetSettings']['startDay'], '%Y-%m-%d')
+        end_dt = datetime.strptime('1970-%s' % self.cfg['datasetSettings']['endDay'], '%Y-%m-%d')
+        if start_dt > end_dt:
+            inc_year = 1
+        else:
+            inc_year = 0
 
         folder_path = '%s%s_%s_%s-%s_%s-%s%s' % (self.cfg['outputFolder'],
                                                  dataset_name,
                                                  self.forecast_type,
                                                  self.cfg['datasetSettings']['years'][0],
                                                  self.cfg['datasetSettings']['startDay'],
-                                                 self.cfg['datasetSettings']['years'][-1],
+                                                 self.cfg['datasetSettings']['years'][-1]+inc_year,
                                                  self.cfg['datasetSettings']['endDay'], os.sep)
         folder_path = folder_path.replace('-', '')
         if not os.path.exists(folder_path):
