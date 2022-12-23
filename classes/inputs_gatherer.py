@@ -243,13 +243,14 @@ class InputsGatherer:
                 if '__d0' in signal or '__d1' in signal or '__d2' in signal or \
                         '__d3' in signal or '__d4' in signal or '__d5' in signal:
                     # check if there are chunks
-                    # check if there are chunks
                     if '__chunk' in signal:
                         self.do_chunk_query(signal, measurement)
                     else:
                         self.do_daily_query(signal, measurement)
                 elif '__db' in signal:
                     self.do_daily_query(signal, measurement)
+                elif '__moving_avg' in signal:
+                    self.do_moving_average_query(signal, measurement)
                 else:
                     # specific period query
                     if 'h__' in signal:
@@ -453,17 +454,45 @@ class InputsGatherer:
         self.calc_data(query=query, signal_data=signal_data, func=func, forecast_substitution=False, str_steps=None,
                        str_dt=None)
 
+    @staticmethod
+    def set_MOR_EVE_daytime(forecast_type, dt):
+        if forecast_type == 'MOR':
+            # Data starting is assigned to 04 UTC
+            return dt.replace(hour=4)
+        elif forecast_type == 'EVE':
+            # Data starting is assigned to 16 UTC
+            return dt.replace(hour=16)
+
+    def do_moving_average_query(self, signal_data, measurement):
+        (location, signal_code, moving_avg_func, hours) = signal_data.split('__')
+
+        end_dt = self.set_forecast_day()
+        end_dt = self.set_MOR_EVE_daytime(self.forecast_type, end_dt)
+        end_dt = end_dt - timedelta(hours=int(hours[1:]))
+
+        start_dt = end_dt - timedelta(hours=int(int(moving_avg_func.replace('moving_avg', ''))))
+
+        query = 'SELECT value FROM %s WHERE location=\'%s\' AND signal=\'%s\' AND time>=\'%s\' AND ' \
+                'time<=\'%s\'' % (measurement, location, signal_code,
+                                  '%s:30:00Z' % start_dt.strftime('%Y-%m-%dT%H'),
+                                  '%s:00:00Z' % end_dt.strftime('%Y-%m-%dT%H'))
+        self.logger.info('Performing query: %s' % query)
+        res = self.influxdb_client.query(query, epoch='s')
+        try:
+            # Consider all the available data
+            vals = []
+            for elem in res.raw['series'][0]['values']:
+                vals.append(elem[1])
+            self.io_data[signal_data] = np.mean(vals)
+        except Exception as e:
+            self.logger.error('No data from query %s' % query)
+            self.io_data[signal_data] = np.nan
+
     def do_hourly_query(self, signal_data, measurement):
         (location, signal_code, hours) = signal_data.split('__')
 
         dt = self.set_forecast_day()
-
-        if self.forecast_type == 'MOR':
-            # Data starting is assigned to 04 UTC
-            dt = dt.replace(hour=4)
-        elif self.forecast_type == 'EVE':
-            # Data starting is assigned to 16 UTC
-            dt = dt.replace(hour=16)
+        dt = self.set_MOR_EVE_daytime(self.forecast_type, dt)
 
         if hours[0] == 'm':
             dt = dt - timedelta(hours=int(hours[1:]))
@@ -482,7 +511,7 @@ class InputsGatherer:
         except Exception as e:
             self.logger.error('Forecast not available')
             self.logger.error('No data from query %s' % query)
-            # Nocturnal irradiance in BIO is missing rather than 0, so fixing it here (DM 09.11.21)
+            # Nocturnal irradiance in BIO is missing rather than 0, so fixing it here
             if location == 'BIO' and signal_code == 'Gl':
                 self.io_data[signal_data] = 0.0
             else:
@@ -492,13 +521,7 @@ class InputsGatherer:
         (location, signal_code, period, func) = signal_data.split('__')
 
         dt = self.set_forecast_day()
-
-        if self.forecast_type == 'MOR':
-            # Data starting is assigned to 04 UTC
-            dt = dt.replace(hour=4)
-        elif self.forecast_type == 'EVE':
-            # Data starting is assigned to 16 UTC
-            dt = dt.replace(hour=16)
+        dt = self.set_MOR_EVE_daytime(self.forecast_type, dt)
 
         hours_num = int(period[0:-1])
 
@@ -764,6 +787,14 @@ class InputsGatherer:
             signals.append(measurementStation + '__' + measuredSignal + '__m' + str(i))
         return signals
 
+
+    def hourly_mean_avgs_measured_signals(self, measurementStation, measuredSignal, hours_back):
+        signals = []
+        for i in range(24):
+            signals.append(measurementStation + '__' + measuredSignal + '__moving_avg' + hours_back + '__m' + str(i))
+        return signals
+
+
     def hourly_forecasted_signals(self, forecastStation, forecastedSignal, start, end, step):
         signals = []
         for i in range(start, end, step):
@@ -777,15 +808,6 @@ class InputsGatherer:
                 signals.append(forecastStation + '__' + forecastedSignal + '__chunk' + str(i) + '__' + modifier)
         return signals
 
-    # def artificial_features_measured_signals(self, measurementStation):
-    #     signals = []
-    #     if measurementStation != 'MS-LUG':
-    #         signals.append(measurementStation + '__NOx__12h_mean')
-    #         signals.append(measurementStation + '__NO2__24h_mean')
-    #         if measurementStation != 'LUG':
-    #             signals.append(measurementStation + '__YO3__d1')
-    #             signals.append(measurementStation + '__YO3_index__d1')
-    #     return signals
 
     def past_days_means_measured_signals(self, measurementStation, measuredSignal, cases=False):
         signals = []
@@ -844,6 +866,12 @@ class InputsGatherer:
 
                     if self.cfg["measuredSignalsStations"][measurementStation][measuredSignal]['aggregations']['hourly'] == 'all':
                         signal_list.extend(self.hourly_measured_signals(measurementStation, measuredSignal))
+
+                    if 'moving_average' in self.cfg["measuredSignalsStations"][measurementStation][measuredSignal]['aggregations']['hourly']:
+                        mov_avg_str = self.cfg["measuredSignalsStations"][measurementStation][measuredSignal]['aggregations']['hourly']
+                        mov_avg_str = mov_avg_str.replace('moving_average_', '')
+                        for hours_back in mov_avg_str.split('-'):
+                            signal_list.extend(self.hourly_mean_avgs_measured_signals(measurementStation, measuredSignal, hours_back))
 
         for forecastStation in self.cfg["regions"][region]["forecastStations"]:
             # signal_list.extend(self.artificial_features_forecasted_signals(forecastStation))
