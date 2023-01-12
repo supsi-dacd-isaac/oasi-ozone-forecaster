@@ -23,15 +23,18 @@ if __name__ == "__main__":
 
     print('\nSTARTING PROGRAM')
 
-    if args.v is True:
-        print('\nSIGNALS WITH NANS:')
-
     cnt_nans_cases = 1
+    tot_sig_code = dict()
     for k in df.columns:
         cnt_nans = df[k].isna().sum()
         if cnt_nans > 0:
-            if args.v is True:
-                print('N. %i -> NANS(%s) = %i/%i (%.0f%%)' % (cnt_nans_cases, k, cnt_nans, len(df), cnt_nans*1e2/len(df)))
+            tmp = k.split('__')
+            sig_code = '%s__%s' % (tmp[0], tmp[1])
+            if sig_code not in tot_sig_code.keys():
+                tot_sig_code[sig_code] = [cnt_nans]
+            else:
+                tot_sig_code[sig_code][0] += cnt_nans
+
             cnt_nans_cases += 1
 
     if args.v is True:
@@ -39,6 +42,11 @@ if __name__ == "__main__":
         days_with_nans = df[df.isna().any(axis=1)].index
         for day in days_with_nans:
             print(day)
+
+        print('\nSIGNALS WITH NANS:')
+        for k in tot_sig_code.keys():
+            if tot_sig_code[k][0] > 5:
+                print('%s = %i' % (k, tot_sig_code[k][0]))
 
     print('\nFIRST DAY: %s' % df.head(1).index[0])
     print('LAST DAY: %s' % df.tail(1).index[0])
