@@ -249,7 +249,7 @@ class InputsGatherer:
                         self.do_daily_query(signal, measurement)
                 elif '__db' in signal:
                     self.do_daily_query(signal, measurement)
-                elif '__moving_avg' in signal:
+                elif '__moving_average' in signal:
                     self.do_moving_average_query(signal, measurement)
                 else:
                     # specific period query
@@ -464,13 +464,13 @@ class InputsGatherer:
             return dt.replace(hour=16)
 
     def do_moving_average_query(self, signal_data, measurement):
-        (location, signal_code, moving_avg_func, hours) = signal_data.split('__')
+        (location, signal_code, moving_average_func, hours) = signal_data.split('__')
 
         end_dt = self.set_forecast_day()
         end_dt = self.set_MOR_EVE_daytime(self.forecast_type, end_dt)
         end_dt = end_dt - timedelta(hours=int(hours[1:]))
 
-        start_dt = end_dt - timedelta(hours=int(int(moving_avg_func.replace('moving_avg', ''))))
+        start_dt = end_dt - timedelta(hours=int(int(moving_average_func.replace('moving_average', ''))))
 
         query = 'SELECT value FROM %s WHERE location=\'%s\' AND signal=\'%s\' AND time>=\'%s\' AND ' \
                 'time<=\'%s\'' % (measurement, location, signal_code,
@@ -791,7 +791,7 @@ class InputsGatherer:
     def hourly_mean_avgs_measured_signals(self, measurementStation, measuredSignal, hours_back):
         signals = []
         for i in range(24):
-            signals.append(measurementStation + '__' + measuredSignal + '__moving_avg' + hours_back + '__m' + str(i))
+            signals.append(measurementStation + '__' + measuredSignal + '__moving_average' + hours_back + '__m' + str(i))
         return signals
 
 
@@ -809,7 +809,7 @@ class InputsGatherer:
         return signals
 
 
-    def past_days_means_measured_signals(self, measurementStation, measuredSignal, cases=False):
+    def past_days_measured_signals_aggregations(self, measurementStation, measuredSignal, cases=False, agg_func=None):
         signals = []
         if cases is not False:
             choices = cases
@@ -817,10 +817,13 @@ class InputsGatherer:
             choices = ['24h', '48h', '72h']
 
         for i in choices:
-            signals.append(measurementStation + '__' + measuredSignal + '__' + str(i) + '__mean')
-            signals.append(measurementStation + '__' + measuredSignal + '__' + str(i) + '__max')
-            signals.append(measurementStation + '__' + measuredSignal + '__' + str(i) + '__min')
-            signals.append(measurementStation + '__' + measuredSignal + '__' + str(i) + '__std')
+            if agg_func == 'all' or agg_func is None:
+                signals.append(measurementStation + '__' + measuredSignal + '__' + str(i) + '__mean')
+                signals.append(measurementStation + '__' + measuredSignal + '__' + str(i) + '__max')
+                signals.append(measurementStation + '__' + measuredSignal + '__' + str(i) + '__min')
+                signals.append(measurementStation + '__' + measuredSignal + '__' + str(i) + '__std')
+            else:
+                signals.append(measurementStation + '__' + measuredSignal + '__' + str(i) + '__' + agg_func)
         return signals
 
     def artificial_features_forecasted_signals(self, forecastStation):
@@ -854,16 +857,27 @@ class InputsGatherer:
             for measuredSignal in self.cfg["measuredSignalsStations"][measurementStation].keys():
 
                 if self.cfg["measuredSignalsStations"][measurementStation][measuredSignal] == 'all':
-                    signal_list.extend(self.past_days_means_measured_signals(measurementStation, measuredSignal))
+                    signal_list.extend(self.past_days_measured_signals_aggregations(measurementStation,
+                                                                                    measuredSignal, False, None))
                     signal_list.extend(self.hourly_measured_signals(measurementStation, measuredSignal))
 
                 else:
                     if self.cfg["measuredSignalsStations"][measurementStation][measuredSignal]['aggregations']['daily'] == 'all':
-                        signal_list.extend(self.past_days_means_measured_signals(measurementStation, measuredSignal))
-                    elif type(self.cfg["measuredSignalsStations"][measurementStation][measuredSignal]['aggregations']['daily']) is list:
-                        signal_list.extend(self.past_days_means_measured_signals(measurementStation, measuredSignal,
-                                                                                 cases=self.cfg["measuredSignalsStations"][measurementStation][measuredSignal]['aggregations']['daily']))
+                        daily_agg_func = self.cfg["measuredSignalsStations"][measurementStation][measuredSignal]['aggregations']['daily_function']
+                        signal_list.extend(self.past_days_measured_signals_aggregations(measurementStation,
+                                                                                        measuredSignal,
+                                                                                        False,
+                                                                                        daily_agg_func))
 
+                    elif type(self.cfg["measuredSignalsStations"][measurementStation][measuredSignal]['aggregations']['daily']) is list:
+                        if 'daily_function' in self.cfg["measuredSignalsStations"][measurementStation][measuredSignal]['aggregations'].keys():
+                            daily_agg_func = self.cfg["measuredSignalsStations"][measurementStation][measuredSignal]['aggregations']['daily_function']
+                        else:
+                            daily_agg_func = 'all'
+                        signal_list.extend(self.past_days_measured_signals_aggregations(measurementStation,
+                                                                                        measuredSignal,
+                                                                                        self.cfg["measuredSignalsStations"][measurementStation][measuredSignal]['aggregations']['daily'],
+                                                                                        daily_agg_func))
                     if self.cfg["measuredSignalsStations"][measurementStation][measuredSignal]['aggregations']['hourly'] == 'all':
                         signal_list.extend(self.hourly_measured_signals(measurementStation, measuredSignal))
 
