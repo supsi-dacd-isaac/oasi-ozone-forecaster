@@ -5,10 +5,13 @@ import os
 import json
 import glob
 import scipy
+import xgboost as xgb
+import lightgbm as lgb
 from ngboost import NGBRegressor
 from ngboost.distns import Normal
 from ngboost.learners import default_tree_learner
 from ngboost.scores import MLE, LogScore
+from xgboost_distribution import XGBDistribution
 from sklearn.model_selection import KFold
 from sklearn.metrics import mean_squared_error, mean_absolute_error, accuracy_score, confusion_matrix
 
@@ -536,9 +539,42 @@ class ModelTrainer:
             self.logger.info('Target %s -> pyquantrf RFQR model training start' % target_signal)
             rfqr_w = qfrfQuantileRandomForestRegressor(nthreads=4,
                                                        n_estimators=target_data['numberEstimatorsNGB'][self.forecast_type],
-                                                       min_samples_leaf=10)
+                                                       min_samples_leaf=2)
             rfqr_w.fit(X, np.array(Y).ravel(), sample_weight=weight)
             self.logger.info('Target %s -> pyquantrf RFQR model training end' % target_signal)
+
+            self.logger.info('XGBOOST model training start')
+            xg_reg = xgb.XGBRegressor(objective='reg:squarederror', colsample_bytree=0.3,
+                                      learning_rate=target_data['learningRateNGB'][self.forecast_type],
+                                      max_depth=5, alpha=10,
+                                      n_estimators=target_data['numberEstimatorsNGB'][self.forecast_type])
+            xg_reg.fit(X, Y)
+            self.logger.info('XGBOOST model training end')
+
+            self.logger.info('LightGBM model training start')
+            xg_reg = xgb.XGBRegressor(objective='reg:squarederror', colsample_bytree=0.3,
+                                      learning_rate=target_data['learningRateNGB'][self.forecast_type],
+                                      max_depth=5, alpha=10,
+                                      n_estimators=target_data['numberEstimatorsNGB'][self.forecast_type])
+            xg_reg.fit(X, Y)
+            self.logger.info('LightGBM model training end')
+            num_round = 10
+            params = {
+                'task': 'train',
+                'boosting': 'gbdt',
+                'objective': 'regression',
+                'num_leaves': 10,
+                'learning_rage': 0.05,
+                'metric': {'l2', 'l1'},
+                'verbose': -1
+            }
+            from sklearn.model_selection import train_test_split
+            x_train, x_test, y_train, y_test = train_test_split(X, np.array(Y).ravel(), test_size=0.15)
+            lgb_train = lgb.Dataset(x_train, y_train)
+            lgb_eval = lgb.Dataset(x_test, y_test, reference=lgb_train)
+            light_gbm = lgb.train(params, train_set=lgb_train, valid_sets=lgb_eval, early_stopping_rounds=30)
+
+            self.logger.info('LightGBM model training end')
 
             # Check if there is a hyperparameters optimization or not
             if hps is None:
@@ -554,7 +590,7 @@ class ModelTrainer:
                 file_name_noext = '%shpo%spredictor_%s_%s' % (fp, os.sep,target_data['label'],
                                                               str_hpars.replace('-', ''))
 
-            pickle.dump([ngb, rfqr, rfqr_w], open('%s.pkl' % file_name_noext, 'wb'))
+            pickle.dump([ngb, rfqr, rfqr_w, xg_reg, light_gbm], open('%s.pkl' % file_name_noext, 'wb'))
             json.dump({"signals": list(selected_features)}, open('%s.json' % file_name_noext.replace('predictor', 'inputs'), 'w'))
             metadata = {
                 "region": k_region,

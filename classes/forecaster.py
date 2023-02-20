@@ -47,6 +47,8 @@ class Forecaster:
         self.flag_best = 'false'
         self.ngb_output = 0
         self.qrf_output = 0
+        self.xg_reg_prediction = 0
+        self.light_gbm_reg_prediction = 0
         self.perc_available_features = 0
 
     def build_model_input_dataset(self, inputs_gatherer, input_cfg_file, output_signal):
@@ -134,7 +136,7 @@ class Forecaster:
     def predict(self, predictor_file, region_data):
         if self.do_prediction is True:
             # Unload the model (qrf is not used because it does not consider the weights)
-            ngb, _, qrf_w = pickle.load(open(predictor_file, 'rb'))
+            ngb, _, qrf_w, xg_reg, light_gbm = pickle.load(open(predictor_file, 'rb'))
 
             # Perform the prediction
             # NGB
@@ -149,6 +151,12 @@ class Forecaster:
             self.qrf_output = ModelTrainer.handle_qrf_output(self.cfg, qrf_w, self.input_df, region_data['code'])
             self.perc_available_features = round(self.available_features * 100 / len(self.input_df.columns), 0)
             self.logger.info('Performed prediction: model=%s ' % predictor_file)
+
+            # XGBOOST
+            self.xg_reg_prediction = xg_reg.predict(self.input_df)[0]
+
+            # LightGBM
+            self.light_gbm_reg_prediction = light_gbm.predict(self.input_df)[0]
 
             # Define best tag: i.e. the current predictor is the best one for this case
             if self.cfg['regions'][region_data['code']]['forecaster']['bestLabels'][self.forecast_type][self.output_signal] in predictor_file:
@@ -195,6 +203,26 @@ class Forecaster:
             dps = self.append_predictor_results(dps, self.qrf_output, region_data,
                                                 self.cfg['influxDB']['measurementOutputThresholdsForecast'],
                                                 self.cfg['influxDB']['measurementOutputQuantilesForecast'])
+
+            # XGBoost section
+            point = {
+                'time': self.day_to_predict,
+                'measurement': self.cfg['influxDB']['measurementOutputSingleForecastXGBoost'],
+                'fields': dict(PredictedValue=float(self.xg_reg_prediction)),
+                'tags': dict(location=region_data['code'], case=self.forecast_type, flag_best=self.flag_best,
+                             predictor=self.model_name, signal=self.output_signal)
+            }
+            dps.append(point)
+
+            # LightGBM section
+            point = {
+                'time': self.day_to_predict,
+                'measurement': self.cfg['influxDB']['measurementOutputSingleForecastLightGBM'],
+                'fields': dict(PredictedValue=float(self.light_gbm_reg_prediction)),
+                'tags': dict(location=region_data['code'], case=self.forecast_type, flag_best=self.flag_best,
+                             predictor=self.model_name, signal=self.output_signal)
+            }
+            dps.append(point)
 
             # Write results on InfluxDB
             self.influxdb_client.write_points(dps, time_precision='s')
