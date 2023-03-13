@@ -120,7 +120,7 @@ class DataManager:
             self.logger.error('Connection exception: %s' % str(e))
 
     def is_meteosuisse_forecast_file(self, file_name):
-        if 'VNXA51' in file_name or 'VQCA19' in file_name or 'VNYA34' in file_name:
+        if 'VNXA51' in file_name or 'VQCA19' in file_name or 'VNYA34' in file_name or 'VNYA32' in file_name or 'VNXA54' in file_name:
             return True
         else:
             return False
@@ -385,11 +385,72 @@ class DataManager:
                     }
                     dps.append(copy.deepcopy(point))
 
+        # VNYA32 and VNXA54 cases: vertical gradients
+        elif 'VNYA32' in code or 'VNXA54' in code:
+            dt_run = None
+
+            single_sigs = self.get_single_signals(f)
+
+            for raw_row in f:
+                row = raw_row.decode(constants.ENCODING)
+                row = row.replace('\n', '')
+                row = row[:-1]
+                data = row.split(';')
+
+                # set the running time
+                if dt_run is None:
+                    dt_run = data[1]
+
+                for i in range(3, len(data)):
+                    utc_time = datetime.strptime(dt_run, self.cfg['local']['timeFormatForecasts'])
+                    utc_dt = pytz.utc.localize(utc_time)
+
+                    # Step and COSMO2 suffix handling
+                    step = int(data[2].split(':')[0])
+                    if 'VNYA32' in code:
+                        str_step = 'step%03d' % step
+                        signal_suffix = '_c2'
+                    else:
+                        str_step = 'step%02d' % step
+                        signal_suffix = ''
+
+                    point = {
+                        'time': int(utc_dt.timestamp()),
+                        'measurement': self.cfg['influxDB']['measurementInputsForecasts'],
+                        'fields': dict(value=float(data[i])),
+                        'tags': dict(signal='%s%s' % (single_sigs[i-3], signal_suffix), location=data[0],
+                                     step=str_step)
+                    }
+                    dps = self.point_handling(dps, point)
+
         # close the file
         f.close()
         # os.unlink(file_path)
 
         return dps
+
+    def get_single_signals(self, fr):
+        str_sigs = False
+        str_quotes = False
+        while str_sigs is False or str_quotes is False:
+            raw_row = fr.readline()
+            row = raw_row.decode(constants.ENCODING)
+            row = row.replace('\n', '')
+            row = row[:-1]
+
+            if 'stn;' in row:
+                str_sigs = row
+            if ';level;' in row:
+                str_quotes = row
+
+        sigs = str_sigs.split(';')
+        quotes = str_quotes.split(';')
+
+        if len(sigs) == len(quotes):
+            new_sigs = []
+            for i in range(3, len(sigs)):
+                new_sigs.append('%s%s' % (sigs[i], quotes[i]))
+        return new_sigs
 
     def point_handling(self, dps, point):
         """
@@ -648,6 +709,9 @@ class DataManager:
                     # Check if input data are meaningful
                     if input1 is not None and input2 is not None and input1.index.equals(input2.index) is True:
                         output = self.apply_function_to_measures(asig_data['function'], input1, input2)
+                        # Apply gain and offset
+                        output['value'] = output['value'] * asig_data['gain'] + asig_data['offset']
+
                         if asig_data['booleanOutputThreshold'] is not False:
                             output = self.digitalize_output(output, asig_data['booleanOutputThreshold'])
                             tag_sig = 'B%s' % tag_sig
@@ -670,6 +734,9 @@ class DataManager:
                     # Check if input data are meaningful
                     if input1 is not None and input2 is not None and input1.index.equals(input2.index) is True:
                         output = self.apply_function_to_forecast(asig_data['function'], input1, input2)
+                        # Apply gain and offset
+                        output['value'] = output['value'] * asig_data['gain'] + asig_data['offset']
+
                         res = self.influx_df_client.write_points(output, self.cfg['influxDB']['measurementInputsForecasts'],
                                                                  tags={'location': tag_loc, 'signal': tag_sig},
                                                                  tag_columns=['step'], protocol='line')
