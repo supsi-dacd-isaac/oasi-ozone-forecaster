@@ -88,8 +88,8 @@ FILLED_DATA_LOCATIONS = {
 
 NOT_USED_VARS = ['Tdew']
 
-METEO_FORECAST_STATIONS = ['COM', 'MAG', 'MTR', 'OTL', 'P_BSM', 'P_LOC', 'TIGIU', 'GEN', 'P_BIO', 'P_CAP',
-                           'P_SAG', 'SBO', 'TICIA']
+METEO_FORECAST_STATIONS = ['COM', 'MAG', 'MAG_MAG', 'MTR', 'OTL', 'P_BSM', 'P_LOC', 'TIGIU', 'GEN', 'P_BIO', 'P_CAP',
+                           'P_SAG', 'SBO', 'TICIA', 'TICIA_TICIA']
 
 CHUNKS_FORECASTS = {
                         '03': {

@@ -118,10 +118,11 @@ class InputsGatherer:
 
             # todo this code should be checked carefully
             # In 2020 we lost part of the forecasted signal, so we're forced to discard most days until the 17th August
-            if 'O3' in output_signals[0] and year == 2020 and start_dt < datetime.strptime('2020-08-17', '%Y-%m-%d'):
-                start_day = '2020-08-17'
-            if 'O3' in output_signals[0] and year == 2020 and end_dt < datetime.strptime('2020-08-17', '%Y-%m-%d'):
-                continue
+            if len(output_signals) > 0:
+                if 'O3' in output_signals[0] and year == 2020 and start_dt < datetime.strptime('2020-08-17', '%Y-%m-%d'):
+                    start_day = '2020-08-17'
+                if 'O3' in output_signals[0] and year == 2020 and end_dt < datetime.strptime('2020-08-17', '%Y-%m-%d'):
+                    continue
 
             curr_day = start_day
 
