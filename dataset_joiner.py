@@ -42,6 +42,7 @@ if __name__ == "__main__":
     df2 = pd.read_csv(if2)
     logger.info('END INPUT FILES READING')
 
+    dfy = pd.DataFrame()
     if join_type == 'columns':
         # Drop the targets columns from df1
         logger.info('DATASETS INITIALIZATION')
@@ -50,6 +51,7 @@ if __name__ == "__main__":
         for col in df1.columns:
             if y in col:
                 cols_to_drop.append(col)
+                dfy[col] = df1[col]
         df1 = df1.drop(columns=cols_to_drop)
 
         # Drop the date column from df1
@@ -57,7 +59,7 @@ if __name__ == "__main__":
 
         # Join the datasets
         logger.info('START JOIN[%s:%s]' % (if1, if2))
-        dfo = pd.concat([df1, df2], axis=1, join='inner')
+        dfo = pd.concat([df1, df2, dfy], axis=1, join='inner')
         logger.info('END JOIN[%s:%s]' % (if1, if2))
 
         # Save the output dataframe
