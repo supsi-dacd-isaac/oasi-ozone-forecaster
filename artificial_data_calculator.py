@@ -86,4 +86,7 @@ if __name__ == "__main__":
     logger.info('Calculate artificial data and insert it into input measurements')
     dm.calculate_artificial_data()
 
+    logger.info('Calculate aggregated data and insert it into input measurements')
+    dm.create_aggregated_data()
+
     logger.info("Ending program")

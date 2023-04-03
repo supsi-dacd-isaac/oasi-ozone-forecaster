@@ -676,9 +676,9 @@ class DataManager:
         return start_date, end_date
 
     def calculate_artificial_data(self):
-        if self.cfg['calculatedInputsSection']['period'] == 'custom':
-            start_day = datetime.strptime(self.cfg['calculatedInputsSection']['from'], '%Y-%m-%d')
-            end_day = datetime.strptime(self.cfg['calculatedInputsSection']['to'], '%Y-%m-%d')
+        if self.cfg['intervalSettings']['period'] == 'custom':
+            start_day = datetime.strptime(self.cfg['intervalSettings']['from'], '%Y-%m-%d')
+            end_day = datetime.strptime(self.cfg['intervalSettings']['to'], '%Y-%m-%d')
 
             # Cycle over the days
             curr_day = start_day
@@ -687,10 +687,27 @@ class DataManager:
                 self.calc_artificial_data_for_given_period(curr_str, curr_str)
                 curr_day += timedelta(days=1)
         else:
-            last_hours = int(self.cfg['calculatedInputsSection']['period'].replace('last', '').replace('h', ''))
+            last_hours = int(self.cfg['intervalSettings']['period'].replace('last', '').replace('h', ''))
             start_str = (datetime.now() - timedelta(hours=last_hours)).strftime('%Y-%m-%d')
             end_str = datetime.now().strftime('%Y-%m-%d')
             self.calc_artificial_data_for_given_period(start_str, end_str)
+
+    def create_aggregated_data(self):
+        if self.cfg['intervalSettings']['period'] == 'custom':
+            start_day = datetime.strptime(self.cfg['intervalSettings']['from'], '%Y-%m-%d')
+            end_day = datetime.strptime(self.cfg['intervalSettings']['to'], '%Y-%m-%d')
+
+            # Cycle over the days
+            curr_day = start_day
+            while curr_day <= end_day:
+                curr_str = curr_day.strftime('%Y-%m-%d')
+                self.calc_aggregated_data_for_given_period(curr_str, curr_str)
+                curr_day += timedelta(days=1)
+        else:
+            last_hours = int(self.cfg['intervalSettings']['period'].replace('last', '').replace('h', ''))
+            start_str = (datetime.now() - timedelta(hours=last_hours)).strftime('%Y-%m-%d')
+            end_str = datetime.now().strftime('%Y-%m-%d')
+            self.calc_aggregated_data_for_given_period(start_str, end_str)
 
     def calc_artificial_data_for_given_period(self, from_str, to_str):
         self.logger.info('Calculate artificial data for period [%s:%s]' % (from_str, to_str))
@@ -750,6 +767,83 @@ class DataManager:
                 self.logger.error('EXCEPTION: %s' % str(e))
                 self.logger.info('Failed data calculation for couple [%s:%s]' % (tag_loc, tag_sig))
 
+    def calc_aggregated_data_for_given_period(self, from_str, to_str):
+        self.logger.info('Created aggregated data for period [%s:%s]' % (from_str, to_str))
+
+        # To be safe go from the beginning of the "from" date to the end of "to" date
+        from_str = '%sT00:00:00Z' % from_str
+        to_str = '%sT23:59:59Z' % to_str
+
+        for asig_data in self.cfg['aggregatedInputsSection']['inputs']:
+            try:
+                if asig_data['forecast'] is False:
+                    inputs = []
+                    for i in range(0, len(asig_data['locations'])):
+                        tmp_df = self.get_measure_data(asig_data['locations'][i], asig_data['signals'][i], from_str, to_str)
+                        tmp_df = tmp_df.rename(columns={'value': 'value_%i' % i})
+                        inputs.append(tmp_df)
+                    input_df = pd.concat(inputs, axis=1, join="inner")
+
+                    agg_df = self.aggregate_dataframes(input_df, asig_data['function'])
+
+                    output = pd.concat([agg_df], axis=1)
+                    output = output.rename(columns={0: 'value'})
+
+                    res = self.influx_df_client.write_points(output,
+                                                             self.cfg['influxDB']['measurementInputsMeasurements'],
+                                                             tags={'location': asig_data['location'],
+                                                                   'signal': asig_data['signal']},
+                                                             protocol='line')
+                    if res is not True:
+                        self.logger.warning('Failed measure inserting for couple [%s:%s]' % (asig_data['location'],
+                                                                                             asig_data['signal']))
+                    else:
+                        self.logger.info('Inserted measure data for couple [%s:%s]' % (asig_data['location'],
+                                                                                       asig_data['signal']))
+                else:
+                    inputs = []
+                    for i in range(0, len(asig_data['locations'])):
+                        tmp_df = self.get_forecast_data(asig_data['locations'][i], asig_data['signals'][i], from_str, to_str)
+                        if i == 0:
+                            idx_step_df = tmp_df
+                            idx_step_df = idx_step_df.drop(['value'], axis=1)
+
+                        tmp_df = tmp_df.drop(['index', 'step'], axis=1)
+                        tmp_df = tmp_df.rename(columns={'value': 'value_%i' % i})
+                        inputs.append(tmp_df)
+
+                    input_df = pd.concat(inputs, axis=1, join='inner')
+
+                    agg_df = self.aggregate_dataframes(input_df, asig_data['function'])
+
+                    output = pd.concat([agg_df, idx_step_df], axis=1)
+                    output = output.rename(columns={0: 'value'})
+                    output = output.set_index('index')
+                    output = output.reindex(columns=['value', 'step'])
+
+                    res = self.influx_df_client.write_points(output, self.cfg['influxDB']['measurementInputsForecasts'],
+                                                             tags={'location': asig_data['location'],
+                                                                   'signal': asig_data['signal']},
+                                                             tag_columns=['step'], protocol='line')
+                    if res is not True:
+                        self.logger.warning('Failed forecast inserting for couple [%s:%s]' % (asig_data['location'],
+                                                                                              asig_data['signal']))
+                    else:
+                        self.logger.info('Inserted forecast data for couple [%s:%s]' % (asig_data['location'],
+                                                                                        asig_data['signal']))
+            except Exception as e:
+                self.logger.error('EXCEPTION: %s' % str(e))
+                self.logger.info('Failed data calculation for couple [%s:%s]' % (asig_data['location'],
+                                                                                 asig_data['signal']))
+
+    @staticmethod
+    def aggregate_dataframes(inputs, func):
+        if func == 'max':
+            return inputs.max(axis=1)
+        elif func == 'mean':
+            return inputs.mean(axis=1)
+        elif func == 'min':
+            return inputs.min(axis=1)
 
     @staticmethod
     def digitalize_output(output, pars):
