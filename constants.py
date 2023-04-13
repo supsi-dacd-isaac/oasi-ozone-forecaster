@@ -91,6 +91,8 @@ NOT_USED_VARS = ['Tdew']
 METEO_FORECAST_STATIONS = ['COM', 'MAG', 'MAG_MAG', 'MTR', 'OTL', 'P_BSM', 'P_LOC', 'TIGIU', 'GEN', 'P_BIO', 'P_CAP',
                            'P_SAG', 'SBO', 'TICIA', 'TICIA_TICIA']
 
+COPERNICUS_STATIONS = ['STC', 'SPC']
+
 CHUNKS_FORECASTS = {
                         '03': {
                                     'chunk1': {'start': 1, 'end': 8},

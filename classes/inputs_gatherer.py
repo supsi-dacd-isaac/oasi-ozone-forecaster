@@ -143,7 +143,7 @@ class InputsGatherer:
                     sleep(self.cfg['datasetSettings']['sleepTimeBetweenQueries'])
 
                 lcl_data = dict({'date': curr_day}, **self.io_data)
-                lcl_df = pd.DataFrame([lcl_data], columns=dataset.columns   )
+                lcl_df = pd.DataFrame([lcl_data], columns=dataset.columns)
 
                 if flag_starting_dataset:
                     lcl_df.to_csv(file_name_df, mode='w', header=True, index=False)
@@ -235,7 +235,11 @@ class InputsGatherer:
                     self.do_forecast_step_query(signal, measurement, forecast_substitution, force_substitution)
 
                 else:
-                    self.do_forecast_period_query(signal, measurement, forecast_substitution, force_substitution)
+                    self.do_forecast_period_query(signal, measurement, forecast_substitution, force_substitution)            # Forecasts data
+
+            # Copernicus forecasts data
+            elif tmp[0] in constants.COPERNICUS_STATIONS:
+                self.do_copernicus_step_query(signal, self.cfg['influxDB']['measurementInputsForecastsCopernicus'])
 
             # Measurement data
             else:
@@ -303,8 +307,31 @@ class InputsGatherer:
         str_steps = '%s)' % str_steps[:-4]
         return str_steps
 
+    def do_copernicus_step_query(self, signal_data, measurement):
+        (location, signal_code, step) = signal_data.split('__')
+
+        dt = self.set_forecast_day()
+
+        # The last COPERNICUS forecast has been performed at 00:00
+        dt = dt.replace(minute=0, hour=0, second=0, microsecond=0)
+        step = 'step%02d' % int(step[4:])
+
+        str_dt = dt.strftime('%Y-%m-%dT%H:%M:%SZ')
+
+        query = 'SELECT value FROM %s WHERE location=\'%s\' AND signal=\'%s\' AND step=\'%s\' AND ' \
+                'time=\'%s\'' % (measurement, location, signal_code, step, str_dt)
+
+        self.logger.info('Performing query: %s' % query)
+        res = self.influxdb_client.query(query, epoch='s')
+        if 'series' in res.raw.keys() and len(res.raw['series']) > 0:
+            try:
+                val = float(res.raw['series'][0]['values'][0][1])
+                self.io_data[signal_data] = val
+            except Exception as e:
+                self.logger.error('Data not available')
+                self.io_data[signal_data] = np.nan
+
     def do_forecast_step_query(self, signal_data, measurement, forecast_substitution, force_substitution=False):
-        # todo to change when wordings like 'TICIA__CLCT__chunk2__step10' will not be used anymore
         if len(signal_data.split('__')) == 4:
             (location, signal_code, case, step) = signal_data.split('__')
         else:
@@ -382,7 +409,6 @@ class InputsGatherer:
                 self.io_data_sub[signal_data] = val
             else:
                 self.io_data_sub[signal_data] = np.nan
-
 
     def do_chunk_query(self, signal_data, measurement):
         (location, signal_code, day, chunk, func) = signal_data.split('__')
@@ -853,6 +879,7 @@ class InputsGatherer:
 
         signal_list = []
 
+        # Add measures signals codes
         for measurementStation in self.cfg["regions"][region]["measureStations"]:
             # signal_list.extend(self.artificial_features_measured_signals(measurementStation))
             for measuredSignal in self.cfg["measuredSignalsStations"][measurementStation].keys():
@@ -888,6 +915,7 @@ class InputsGatherer:
                         for hours_back in mov_avg_str.split('-'):
                             signal_list.extend(self.hourly_mean_avgs_measured_signals(measurementStation, measuredSignal, hours_back))
 
+        # Add forecast signals codes
         for forecastStation in self.cfg["regions"][region]["forecastStations"]:
             # signal_list.extend(self.artificial_features_forecasted_signals(forecastStation))
             for forecastedSignal in self.cfg["forecastedSignalsStations"][forecastStation]:
@@ -897,10 +925,16 @@ class InputsGatherer:
                     # The first 33 hours are not considered because they are already covered by COSMO1
                     signal_list.extend(self.hourly_forecasted_signals(forecastStation, forecastedSignal, 33, 120+1, 3))
                 else:
-                    # COSMO2 goes until 33 hours ahead with a resolution of 1 hour
+                    # COSMO1 goes until 33 hours ahead with a resolution of 1 hour
                     signal_list.extend(self.hourly_forecasted_signals(forecastStation, forecastedSignal, 0, 33+1, 1))
                     # Chunk aggregation
                     signal_list.extend(self.chunks_forecasted_signals(forecastStation, forecastedSignal))
+
+        # Add Copernicus forecast signals codes
+        for copernicusStation in self.cfg["regions"][region]["copernicusStations"]:
+            for copernicusSignal in self.cfg["copernicusSignalsStations"][copernicusStation]:
+                signal_list.extend(self.hourly_forecasted_signals(copernicusStation, copernicusSignal, 0, 95+1, 1))
+
         signal_list.extend(self.cfg['globalSignals'])
 
         return signal_list
