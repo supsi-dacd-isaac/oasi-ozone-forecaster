@@ -312,9 +312,12 @@ class InputsGatherer:
 
         dt = self.set_forecast_day()
 
-        # The last COPERNICUS forecast has been performed at 00:00
         dt = dt.replace(minute=0, hour=0, second=0, microsecond=0)
         step = 'step%02d' % int(step[4:])
+
+        # The last COPERNICUS forecast is performed at ~10:00 AM, so it is not available for the MOR case
+        if self.forecast_type == 'MOR':
+            dt = dt - timedelta(days=1)
 
         str_dt = dt.strftime('%Y-%m-%dT%H:%M:%SZ')
 
@@ -933,7 +936,10 @@ class InputsGatherer:
         # Add Copernicus forecast signals codes
         for copernicusStation in self.cfg["regions"][region]["copernicusStations"]:
             for copernicusSignal in self.cfg["copernicusSignalsStations"][copernicusStation]:
-                signal_list.extend(self.hourly_forecasted_signals(copernicusStation, copernicusSignal, 0, 95+1, 1))
+                # Only 48 steps (instead of 96) of a Copernicus forecast are considered, this because when a prediction
+                # has to be done only 48 steps are available
+                # Example: Prediction MOR of day X => the latest available prediction is of day X-1 with 48 steps
+                signal_list.extend(self.hourly_forecasted_signals(copernicusStation, copernicusSignal, 0, 48+1, 1))
 
         signal_list.extend(self.cfg['globalSignals'])
 
