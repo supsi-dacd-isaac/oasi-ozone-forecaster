@@ -941,10 +941,8 @@ class InputsGatherer:
         # Add Copernicus forecast signals codes
         for copernicusStation in self.cfg["regions"][region]["copernicusStations"]:
             for copernicusSignal in self.cfg["copernicusSignalsStations"][copernicusStation]:
-                # Only 48 steps (instead of 96) of a Copernicus forecast are considered, this because when a prediction
-                # has to be done only 48 steps are available
-                # Example: Prediction MOR of day X => the latest available prediction is of day X-1 with 48 steps
-                signal_list.extend(self.hourly_forecasted_signals(copernicusStation, copernicusSignal, 0, 48+1, 1))
+                # Copernicus forecast provides 96 steps
+                signal_list.extend(self.hourly_forecasted_signals(copernicusStation, copernicusSignal, 0, 95+1, 1))
 
         signal_list.extend(self.cfg['globalSignals'])
 
