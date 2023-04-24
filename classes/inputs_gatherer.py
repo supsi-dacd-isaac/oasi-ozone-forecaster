@@ -238,7 +238,7 @@ class InputsGatherer:
                     self.do_forecast_period_query(signal, measurement, forecast_substitution, force_substitution)            # Forecasts data
 
             # Copernicus forecasts data
-            elif tmp[0] in constants.COPERNICUS_STATIONS:
+            elif tmp[0] in constants.COPERNICUS_STATIONS and tmp[1] in constants.COPERNICUS_SIGNALS:
                 self.do_copernicus_step_query(signal, self.cfg['influxDB']['measurementInputsForecastsCopernicus'])
 
             # Measurement data

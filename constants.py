@@ -92,6 +92,10 @@ METEO_FORECAST_STATIONS = ['COM', 'MAG', 'MAG_MAG', 'MTR', 'OTL', 'P_BSM', 'P_LO
                            'P_SAG', 'SBO', 'TICIA', 'TICIA_TICIA']
 
 COPERNICUS_STATIONS = ['STC', 'SPC']
+COPERNICUS_SIGNALS = ['dust_lvl50_copern', 'nmvoc_conc_lvl50_copern', 'no2_conc_lvl50_copern', 'no_conc_lvl50_copern',
+                      'o3_conc_lvl50_copern', 'pm10_conc_lvl50_copern', 'pm2p5_conc_lvl50_copern',
+                      'dust_lvl1000_copern', 'nmvoc_conc_lvl1000_copern', 'no2_conc_lvl1000_copern', 'no_conc_lvl1000_copern',
+                      'o3_conc_lvl1000_copern', 'pm10_conc_lvl1000_copern', 'pm2p5_conc_lvl1000_copern']
 
 CHUNKS_FORECASTS = {
                         '03': {
