@@ -38,6 +38,17 @@ def sort_results(prediction_results):
     return sorted(ordered_res), res_data
 
 
+def select_best_predictor_value(result_prediction):
+    if result_prediction['best_predictor'] == 'ngb':
+        return result_prediction['ngb_prediction']
+    elif result_prediction['best_predictor'] == 'xgb':
+        return result_prediction['xgb_prediction']
+    elif result_prediction['best_predictor'] == 'lgb':
+        return result_prediction['lgb_prediction']
+    elif result_prediction['best_predictor'] == 'qfr':
+        return result_prediction['qrf_prediction']['quantiles']['perc50']
+
+
 def upload_best_results(prediction_results):
     logger.info('Send best results to remote FTP server')
     # Create first row (header)
@@ -64,13 +75,14 @@ def upload_best_results(prediction_results):
     for k in ordered_res:
         result = res_data[k]
         if result['flag_best'] is True:
+            predicted_value = select_best_predictor_value(result)
+
             str_results = '%s%s,%s,%s,%s,%.1f,%.0f' % (str_results, dt.strftime('%Y-%m-%d'), result['region'],
                                                        forecast_type, result['output_signal'],
-                                                       result['ngb_prediction'], result['perc_available_features'])
+                                                       predicted_value, result['perc_available_features'])
             for k in result['qrf_prediction']['thresholds'].keys():
                 str_results = '%s,%.1f' % (str_results, result['qrf_prediction']['thresholds'][k]*100)
-            # for k in result['qrf_prediction']['quantiles'].keys():
-            #     str_results = '%s,%.1f' % (str_results, result['qrf_prediction']['quantiles'][k])
+
             str_results = '%s\n' % str_results
 
     # Results file creation
@@ -88,6 +100,7 @@ def upload_best_results(prediction_results):
     # Results file deletion
     os.unlink('%s%s%s' % (cfg['ftp']['localFolders']['tmp'], os.sep, results_file))
 
+
 def notify_summary(prediction_results):
     logger.info('Alert checking')
     str_err = ''
@@ -100,6 +113,7 @@ def notify_summary(prediction_results):
         result = res_data[k]
         threshold = cfg['regions'][result['region']]['alarms']['thresholds'][forecast_type]
         if result['flag_prediction'] is True:
+            predicted_value = select_best_predictor_value(result)
             if result['perc_available_features'] <= threshold:
                 str_err = '%s%s_%s_%s: model %s -> predicted max(O3) = %.1f, probabilities: %s, ' \
                           'quantiles %s, available features %.1f%%, alert_threshold %.1f%%, ' \
@@ -108,7 +122,7 @@ def notify_summary(prediction_results):
                                                 result['forecast_type'],
                                                 result['output_signal'],
                                                 result['predictor'],
-                                                result['ngb_prediction'],
+                                                predicted_value,
                                                 result['qrf_prediction']['thresholds'],
                                                 result['qrf_prediction']['quantiles'],
                                                 result['perc_available_features'],
@@ -125,7 +139,7 @@ def notify_summary(prediction_results):
                                                                                        result['forecast_type'],
                                                                                        result['output_signal'],
                                                                                        result['predictor'],
-                                                                                       result['ngb_prediction'])
+                                                                                       predicted_value)
                     for kt in result['qrf_prediction']['thresholds'].keys():
                         str_info = '%s %s=%.1f%%,' % (str_info, kt, result['qrf_prediction']['thresholds'][kt]*100)
                     str_info = '%s; flag best=%s\n' % (str_info[:-1], result['flag_best'])
@@ -157,14 +171,14 @@ def notify_summary(prediction_results):
 
 
 def predictor_process(inputs_gatherer, input_cfg_file, forecast_type, region, output_signal, model_name, q, cfg, logger):
-    dp, out_sig, ngb_pred, paf, uvf, usf, fp, qfr_pred, fb = perform_single_forecast(inputs_gatherer,
-                                                                                     input_cfg_file,
-                                                                                     forecast_type,
-                                                                                     region,
-                                                                                     output_signal,
-                                                                                     model_name,
-                                                                                     cfg,
-                                                                                     logger)
+    dp, out_sig, ngb_pred, lgb_pred, xgb_pred, paf, uvf, usf, fp, qfr_pred, fb, bp = perform_single_forecast(inputs_gatherer,
+                                                                                                             input_cfg_file,
+                                                                                                             forecast_type,
+                                                                                                             region,
+                                                                                                             output_signal,
+                                                                                                             model_name,
+                                                                                                             cfg,
+                                                                                                             logger)
 
     # Write on the queue
     q.put(
@@ -175,12 +189,15 @@ def predictor_process(inputs_gatherer, input_cfg_file, forecast_type, region, ou
                 'forecast_type': forecast_type,
                 'predictor': model_name,
                 'ngb_prediction': ngb_pred,
+                'lgb_prediction': lgb_pred,
+                'xgb_prediction': xgb_pred,
                 'perc_available_features': paf,
                 'qrf_prediction': qfr_pred,
                 'unavailable_features': uvf,
                 'unsurrogable_features': usf,
                 'flag_prediction': fp,
-                'flag_best': fb
+                'flag_best': fb,
+                'best_predictor': bp
             }
         )
 
@@ -201,8 +218,9 @@ def perform_single_forecast(inputs_gatherer, input_cfg_file, forecast_type, regi
     forecaster.predict(input_cfg_file.replace('inputs', 'predictor').replace('json', 'pkl'), region_data)
 
     return forecaster.day_to_predict, forecaster.output_signal, forecaster.ngb_output, \
-           forecaster.perc_available_features, forecaster.unavailable_features, forecaster.unsurrogable_features, \
-           forecaster.do_prediction, forecaster.qrf_output, forecaster.flag_best
+           forecaster.light_gbm_reg_prediction, forecaster.xg_reg_prediction, forecaster.perc_available_features, \
+           forecaster.unavailable_features, forecaster.unsurrogable_features, \
+           forecaster.do_prediction, forecaster.qrf_output, forecaster.flag_best, forecaster.best_predictor
 
 def perform_forecast(day_case, forecast_type):
 
@@ -245,14 +263,14 @@ def perform_forecast(day_case, forecast_type):
                     tmp_proc.start()
                     procs.append(tmp_proc)
                 else:
-                    dp, out_sig, ngb_pred, paf, uvf, usf, fp, qfr_pred, fb = perform_single_forecast(inputs_gatherer,
-                                                                                                     input_cfg_file,
-                                                                                                     forecast_type,
-                                                                                                     region_info,
-                                                                                                     output_signal,
-                                                                                                     model_name,
-                                                                                                     cfg,
-                                                                                                     logger)
+                    dp, out_sig, ngb_pred, lgb_pred, xgb_pred, paf, uvf, usf, fp, qfr_pred, fb, bp = perform_single_forecast(inputs_gatherer,
+                                                                                                                             input_cfg_file,
+                                                                                                                             forecast_type,
+                                                                                                                             region_info,
+                                                                                                                             output_signal,
+                                                                                                                             model_name,
+                                                                                                                             cfg,
+                                                                                                                             logger)
                     results.append({
                                         'day_to_predict': dp,
                                         'output_signal': out_sig,
@@ -260,14 +278,16 @@ def perform_forecast(day_case, forecast_type):
                                         'forecast_type': forecast_type,
                                         'predictor': model_name,
                                         'ngb_prediction': ngb_pred,
+                                        'lgb_prediction': lgb_pred,
+                                        'xgb_prediction': xgb_pred,
                                         'perc_available_features': paf,
                                         'qrf_prediction': qfr_pred,
                                         'unavailable_features': uvf,
                                         'unsurrogable_features': usf,
                                         'flag_prediction': fp,
-                                        'flag_best': fb
+                                        'flag_best': fb,
+                                        'best_predictor': bp
                                     })
-
 
     # Collect the results if the predictors have worked in parallel mode
     if cfg['predictionGeneralSettings']['operationMode'] == 'parallel':
@@ -288,16 +308,16 @@ def perform_forecast(day_case, forecast_type):
     for result in results:
         dp_desc = datetime.fromtimestamp(result['day_to_predict']).strftime('%Y-%m-%d')
         if result['flag_prediction'] is True:
-            logger.info('[%s;%s;%s;%s;%s] -> predicted max(O3) = %.1f, '
-                        'probabilities: %s, quantiles: %s, available features = %.0f%%' % (dp_desc,
-                                                                           result['region'],
-                                                                           result['forecast_type'],
-                                                                           result['output_signal'],
-                                                                           result['predictor'],
-                                                                           result['ngb_prediction'],
-                                                                           result['qrf_prediction']['thresholds'],
-                                                                           result['qrf_prediction']['quantiles'],
-                                                                           result['perc_available_features']))
+            logger.info('[%s;%s;%s;%s;%s] -> predictions: [ngb = %.1f, lgb = %.1f, '
+                        'xgb = %.1f, rqrf = %.1f]' % (dp_desc,
+                                                      result['region'],
+                                                      result['forecast_type'],
+                                                      result['output_signal'],
+                                                      result['predictor'],
+                                                      result['ngb_prediction'],
+                                                      result['lgb_prediction'],
+                                                      result['xgb_prediction'],
+                                                      result['qrf_prediction']['quantiles']['perc50']))
         else:
             logger.info('[%s;%s;%s;%s;%s] -> prediction not performed' % (dp_desc,
                                                                           result['region'],
@@ -312,11 +332,6 @@ def perform_forecast(day_case, forecast_type):
     # Check if the result summary has to be notified
     if cfg['ftp']['sendResults'] is True:
         upload_best_results(prediction_results=results)
-
-
-    # todo check this part is still needed, probably yes but calc_kpis() has to be changed strongly
-    # if cfg['dayToForecast'] == 'current':
-    #     dm.calc_kpis()
 
 
 # --------------------------------------------------------------------------- #

@@ -315,12 +315,12 @@ class InputsGatherer:
         dt = dt.replace(minute=0, hour=0, second=0, microsecond=0)
         step = 'step%02d' % int(step[4:])
 
-        # MOR case: for the prediction of a generic day D, The latest COPERNICUS forecast is the one performed
-        # at ~00:30 AM of D, related to day D-1
+        # MOR case: for the prediction of a generic day D (performed at D_07:30) the latest COPERNICUS forecast
+        # is the one available at ~00:30 AM of D, related to D-1,D,D+1,D+2,...
         if self.forecast_type == 'MOR':
             dt = dt - timedelta(days=1)
-        # EVE case: for the prediction of a generic day D, The latest COPERNICUS forecast is the one performed
-        # at ~00:30 AM of D-1, related to day D-2
+        # EVE case: for the prediction of a generic day D (performed at D-1_19:30) the latest COPERNICUS forecast
+        # is the one available at ~00:30 AM of D-1, related to D-2,D-1,D,D+1,...
         elif self.forecast_type == 'EVE':
             dt = dt - timedelta(days=2)
 

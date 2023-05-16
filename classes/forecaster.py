@@ -45,6 +45,7 @@ class Forecaster:
         self.unsurrogable_features = []
         self.do_prediction = True
         self.flag_best = 'false'
+        self.best_predictor = 'lgb'
         self.ngb_output = 0
         self.qrf_output = 0
         self.xg_reg_prediction = 0
@@ -159,13 +160,16 @@ class Forecaster:
             self.light_gbm_reg_prediction = light_gbm.predict(self.input_df)[0]
 
             # Define best tag: i.e. the current predictor is the best one for this case
-            if self.cfg['regions'][region_data['code']]['forecaster']['bestLabels'][self.forecast_type][self.output_signal] in predictor_file:
+            family = self.cfg['regions'][region_data['code']]['forecaster']['bestLabels'][self.forecast_type][self.output_signal]['family']
+            if family in predictor_file:
                 self.flag_best = True
             else:
                 self.flag_best = False
 
-            dps = []
+            # Define the best predictor
+            self.best_predictor = self.cfg['regions'][region_data['code']]['forecaster']['bestLabels'][self.forecast_type][self.output_signal]['predictor']
 
+            dps = []
             # NGBoost section
             point = {
                 'time': self.day_to_predict,
