@@ -1,18 +1,20 @@
+import copy
 import json
 import logging
 import datetime
 import os
 import sys
 import argparse
-import pandas as pd
 import urllib3
+import warnings
+
+import numpy as np
+import pandas as pd
 from influxdb import DataFrameClient
 
 from classes.alerts import SlackClient
 
-import warnings
 warnings.filterwarnings("ignore")
-
 urllib3.disable_warnings()
 
 
@@ -54,6 +56,9 @@ def calc_output(measurement, output_cfg, year, start_day, end_day):
 
     df_ret = pd.concat(df_daily_locs, axis=1)
 
+    if output_cfg['outlierFiltering']['enabled'] is True:
+        df_ret = filter_outlier(copy.deepcopy(df_ret), output_cfg)
+
     # Final handling related to the location aggregation level
     if output_cfg['aggregations']['locations'] == 'max':
         return df_ret.max(axis=1)
@@ -62,6 +67,26 @@ def calc_output(measurement, output_cfg, year, start_day, end_day):
     elif output_cfg['aggregations']['locations'] == 'min':
         return df_ret.min(axis=1)
     return None
+
+
+def filter_outlier(df, output_cfg):
+    for index, row in df.iterrows():
+        outliers = []
+        cnt_outliers = 0
+        row_values = row.values
+        for i in range(len(row_values)):
+            other_values = np.delete(row_values, i)
+            centroid = np.mean(other_values)
+            distance = row_values[i] - centroid
+            if distance > output_cfg['outlierFiltering']['threshold']:
+                cnt_outliers += 1
+                outliers.append(df.columns[i])
+
+        if 0 < cnt_outliers <= output_cfg['outlierFiltering']['numMaxOutliers']:
+            logger.warning(f"Found outliers [{index.strftime('%Y-%m-%d')}] -> {outliers}")
+            if output_cfg['outlierFiltering']['setNan']:
+                df.at[index, df.columns[i]] = np.nan
+    return df
 
 
 if __name__ == "__main__":
