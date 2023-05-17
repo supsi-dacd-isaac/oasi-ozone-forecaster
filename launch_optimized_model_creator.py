@@ -183,7 +183,7 @@ if __name__ == "__main__":
             # Phase N°1: Data retrieving
             fa = FeaturesAnalyzer(ig, forecast_type, cfg, logger)
             fa.dataset_reader(k_region, [target])
-            dataset = fa.dataFrames[k_region]['dataset'].head(50)
+            dataset = fa.dataFrames[k_region]['dataset']
             root_folder = fa.inputs_gatherer.output_folder_creator(k_region)
 
             omc = OptimizedModelCreator(dataset, target, k_region, forecast_type, root_folder, cfg, logger)
