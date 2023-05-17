@@ -1,32 +1,16 @@
-import copy
-
-import numpy as np
 import pandas as pd
 import pickle
 import os
 import json
-import glob
-import scipy
-import xgboost as xgb
-from ngboost import NGBRegressor
-from ngboost.distns import Normal
-from ngboost.learners import default_tree_learner
-from ngboost.scores import MLE, LogScore
-from xgboost_distribution import XGBDistribution
-from sklearn.model_selection import KFold
-from sklearn.metrics import mean_squared_error, mean_absolute_error, accuracy_score, confusion_matrix
-
-from classes.qrfr import QuantileRandomForestRegressor as qfrfQuantileRandomForestRegressor
-
 import lightgbm
 import shap
 import numpy as np
+
 from sklearn.model_selection import KFold
-
-from sklearn.model_selection import train_test_split
-
 from pyforecaster.trainer import hyperpar_optimizer, retrieve_cv_results
-from pyforecaster.metrics import nmae
+from pyforecaster.metrics import err, squerr, rmse, nmae, mape
+
+from classes.qrfr import QuantileRandomForestRegressor as qfrfQuantileRandomForestRegressor
 
 
 class OptimizedModelCreator:
@@ -62,9 +46,8 @@ class OptimizedModelCreator:
         self.df_X_all, self.df_y = self.prepare_df_for_optimization()
         self.hp_optimized_result = None
         self.df_X_best = None
-        self.lgb = None
-        self.qrf = None
         self.active_hpo = None
+        self.METRICS = {'nmae': nmae, 'err': err, 'squerr': squerr, 'rmse': rmse, 'mape': mape}
 
     def prepare_df_for_optimization(self,):
         df_all = self.dataset.dropna(subset=self.dataset.columns)
@@ -155,15 +138,15 @@ class OptimizedModelCreator:
             df_X_dataset = self.df_X_best
             cfg_hpo = self.cfg['hpoAfterFS']
 
-        if self.cfg['cv']['shuffle']:
-            cv_idxs = self.get_random_cv_idxs(len(df_X_dataset.index), self.cfg['cv']['folds'])
+        if cfg_hpo['cv']['shuffle']:
+            cv_idxs = self.get_random_cv_idxs(len(df_X_dataset.index), cfg_hpo['cv']['folds'])
         else:
-            cv_idxs = self.get_sequential_cv_idxs(len(df_X_dataset.index), self.cfg['cv']['folds'])
+            cv_idxs = self.get_sequential_cv_idxs(len(df_X_dataset.index), cfg_hpo['cv']['folds'])
         cv = (f for f in cv_idxs)
 
         study, replies = hyperpar_optimizer(df_X_dataset, self.df_y.iloc[:, [0]], lightgbm.LGBMRegressor(),
-                                            n_trials=cfg_hpo['trials'], metric=nmae, cv=cv, param_space_fun=self.param_space_fun,
-                                            hpo_type=self.cfg['cv']['type'],
+                                            n_trials=cfg_hpo['trials'], metric=self.METRICS[cfg_hpo['metric']],
+                                            cv=cv, param_space_fun=self.param_space_fun, hpo_type=cfg_hpo['cv']['type'],
                                             callbacks=[self.stop_on_no_improvement_callback])
         trials_df = retrieve_cv_results(study)
         assert trials_df['value'].isna().sum() == 0
@@ -207,13 +190,13 @@ class OptimizedModelCreator:
         X = self.df_X_all.values
         y = self.df_y.values.ravel()
 
-        kf = KFold(n_splits=self.cfg['cv']['folds'], shuffle=self.cfg['cv']['shuffle'])
+        kf = KFold(n_splits=self.cfg['fs']['cv']['folds'], shuffle=self.cfg['fs']['cv']['shuffle'])
 
         # Perform cross-validation
         k = 1
         self.logger.info('CV started')
         for train_idx, test_idx in kf.split(X):
-            self.logger.info('Fold %i/%i' % (k, self.cfg['cv']['folds']))
+            self.logger.info('Fold %i/%i' % (k, self.cfg['fs']['cv']['folds']))
             X_train, X_test = X[train_idx], X[test_idx]
             y_train, y_test = y[train_idx], y[test_idx]
 
@@ -230,7 +213,7 @@ class OptimizedModelCreator:
         self.logger.info('CV ended')
 
         # Calculate average Shapley values across all folds
-        shapley_values /= self.cfg['cv']['folds']
+        shapley_values /= self.cfg['fs']['cv']['folds']
 
         # Sort the Shapley values in descending order
         sorted_idx = np.argsort(shapley_values)[::-1]
@@ -268,28 +251,28 @@ class OptimizedModelCreator:
 
         self.logger.info('LightGBM training started')
         train_data = lightgbm.Dataset(self.df_X_best, label=self.df_y)
-        self.lgb = lightgbm.train(self.cfg['fs']['fixedParams'], train_data,
-                                  num_boost_round=self.cfg['fs']['numBoostRound'], keep_training_booster=True,
-                                  init_model=tr_lgb)
+        lgb = lightgbm.train(self.cfg['fs']['fixedParams'], train_data, num_boost_round=self.cfg['fs']['numBoostRound'],
+                             keep_training_booster=True, init_model=tr_lgb)
         self.logger.info('LightGBM training ended')
 
         # todo the part related to QRF must be improved,trying to reuse the optimized parameters of LightGBM model.
         #  Now only n_estimators is used
         self.logger.info('RFQR training started')
-        self.qrf = qfrfQuantileRandomForestRegressor(n_estimators=tr_lgb.n_estimators)
-        self.qrf.fit(np.array(self.df_X_best.values), np.array(self.df_y.values).ravel())
+        qrf = qfrfQuantileRandomForestRegressor(n_estimators=tr_lgb.n_estimators)
+        qrf.fit(np.array(self.df_X_best.values), np.array(self.df_y.values).ravel())
         self.logger.info('RFQR training ended')
 
-        self.saving_models_training_results(tr_lgb)
+        self.saving_models_training_results(tr_lgb, lgb, qrf)
 
-    def saving_models_training_results(self, tr_lgb):
+    def saving_models_training_results(self, tr_lgb, lgb, qrf):
         target_folder = '%smt' % self.root_folder
         if not os.path.exists(target_folder):
             os.makedirs(target_folder)
         self.logger.info('Save MT results in folder %s' % target_folder)
 
         # Inputs/features file
-        files_id = '%s-%s_%s' % (self.cfg['mt']['output'], self.target.split('__')[-1], self.cfg['mt']['family'])
+        _, output_signal, day_case = self.target.split('__')
+        files_id = '%s-%s_%s' % (output_signal[1:], day_case, self.cfg['mt']['family'])
 
         with open('%s%sinputs_%s.json' % (target_folder, os.sep, files_id), 'w') as of:
             json.dump({'signals': list(self.df_X_best.columns)}, of)
@@ -304,11 +287,11 @@ class OptimizedModelCreator:
             },
             "modelParameters": {
                 "lightGBM": tr_lgb.get_params(),
-                "quantileRandomForestRegressor": self.qrf.forest.get_params()
+                "quantileRandomForestRegressor": qrf.forest.get_params()
             }
         }
         with open('%s%smetadata_%s.json' % (target_folder, os.sep, files_id), 'w') as of:
             json.dump(metadata, of, indent=2)
 
         # Models file
-        pickle.dump([self.lgb, self.qrf], open('%s%spredictor_%s.pkl' % (target_folder, os.sep, files_id), 'wb'))
+        pickle.dump([lgb, qrf], open('%s%spredictor_%s.pkl' % (target_folder, os.sep, files_id), 'wb'))
