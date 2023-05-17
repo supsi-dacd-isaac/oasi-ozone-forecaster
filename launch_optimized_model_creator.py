@@ -186,6 +186,7 @@ if __name__ == "__main__":
             dataset = fa.dataFrames[k_region]['dataset']
             root_folder = fa.inputs_gatherer.output_folder_creator(k_region)
 
+            logger.info('Dataset main settings: observations = %i, features = %i' % (len(dataset), len(dataset.columns)))
             omc = OptimizedModelCreator(dataset, target, k_region, forecast_type, root_folder, cfg, logger)
 
             # Phase N°2: First (eventual) hyperparameters optimization, performed considering all the features
