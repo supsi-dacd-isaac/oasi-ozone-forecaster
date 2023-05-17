@@ -14,6 +14,7 @@ import lightgbm
 import ngboost
 import xgboost
 # from skgarden import RandomForestQuantileRegressor
+from classes.qrfr import QuantileRandomForestRegressor as qfrfQuantileRandomForestRegressor
 
 from multiprocessing import Process
 import urllib3
@@ -29,6 +30,8 @@ from sklearn.linear_model import ElasticNet
 from sklearn.pipeline import Pipeline
 from pyforecaster.metrics import nmae
 from pyforecaster.formatter import Formatter
+
+from classes.optimized_model_creator import OptimizedModelCreator
 
 import warnings
 from numba.core.errors import NumbaDeprecationWarning
@@ -64,22 +67,47 @@ def param_space_fun(trial):
     return param_space
 
 
+def get_sequential_cv_idxs(dataset_len, n_folds):
+    fold_size = int(dataset_len/n_folds)
+    mod_fold = int(dataset_len % n_folds)
+    cv_idxs = []
+    for i in range(n_folds):
+        start_idx = i * fold_size
+        end_idx = i * fold_size + fold_size
+        if i == 0:
+            tr_idx = np.concatenate((np.zeros(end_idx-start_idx).astype(int),
+                                     np.ones(dataset_len-end_idx).astype(int)), axis=0)
+        else:
+            tr_idx = np.concatenate((np.ones(start_idx).astype(int),
+                                     (np.zeros(end_idx-start_idx)).astype(int),
+                                     (np.ones(dataset_len-end_idx).astype(int))), axis=0)
+        tr_idx = tr_idx.astype(bool)
+        te_idx = ~tr_idx
+        cv_idxs.append((tr_idx, te_idx))
+
+    if mod_fold > 0:
+        tr_idx = np.concatenate((np.ones(end_idx).astype(int), (np.zeros(mod_fold)).astype(int)), axis=0)
+        tr_idx = tr_idx.astype(bool)
+        te_idx = ~tr_idx
+        cv_idxs.append((tr_idx, te_idx))
+    return cv_idxs
+
+
 def optimize_model(model, df_X, df_y):
     n_trials = 40
     n_folds = 5
 
     # Random folds selection
-    cv_idxs = []
-    for i in range(n_folds):
-        tr_idx = np.random.randint(0, 2, len(df_X.index), dtype=bool)
-        te_idx = ~tr_idx
-        cv_idxs.append((tr_idx, te_idx))
-    cv = (f for f in cv_idxs)
+    # cv_idxs = []
+    # for i in range(n_folds):
+    #     tr_idx = np.random.randint(0, 2, len(df_X.index), dtype=bool)
+    #     te_idx = ~tr_idx
+    #     cv_idxs.append((tr_idx, te_idx))
+    # cv = (f for f in cv_idxs)
 
     # Sequential folds selection
-    # formatter = Formatter()
-    # fold_generator = formatter.time_kfcv(df_X.index, n_folds)
-    # cv = list(fold_generator)
+    cv_idxs = get_sequential_cv_idxs(len(df_X.index), n_folds)
+    cv = (f for f in cv_idxs)
 
     study, replies = hyperpar_optimizer(df_X, df_y.iloc[:, [0]], model, n_trials=n_trials, metric=nmae,
                                         cv=cv, param_space_fun=param_space_fun,
@@ -133,15 +161,16 @@ if __name__ == "__main__":
 
     logger.info('Starting program')
 
-    lgb_params = {
-        'task': 'train',
-        'boosting': 'gbdt',
-        'objective': 'regression',
-        'num_leaves': 10,
-        'learning_rage': 0.05,
-        'metric': {'l2', 'l1'},
-        'verbose': -1
-    }
+    # todo Some of the following must be fixed?
+    # lgb_params = {
+    #     'task': 'train',
+    #     'boosting': 'gbdt',
+    #     'objective': 'regression',
+    #     'num_leaves': 10,
+    #     'learning_rage': 0.05,
+    #     'metric': {'l2', 'l1'},
+    #     'verbose': -1
+    # }
 
     af = ArtificialFeatures(None, forecast_type, cfg, logger)
     ig = InputsGatherer(None, forecast_type, cfg, logger, af)
@@ -149,31 +178,35 @@ if __name__ == "__main__":
     procs = []
     # Cycle over the regions
     for k_region in cfg['regions'].keys():
-        for target in cfg['regions'][k_region]['optimizer']['targetColumns']:
+        for target in cfg['regions'][k_region]['targets']:
+
+            # Phase N°1: Data retrieving
             fa = FeaturesAnalyzer(ig, forecast_type, cfg, logger)
             fa.dataset_reader(k_region, [target])
-            df_all = fa.dataFrames[k_region]['dataset'].head(200)
-            # df_all = fa.dataFrames[k_region]['dataset']
-            df_X, df_y = prepare_df_for_optimization(df_all)
+            dataset = fa.dataFrames[k_region]['dataset'].head(50)
+            root_folder = fa.inputs_gatherer.output_folder_creator(k_region)
 
-            # OK
-            lgb = lightgbm.LGBMRegressor()
-            study = optimize_model(lgb, df_X, df_y)
-            logger.info('LGB -> Best score = %f; params = %s' % (study.best_value, study.best_params))
+            omc = OptimizedModelCreator(dataset, target, k_region, forecast_type, root_folder, cfg, logger)
 
-            # OK
-            # xgb = xgboost.XGBRegressor()
-            # study = optimize_model(xgb, df_X, df_y)
-            # logger.info('XGB -> Best score = %f; params = %s' % (study.best_value, study.best_params))
+            # Phase N°2: First (eventual) hyperparameters optimization, performed considering all the features
+            if cfg['hpoBeforeFS']['enabled'] is True:
+                logger.info('First HPOPT starting')
+                omc.do_hyperparameters_optimization('before_fs')
+                logger.info('First HPOPT ending')
 
-            # todo NOK
-            # ngb = ngboost.NGBRegressor()
-            # study = optimize_model(ngb, df_X, df_y)
-            # logger.info('NGB -> Best score = %f; params = %s' % (study.best_value, study.best_params))
+            # Phase N°3: Features selection via Shapley values considering the optimized hyperparameters
+            logger.info('FS starting')
+            omc.do_feature_selection()
+            logger.info('FS ending')
 
-            # todo NOK
-            # qrf = RandomForestQuantileRegressor()
-            # study = optimize_model(qrf, df_X, df_y)
-            # logger.info('QRF -> Best score = %f; params = %s' % (study.best_value, study.best_params))
+            # Phase N°4: Second hyperparameters optimization, performed considering only the features selected by FS
+            logger.info('Second HPOPT starting')
+            omc.do_hyperparameters_optimization('after_fs')
+            logger.info('Second HPOPT ending')
+
+            # # Phase N°5: Model training
+            logger.info('MT starting')
+            omc.do_models_training()
+            logger.info('MT ending')
 
     logger.info('Ending program')
