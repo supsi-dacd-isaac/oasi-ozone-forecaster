@@ -64,6 +64,7 @@ class OptimizedModelCreator:
         self.df_X_best = None
         self.lgb = None
         self.qrf = None
+        self.active_hpo = None
 
     def prepare_df_for_optimization(self,):
         df_all = self.dataset.dropna(subset=self.dataset.columns)
@@ -73,7 +74,11 @@ class OptimizedModelCreator:
         return df_X, df_y
 
     def stop_on_no_improvement_callback(self, study, trial):
-        window = self.cfg['hpoBeforeFS']['noImprovementWindow']
+        if self.active_hpo == 'before_fs':
+            window = self.cfg['hpoBeforeFS']['noImprovementWindow']
+        else:
+            window = self.cfg['hpoAfterFS']['noImprovementWindow']
+
         horizon = window
         if len(study.trials) > window:
             horizon += study.best_trial.number
@@ -142,6 +147,7 @@ class OptimizedModelCreator:
 
     def do_hyperparameters_optimization(self, case):
 
+        self.active_hpo = case
         if case == 'before_fs':
             df_X_dataset = self.df_X_all
             cfg_hpo = self.cfg['hpoBeforeFS']
@@ -235,12 +241,7 @@ class OptimizedModelCreator:
             selected_features.append(self.df_X_all.columns[i])
 
         # Set the dataframe containing only the selected features
-        self.df_X_best = self.df_X_all
-        for col in self.df_X_all.columns:
-            # Check if the feature has not been selected
-            if col not in selected_features:
-                self.df_X_best = self.df_X_best.drop(col, axis=1)
-        self.df_X_best = self.df_X_best.reindex(columns=selected_features)
+        self.df_X_best = self.df_X_all[selected_features].copy()
 
         # Save the FS results
         self.save_fs_results(sorted_idx, shapley_values)
