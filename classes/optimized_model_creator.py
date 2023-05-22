@@ -2,9 +2,16 @@ import pandas as pd
 import pickle
 import os
 import json
+import copy
 import lightgbm
 import shap
 import numpy as np
+import xgboost as xgb
+
+from ngboost import NGBRegressor
+from ngboost.distns import Normal
+from ngboost.learners import default_tree_learner
+from ngboost.scores import MLE
 
 from sklearn.model_selection import KFold
 from pyforecaster.trainer import hyperpar_optimizer, retrieve_cv_results
@@ -159,7 +166,7 @@ class OptimizedModelCreator:
         if not os.path.exists(target_folder):
             os.makedirs(target_folder)
         with open('%s%s%s_best_pars.json' % (target_folder, os.sep, self.target), 'w') as of:
-            json.dump(self.hp_optimized_result.best_params, of)
+            json.dump(self.hp_optimized_result.best_params, of, indent=2)
 
     def initialize_lgb_model(self, pars):
         lgb = lightgbm.LGBMRegressor()
@@ -181,11 +188,17 @@ class OptimizedModelCreator:
         # Initialize an array to store Shapley values for each feature
         shapley_values = np.zeros(self.df_X_all.shape[1])
 
-        # Set the LightGBM parameters
+        # LightGBM parameters setting
+        # Initialize the pars dictionary with the fixed parameters
+        pars = copy.deepcopy(self.cfg['fs']['fixedParams'])
         if self.cfg['hpoBeforeFS']['enabled'] is True:
-            fs_lgb = self.initialize_lgb_model(self.hp_optimized_result.best_params)
+            # Update the pars dictionary with the optimized parameters
+            pars.update(self.hp_optimized_result.best_params)
+            fs_lgb = self.initialize_lgb_model(pars)
         else:
-            fs_lgb = self.initialize_lgb_model(self.cfg['fs']['defaultParams'])
+            # Update the pars dictionary with the default parameters
+            pars.update(self.cfg['fs']['defaultParams'])
+            fs_lgb = self.initialize_lgb_model(pars)
 
         X = self.df_X_all.values
         y = self.df_y.values.ravel()
@@ -244,27 +257,47 @@ class OptimizedModelCreator:
         of.close()
 
         with open('%s%s%s_best_features.json' % (target_folder, os.sep, self.target), 'w') as of:
-            json.dump({'signals': list(self.df_X_best.columns)}, of)
+            json.dump({'signals': list(self.df_X_best.columns)}, of, indent=2)
 
     def do_models_training(self):
-        tr_lgb = self.initialize_lgb_model(self.hp_optimized_result.best_params)
+        # Training data preparation
+        train_data_Xy_lgb = lightgbm.Dataset(self.df_X_best, label=self.df_y)
+        train_data_X = np.array(self.df_X_best.values)
+        train_data_y = np.array(self.df_y.values).ravel()
 
+        # LightGBM training
         self.logger.info('LightGBM training started')
-        train_data = lightgbm.Dataset(self.df_X_best, label=self.df_y)
-        lgb = lightgbm.train(self.cfg['fs']['fixedParams'], train_data, num_boost_round=self.cfg['fs']['numBoostRound'],
-                             keep_training_booster=True, init_model=tr_lgb)
+        tr_lgb_reg = self.initialize_lgb_model(self.hp_optimized_result.best_params)
+        lgb_reg = lightgbm.train(self.cfg['mt']['fixedParams'], train_data_Xy_lgb, num_boost_round=self.cfg['mt']['numBoostRound'],
+                                 keep_training_booster=True, init_model=tr_lgb_reg)
         self.logger.info('LightGBM training ended')
 
+        # RFQR training
         # todo the part related to QRF must be improved,trying to reuse the optimized parameters of LightGBM model.
         #  Now only n_estimators is used
         self.logger.info('RFQR training started')
-        qrf = qfrfQuantileRandomForestRegressor(n_estimators=tr_lgb.n_estimators)
-        qrf.fit(np.array(self.df_X_best.values), np.array(self.df_y.values).ravel())
+        qrf_reg = qfrfQuantileRandomForestRegressor(n_estimators=tr_lgb_reg.n_estimators)
+        qrf_reg.fit(train_data_X, train_data_y)
         self.logger.info('RFQR training ended')
 
-        self.saving_models_training_results(tr_lgb, lgb, qrf)
+        # NGB + XGB training
+        self.logger.info('NGBoost training started')
+        ngb_reg = NGBRegressor(n_estimators=tr_lgb_reg.n_estimators, learning_rate=tr_lgb_reg.learning_rate,
+                               Dist=Normal, Base=default_tree_learner, natural_gradient=True, verbose=False, Score=MLE,
+                               random_state=500)
+        ngb_reg.fit(train_data_X, train_data_y)
+        self.logger.info('NGBoost training ended')
 
-    def saving_models_training_results(self, tr_lgb, lgb, qrf):
+        self.logger.info('XGBoost training started')
+        xgb_reg = xgb.XGBRegressor(objective='reg:squarederror', colsample_bytree=tr_lgb_reg.colsample_bytree,
+                                   learning_rate=tr_lgb_reg.learning_rate, max_depth=5, alpha=10,
+                                   n_estimators=tr_lgb_reg.n_estimators)
+        xgb_reg.fit(train_data_X, train_data_y)
+        self.logger.info('XGBoost training ended')
+
+        self.saving_models_training_results(tr_lgb_reg, lgb_reg, qrf_reg, ngb_reg, xgb_reg)
+
+    def saving_models_training_results(self, tr_lgb_reg, lgb_reg, qrf_reg, ngb_reg, xgb_reg):
         target_folder = '%smt' % self.root_folder
         if not os.path.exists(target_folder):
             os.makedirs(target_folder)
@@ -275,9 +308,11 @@ class OptimizedModelCreator:
         files_id = '%s-%s_%s' % (output_signal[1:], day_case, self.cfg['mt']['family'])
 
         with open('%s%sinputs_%s.json' % (target_folder, os.sep, files_id), 'w') as of:
-            json.dump({'signals': list(self.df_X_best.columns)}, of)
+            json.dump({'signals': list(self.df_X_best.columns)}, of, indent=2)
 
         # Metadata file
+        ngboost_keys = ['natural_gradient', 'n_estimators', 'learning_rate', 'minibatch_frac', 'col_sample', 'verbose']
+        ngboost_pars = {key: ngb_reg.get_params()[key] for key in ngboost_keys if key in ngb_reg.get_params()}
         metadata = {
             'general': {
                 'region': self.region,
@@ -286,12 +321,15 @@ class OptimizedModelCreator:
                 'family': self.cfg['mt']['family']
             },
             "modelParameters": {
-                "lightGBM": tr_lgb.get_params(),
-                "quantileRandomForestRegressor": qrf.forest.get_params()
+                "lightGBM": tr_lgb_reg.get_params(),
+                "quantileRandomForestRegressor": qrf_reg.forest.get_params(),
+                "ngboost": ngboost_pars,
+                "xgboost": xgb_reg.get_params()
             }
         }
         with open('%s%smetadata_%s.json' % (target_folder, os.sep, files_id), 'w') as of:
             json.dump(metadata, of, indent=2)
 
-        # Models file
-        pickle.dump([lgb, qrf], open('%s%spredictor_%s.pkl' % (target_folder, os.sep, files_id), 'wb'))
+        # Models file (structure needed for the compatibility with forecast_manager script
+        pickle.dump([ngb_reg, qrf_reg, qrf_reg, xgb_reg, lgb_reg], open('%s%spredictor_%s.pkl' % (target_folder, os.sep,
+                                                                                                  files_id), 'wb'))
