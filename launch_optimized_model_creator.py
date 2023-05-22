@@ -10,11 +10,6 @@ from classes.inputs_gatherer import InputsGatherer
 
 from classes.optimized_model_creator import OptimizedModelCreator
 
-import warnings
-from numba.core.errors import NumbaDeprecationWarning
-warnings.filterwarnings("ignore", category=NumbaDeprecationWarning)
-
-
 if __name__ == "__main__":
     arg_parser = argparse.ArgumentParser()
     arg_parser.add_argument("-c", help="configuration file")
@@ -28,15 +23,17 @@ if __name__ == "__main__":
         print('\nATTENTION! Unable to open configuration file %s\n' % config_file)
         sys.exit(1)
 
+    # Load the configuration
     cfg_file_name = args.c
     cfg = json.loads(open(cfg_file_name).read())
+
+    cfg_signals_codes = json.loads(open(cfg['signalsCodesFile']).read())
+    cfg.update(cfg_signals_codes)
 
     # Define the forecast type
     forecast_type = args.t
 
-    # --------------------------------------------------------------------------- #
     # Set logging object
-    # --------------------------------------------------------------------------- #
     if not args.l:
         log_file = None
     else:
