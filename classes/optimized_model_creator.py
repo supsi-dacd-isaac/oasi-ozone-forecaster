@@ -59,7 +59,7 @@ class OptimizedModelCreator:
         self.active_hpo = None
         self.METRICS = {'nmae': nmae, 'err': err, 'squerr': squerr, 'rmse': rmse, 'mape': mape}
         self.root_folder = self.get_data_folder(self.region, self.forecast_type, self.cfg)
-        self.result_folder = self.get_result_folder(self.region, self.forecast_type, self.cfg)
+        self.result_folder = self.get_result_folder(self.region, self.forecast_type, self.target, self.cfg)
         if os.path.exists(self.result_folder):
             self.logger.error('Result folder %s already exists' % self.result_folder)
             self.logger.info('Exit program')
@@ -72,11 +72,11 @@ class OptimizedModelCreator:
                                         cfg['datasetPeriod']['endYear'], cfg['datasetPeriod']['endDay'], os.sep)
 
     @staticmethod
-    def get_result_folder(region, forecast_type, cfg):
-        return '%s%s_%s_%s%s_%s%s%s%s%s' % (cfg['outputFolder'], region, forecast_type,
-                                            cfg['datasetPeriod']['startYear'], cfg['datasetPeriod']['startDay'],
-                                            cfg['datasetPeriod']['endYear'], cfg['datasetPeriod']['endDay'], os.sep,
-                                            cfg['family'], os.sep)
+    def get_result_folder(region, forecast_type, target, cfg):
+        return '%s%s_%s_%s%s_%s%s%s%s%s%s%s' % (cfg['outputFolder'], region, forecast_type,
+                                                cfg['datasetPeriod']['startYear'], cfg['datasetPeriod']['startDay'],
+                                                cfg['datasetPeriod']['endYear'], cfg['datasetPeriod']['endDay'], os.sep,
+                                                cfg['family'], os.sep, target, os.sep)
 
     def fill_datasets(self, region, target):
         output_dfs = {}
