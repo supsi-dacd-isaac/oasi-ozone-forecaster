@@ -51,7 +51,6 @@ class OptimizedModelCreator:
         self.region = region
         self.forecast_type = forecast_type
         self.cfg = cfg
-        self.root_folder = self.get_data_folder(self.region, self.forecast_type, self.cfg)
         self.logger = logger
         self.df_X_all = None
         self.df_y = None
@@ -59,13 +58,25 @@ class OptimizedModelCreator:
         self.df_X_best = None
         self.active_hpo = None
         self.METRICS = {'nmae': nmae, 'err': err, 'squerr': squerr, 'rmse': rmse, 'mape': mape}
-
+        self.root_folder = self.get_data_folder(self.region, self.forecast_type, self.cfg)
+        self.result_folder = self.get_result_folder(self.region, self.forecast_type, self.cfg)
+        if os.path.exists(self.result_folder):
+            self.logger.error('Result folder %s already exists' % self.result_folder)
+            self.logger.info('Exit program')
+            sys.exit(-3)
 
     @staticmethod
     def get_data_folder(region, forecast_type, cfg):
         return '%s%s_%s_%s%s_%s%s%s' % (cfg['outputFolder'], region, forecast_type,
                                         cfg['datasetPeriod']['startYear'], cfg['datasetPeriod']['startDay'],
                                         cfg['datasetPeriod']['endYear'], cfg['datasetPeriod']['endDay'], os.sep)
+
+    @staticmethod
+    def get_result_folder(region, forecast_type, cfg):
+        return '%s%s_%s_%s%s_%s%s%s%s%s' % (cfg['outputFolder'], region, forecast_type,
+                                            cfg['datasetPeriod']['startYear'], cfg['datasetPeriod']['startDay'],
+                                            cfg['datasetPeriod']['endYear'], cfg['datasetPeriod']['endDay'], os.sep,
+                                            cfg['family'], os.sep)
 
     def fill_datasets(self, region, target):
         output_dfs = {}
@@ -202,12 +213,13 @@ class OptimizedModelCreator:
         self.hp_optimized_result = study
 
         # Save results
-        self.save_best_result('%shpo_%s' % (self.root_folder, case))
+        self.save_best_result(case)
 
-    def save_best_result(self, target_folder):
+    def save_best_result(self, case):
+        target_folder = '%shpo_%s' % (self.result_folder, case)
         if not os.path.exists(target_folder):
             os.makedirs(target_folder)
-        with open('%s%s%s_best_pars.json' % (target_folder, os.sep, self.target), 'w') as of:
+        with open('%s%s%s_%s_best_pars.json' % (target_folder, os.sep, self.cfg['family'], self.target), 'w') as of:
             json.dump(self.hp_optimized_result.best_params, of, indent=2)
 
     def initialize_lgb_model(self, pars):
@@ -285,12 +297,12 @@ class OptimizedModelCreator:
         self.save_fs_results(sorted_idx, shapley_values)
 
     def save_fs_results(self, sorted_idx, shapley_values):
-        target_folder = '%sfs' % self.root_folder
+        target_folder = '%sfs' % self.result_folder
         if not os.path.exists(target_folder):
             os.makedirs(target_folder)
         self.logger.info('Save FS results in folder %s' % target_folder)
 
-        of = open('%s%s%s_features_rank.csv' % (target_folder, os.sep, self.target), 'w')
+        of = open('%s%s%s_%s_features_rank.csv' % (target_folder, os.sep, self.cfg['family'], self.target), 'w')
         of.write('rank,feature,feature_importance\n')
         rank = 1
         for i in sorted_idx:
@@ -298,7 +310,7 @@ class OptimizedModelCreator:
             rank += 1
         of.close()
 
-        with open('%s%s%s_best_features.json' % (target_folder, os.sep, self.target), 'w') as of:
+        with open('%s%s%s_%s_best_features.json' % (target_folder, os.sep, self.cfg['family'], self.target), 'w') as of:
             json.dump({'signals': list(self.df_X_best.columns)}, of, indent=2)
 
     def do_models_training(self):
@@ -340,14 +352,14 @@ class OptimizedModelCreator:
         self.saving_models_training_results(tr_lgb_reg, lgb_reg, qrf_reg, ngb_reg, xgb_reg)
 
     def saving_models_training_results(self, tr_lgb_reg, lgb_reg, qrf_reg, ngb_reg, xgb_reg):
-        target_folder = '%smt' % self.root_folder
+        target_folder = '%smt' % self.result_folder
         if not os.path.exists(target_folder):
             os.makedirs(target_folder)
         self.logger.info('Save MT results in folder %s' % target_folder)
 
         # Inputs/features file
         _, output_signal, day_case = self.target.split('__')
-        files_id = '%s-%s_%s' % (output_signal[1:], day_case, self.cfg['mt']['family'])
+        files_id = '%s-%s_%s' % (output_signal[1:], day_case, self.cfg['family'])
 
         with open('%s%sinputs_%s.json' % (target_folder, os.sep, files_id), 'w') as of:
             json.dump({'signals': list(self.df_X_best.columns)}, of, indent=2)
@@ -360,7 +372,7 @@ class OptimizedModelCreator:
                 'region': self.region,
                 'case': self.forecast_type,
                 'target': self.target,
-                'family': self.cfg['mt']['family']
+                'family': self.cfg['family']
             },
             "modelParameters": {
                 "lightGBM": tr_lgb_reg.get_params(),
