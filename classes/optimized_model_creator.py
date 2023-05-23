@@ -1,3 +1,5 @@
+import sys
+
 import pandas as pd
 import pickle
 import os
@@ -25,9 +27,11 @@ class OptimizedModelCreator:
     This class will perform hyperparameters optimization + feature selection + model training
     """
 
-    def __init__(self, dataset, target, region, forecast_type, root_folder, cfg, logger):
+    def __init__(self, ig, target, region, forecast_type, cfg, logger):
         """
         Constructor
+        :param ig: Inputs gatherer
+        :type ig: InputsGatherer object
         :param dataset: Dataset
         :type dataset: pandas dataframe
         :param target: output target
@@ -36,28 +40,74 @@ class OptimizedModelCreator:
         :type region: str
         :param forecast_type: Forecast type (MOR | EVE)
         :type forecast_type: str
-        :param root_folder: Data root folder
-        :type root_folder: str
         :param cfg: Main configuraion
         :type cfg: dict
         :param logger: Logger
         :type logger: Logger object
         """
-        self.dataset = dataset
+        self.ig = ig
+        self.dataset = None
         self.target = target
         self.region = region
         self.forecast_type = forecast_type
-        self.root_folder = root_folder
         self.cfg = cfg
+        self.root_folder = self.get_data_folder(self.region, self.forecast_type, self.cfg)
         self.logger = logger
-        self.df_X_all, self.df_y = self.prepare_df_for_optimization()
+        self.df_X_all = None
+        self.df_y = None
         self.hp_optimized_result = None
         self.df_X_best = None
         self.active_hpo = None
         self.METRICS = {'nmae': nmae, 'err': err, 'squerr': squerr, 'rmse': rmse, 'mape': mape}
 
-    def prepare_df_for_optimization(self,):
-        df_all = self.dataset.dropna(subset=self.dataset.columns)
+
+    @staticmethod
+    def get_data_folder(region, forecast_type, cfg):
+        return '%s%s_%s_%s%s_%s%s%s' % (cfg['outputFolder'], region, forecast_type,
+                                        cfg['datasetPeriod']['startYear'], cfg['datasetPeriod']['startDay'],
+                                        cfg['datasetPeriod']['endYear'], cfg['datasetPeriod']['endDay'], os.sep)
+
+    def fill_datasets(self, region, target):
+        output_dfs = {}
+
+        file_path_df = '%s%s_dataset.csv' % (self.root_folder, self.root_folder.split(os.sep)[-2])
+        if not os.path.isfile(file_path_df):
+            self.logger.error('File %s does not exist' % file_path_df)
+            sys.exit(-1)
+        # Read the data file
+        tmp_df = pd.read_csv(file_path_df)
+
+        # Filtering on data -> only observations related to output values higher than the limit will be considered
+        mask = tmp_df[target] >= self.cfg['regions'][region]['dataToConsiderMinLimit']
+        output_dfs[region] = {'dataset': tmp_df[mask], 'targetColumns': target}
+
+        # Select only configured input signals
+        input_signals = self.ig.generate_input_signals_codes(region)
+        candidate_signals = list(output_dfs[region]['dataset'].columns)
+
+        # Remove date and output from candidates list
+        candidate_signals.remove('date')
+        for target_column in self.cfg['regions'][region]['targetColumns']:
+            candidate_signals.remove(target_column)
+
+        # Select candidate signals from data
+        for candidate_signal in candidate_signals:
+            if candidate_signal not in input_signals:
+                # This signal has not to be used in the grid search
+                output_dfs[region]['dataset'] = output_dfs[region]['dataset'].drop(candidate_signal, axis=1)
+
+        self.dataset = output_dfs[region]['dataset']
+        self.df_X_all, self.df_y = self.prepare_df_for_optimization()
+
+    def prepare_df_for_optimization(self):
+        # Remove any rows with at least a nan
+        df_all = copy.deepcopy(self.dataset)
+        df_all.dropna(inplace=True)
+
+        self.logger.info('Found %i nans on %i observations (%.0f%%)' % (len(self.dataset)-len(df_all),
+                                                                        len(self.dataset),
+                                                                        ((1-len(df_all)/len(self.dataset))*1e2)))
+
         df_all = df_all.set_index('date')
         df_y = pd.DataFrame(df_all, columns=[self.target])
         df_X = df_all.drop(self.cfg['regions'][self.region]['targetColumns'], axis=1)
@@ -79,14 +129,6 @@ class OptimizedModelCreator:
                 study.stop()
 
     def param_space_fun(self, trial):
-        # Example:
-        # param_space = {
-        #     'learning_rate': trial.suggest_float('learning_rate', low=0.005, high=0.2),
-        #     'n_estimators': trial.suggest_int('n_estimators', low=50, high=500),
-        #     'colsample_bytree': trial.suggest_float('colsample_bytree', low=0.5, high=1.0),
-        #     'num_leaves': trial.suggest_int('num_leaves', low=20, high=400)
-        # }
-
         par_space_cfg = self.cfg['hpoBeforeFS']['paramSpace']
         par_space = {}
         for par_conf in par_space_cfg:

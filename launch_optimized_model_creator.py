@@ -4,10 +4,7 @@ import os
 import sys
 import argparse
 
-from classes.artificial_features import ArtificialFeatures
-from classes.features_analyzer import FeaturesAnalyzer
 from classes.inputs_gatherer import InputsGatherer
-
 from classes.optimized_model_creator import OptimizedModelCreator
 
 if __name__ == "__main__":
@@ -45,8 +42,7 @@ if __name__ == "__main__":
 
     logger.info('Starting program')
 
-    af = ArtificialFeatures(None, forecast_type, cfg, logger)
-    ig = InputsGatherer(None, forecast_type, cfg, logger, af)
+    ig = InputsGatherer(None, forecast_type, cfg, logger, None)
 
     procs = []
     # Cycle over the regions
@@ -54,13 +50,11 @@ if __name__ == "__main__":
         for target in cfg['regions'][k_region]['targets']:
 
             # Phase N°1: Data retrieving
-            fa = FeaturesAnalyzer(ig, forecast_type, cfg, logger)
-            fa.dataset_reader(k_region, [target])
-            dataset = fa.dataFrames[k_region]['dataset']
-            root_folder = fa.inputs_gatherer.output_folder_creator(k_region)
+            omc = OptimizedModelCreator(ig, target, k_region, forecast_type, cfg, logger)
+            omc.fill_datasets(k_region, target)
 
-            logger.info('Dataset main settings: observations = %i, features = %i' % (len(dataset), len(dataset.columns)))
-            omc = OptimizedModelCreator(dataset, target, k_region, forecast_type, root_folder, cfg, logger)
+            logger.info('Dataset main settings: observations = %i, features = %i' % (len(omc.dataset),
+                                                                                     len(omc.dataset.columns)))
 
             # Phase N°2: First (eventual) hyperparameters optimization, performed considering all the features
             if cfg['hpoBeforeFS']['enabled'] is True:
