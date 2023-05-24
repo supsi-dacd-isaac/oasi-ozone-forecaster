@@ -15,6 +15,7 @@ from ngboost.distns import Normal
 from ngboost.learners import default_tree_learner
 from ngboost.scores import MLE
 
+
 from sklearn.model_selection import KFold
 from pyforecaster.trainer import hyperpar_optimizer, retrieve_cv_results
 from pyforecaster.metrics import err, squerr, rmse, nmae, mape
@@ -321,37 +322,50 @@ class OptimizedModelCreator:
 
         # LightGBM training
         self.logger.info('LightGBM training started')
-        tr_lgb_reg = self.initialize_lgb_model(self.hp_optimized_result.best_params)
-        lgb_reg = lightgbm.train(self.cfg['mt']['fixedParams'], train_data_Xy_lgb, num_boost_round=self.cfg['mt']['numBoostRound'],
-                                 keep_training_booster=True, init_model=tr_lgb_reg)
+        lgb_pars = copy.deepcopy(self.cfg['mt']['fixedParams'])
+        lgb_pars.update(self.hp_optimized_result.best_params)
+        lgb_reg = lightgbm.train(lgb_pars, train_data_Xy_lgb)
         self.logger.info('LightGBM training ended')
+
+        # Only mae and rmse are now properly translated for XGB and QRF regressors
+        if lgb_reg.params['metric'] == 'mae':
+            qrf_criterion = 'absolute_error'
+            # Deprecated
+            xgb_obj = 'reg:linear'
+        elif lgb_reg.params['metric'] == 'rmse':
+            qrf_criterion = 'squared_error'
+            xgb_obj = 'reg:squarederror'
+        else:
+            qrf_criterion = 'absolute_error'
+            # Deprecated
+            xgb_obj = 'reg:linear'
 
         # RFQR training
         # todo the part related to QRF must be improved,trying to reuse the optimized parameters of LightGBM model.
         #  Now only n_estimators is used
-        self.logger.info('RFQR training started')
-        qrf_reg = qfrfQuantileRandomForestRegressor(n_estimators=tr_lgb_reg.n_estimators)
+        qrf_reg = qfrfQuantileRandomForestRegressor(n_estimators=lgb_reg.params['num_iterations'],
+                                                    criterion=qrf_criterion)
         qrf_reg.fit(train_data_X, train_data_y)
         self.logger.info('RFQR training ended')
 
         # NGB + XGB training
         self.logger.info('NGBoost training started')
-        ngb_reg = NGBRegressor(n_estimators=tr_lgb_reg.n_estimators, learning_rate=tr_lgb_reg.learning_rate,
-                               Dist=Normal, Base=default_tree_learner, natural_gradient=True, verbose=False, Score=MLE,
-                               random_state=500)
+        ngb_reg = NGBRegressor(n_estimators=lgb_reg.params['num_iterations'],
+                               learning_rate=lgb_reg.params['learning_rate'], Dist=Normal, Base=default_tree_learner,
+                               natural_gradient=True, verbose=False, Score=MLE, random_state=500)
         ngb_reg.fit(train_data_X, train_data_y)
         self.logger.info('NGBoost training ended')
 
         self.logger.info('XGBoost training started')
-        xgb_reg = xgb.XGBRegressor(objective='reg:squarederror', colsample_bytree=tr_lgb_reg.colsample_bytree,
-                                   learning_rate=tr_lgb_reg.learning_rate, max_depth=5, alpha=10,
-                                   n_estimators=tr_lgb_reg.n_estimators)
+        xgb_reg = xgb.XGBRegressor(objective=xgb_obj, colsample_bytree=lgb_reg.params['colsample_bytree'],
+                                   learning_rate=lgb_reg.params['learning_rate'], max_depth=5, alpha=10,
+                                   n_estimators=lgb_reg.params['num_iterations'])
         xgb_reg.fit(train_data_X, train_data_y)
         self.logger.info('XGBoost training ended')
 
-        self.saving_models_training_results(tr_lgb_reg, lgb_reg, qrf_reg, ngb_reg, xgb_reg)
+        self.saving_models_training_results(lgb_reg, qrf_reg, ngb_reg, xgb_reg)
 
-    def saving_models_training_results(self, tr_lgb_reg, lgb_reg, qrf_reg, ngb_reg, xgb_reg):
+    def saving_models_training_results(self, lgb_reg, qrf_reg, ngb_reg, xgb_reg):
         target_folder = '%smt' % self.result_folder
         if not os.path.exists(target_folder):
             os.makedirs(target_folder)
@@ -369,13 +383,24 @@ class OptimizedModelCreator:
         ngboost_pars = {key: ngb_reg.get_params()[key] for key in ngboost_keys if key in ngb_reg.get_params()}
         metadata = {
             'general': {
-                'region': self.region,
+                'region': {
+                    'name': self.region,
+                    'measureStations': self.cfg['regions'][self.region]['measureStations'],
+                    'forecastStations': self.cfg['regions'][self.region]['forecastStations'],
+                    'copernicusStations': self.cfg['regions'][self.region]['copernicusStations'],
+                    'dataToConsiderMinLimit': self.cfg['regions'][self.region]['dataToConsiderMinLimit'],
+                },
                 'case': self.forecast_type,
                 'target': self.target,
-                'family': self.cfg['family']
+                'family': self.cfg['family'],
+                'datasetPeriod': self.cfg['datasetPeriod'],
+                'hpoBeforeFSPars': self.cfg['hpoBeforeFS'],
+                'fsPars': self.cfg['fs'],
+                'hpoAfterFSPars': self.cfg['hpoAfterFS'],
+                'mtPars': self.cfg['mt']
             },
             "modelParameters": {
-                "lightGBM": tr_lgb_reg.get_params(),
+                "lightGBM": lgb_reg.params,
                 "quantileRandomForestRegressor": qrf_reg.forest.get_params(),
                 "ngboost": ngboost_pars,
                 "xgboost": xgb_reg.get_params()

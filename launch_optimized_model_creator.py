@@ -10,7 +10,6 @@ from classes.optimized_model_creator import OptimizedModelCreator
 if __name__ == "__main__":
     arg_parser = argparse.ArgumentParser()
     arg_parser.add_argument("-c", help="configuration file")
-    arg_parser.add_argument("-t", help="type (MOR | EVE)")
     arg_parser.add_argument("-l", help="log file (optional, if empty log redirected on stdout)")
     args = arg_parser.parse_args()
 
@@ -27,9 +26,6 @@ if __name__ == "__main__":
     cfg_signals_codes = json.loads(open(cfg['signalsCodesFile']).read())
     cfg.update(cfg_signals_codes)
 
-    # Define the forecast type
-    forecast_type = args.t
-
     # Set logging object
     if not args.l:
         log_file = None
@@ -42,39 +38,39 @@ if __name__ == "__main__":
 
     logger.info('Starting program')
 
-    ig = InputsGatherer(None, forecast_type, cfg, logger, None)
-
-    procs = []
     # Cycle over the regions
     for k_region in cfg['regions'].keys():
-        for target in cfg['regions'][k_region]['targets']:
+        for forecast_type in cfg['regions'][k_region]['targets'].keys():
+            ig = InputsGatherer(None, forecast_type, cfg, logger, None)
 
-            # Phase N°1: Data retrieving
-            omc = OptimizedModelCreator(ig, target, k_region, forecast_type, cfg, logger)
-            omc.fill_datasets(k_region, target)
+            for target in cfg['regions'][k_region]['targets'][forecast_type]:
 
-            logger.info('Dataset main settings: observations = %i, features = %i' % (len(omc.dataset),
-                                                                                     len(omc.dataset.columns)))
+                # Phase N°1: Data retrieving
+                omc = OptimizedModelCreator(ig, target, k_region, forecast_type, cfg, logger)
+                omc.fill_datasets(k_region, target)
 
-            # Phase N°2: First (eventual) hyperparameters optimization, performed considering all the features
-            if cfg['hpoBeforeFS']['enabled'] is True:
-                logger.info('First HPOPT starting')
-                omc.do_hyperparameters_optimization('before_fs')
-                logger.info('First HPOPT ending')
+                logger.info('Dataset main settings: observations = %i, features = %i' % (len(omc.dataset),
+                                                                                         len(omc.dataset.columns)))
 
-            # Phase N°3: Features selection via Shapley values considering the optimized hyperparameters
-            logger.info('FS starting')
-            omc.do_feature_selection()
-            logger.info('FS ending')
+                # Phase N°2: First (eventual) hyperparameters optimization, performed considering all the features
+                if cfg['hpoBeforeFS']['enabled'] is True:
+                    logger.info('First HPOPT starting')
+                    omc.do_hyperparameters_optimization('before_fs')
+                    logger.info('First HPOPT ending')
 
-            # Phase N°4: Second hyperparameters optimization, performed considering only the features selected by FS
-            logger.info('Second HPOPT starting')
-            omc.do_hyperparameters_optimization('after_fs')
-            logger.info('Second HPOPT ending')
+                # Phase N°3: Features selection via Shapley values considering the optimized hyperparameters
+                logger.info('FS starting')
+                omc.do_feature_selection()
+                logger.info('FS ending')
 
-            # # Phase N°5: Model training
-            logger.info('MT starting')
-            omc.do_models_training()
-            logger.info('MT ending')
+                # Phase N°4: Second hyperparameters optimization, performed considering only the features selected by FS
+                logger.info('Second HPOPT starting')
+                omc.do_hyperparameters_optimization('after_fs')
+                logger.info('Second HPOPT ending')
+
+                # # Phase N°5: Model training
+                logger.info('MT starting')
+                omc.do_models_training()
+                logger.info('MT ending')
 
     logger.info('Ending program')
