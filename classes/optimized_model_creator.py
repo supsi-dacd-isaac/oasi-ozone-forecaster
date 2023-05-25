@@ -340,10 +340,10 @@ class OptimizedModelCreator:
             # Deprecated
             xgb_obj = 'reg:linear'
 
-        # RFQR training
-        # todo the part related to QRF must be improved,trying to reuse the optimized parameters of LightGBM model.
-        #  Now only n_estimators is used
+        # QFR training
         qrf_reg = qfrfQuantileRandomForestRegressor(n_estimators=lgb_reg.params['num_iterations'],
+                                                    max_leaf_nodes=lgb_reg.params['num_leaves'],
+                                                    max_features=lgb_reg.params['colsample_bytree'],
                                                     criterion=qrf_criterion)
         qrf_reg.fit(train_data_X, train_data_y)
         self.logger.info('RFQR training ended')
