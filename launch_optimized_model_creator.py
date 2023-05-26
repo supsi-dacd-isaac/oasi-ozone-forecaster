@@ -50,8 +50,8 @@ if __name__ == "__main__":
                 omc = OptimizedModelCreator(ig, target, k_region, forecast_type, cfg, logger)
                 omc.fill_datasets(k_region, target)
 
-                logger.info('%sDataset main settings: observations = %i, features = %i' % (ft_desc, len(omc.dataset),
-                                                                                           len(omc.dataset.columns)))
+                logger.info('%sDataset dimensions: observations = %i, features = %i' % (ft_desc, len(omc.dataset),
+                                                                                        len(omc.dataset.columns)-1))
 
                 # Phase N°2: First (eventual) hyperparameters optimization, performed considering all the features
                 if cfg['hpoBeforeFS']['enabled'] is True:

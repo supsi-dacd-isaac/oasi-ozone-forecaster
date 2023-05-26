@@ -69,14 +69,14 @@ class OptimizedModelCreator:
     @staticmethod
     def get_data_folder(region, forecast_type, cfg):
         return '%s%s_%s_%s%s_%s%s%s' % (cfg['outputFolder'], region, forecast_type,
-                                        cfg['datasetPeriod']['startYear'], cfg['datasetPeriod']['startDay'],
-                                        cfg['datasetPeriod']['endYear'], cfg['datasetPeriod']['endDay'], os.sep)
+                                        cfg['dataset']['startYear'], cfg['dataset']['startDay'],
+                                        cfg['dataset']['endYear'], cfg['dataset']['endDay'], os.sep)
 
     @staticmethod
     def get_result_folder(region, forecast_type, target, cfg):
         return '%s%s_%s_%s%s_%s%s%s%s%s%s%s' % (cfg['outputFolder'], region, forecast_type,
-                                                cfg['datasetPeriod']['startYear'], cfg['datasetPeriod']['startDay'],
-                                                cfg['datasetPeriod']['endYear'], cfg['datasetPeriod']['endDay'], os.sep,
+                                                cfg['dataset']['startYear'], cfg['dataset']['startDay'],
+                                                cfg['dataset']['endYear'], cfg['dataset']['endDay'], os.sep,
                                                 cfg['family'], os.sep, target, os.sep)
 
     def fill_datasets(self, region, target):
@@ -109,16 +109,38 @@ class OptimizedModelCreator:
                 output_dfs[region]['dataset'] = output_dfs[region]['dataset'].drop(candidate_signal, axis=1)
 
         self.dataset = output_dfs[region]['dataset']
-        self.df_X_all, self.df_y = self.prepare_df_for_optimization()
+        self.df_X_all, self.df_y = self.prepare_Xy_dfs()
 
-    def prepare_df_for_optimization(self):
-        # Remove any rows with at least a nan
-        df_all = copy.deepcopy(self.dataset)
-        df_all.dropna(inplace=True)
+    def nans_management(self):
+        # Nans management
+        df_tmp = copy.deepcopy(self.dataset)
+        df_tmp.dropna(inplace=True)
 
-        self.logger.info('Found %i nans on %i observations (%.0f%%)' % (len(self.dataset)-len(df_all),
+        self.logger.info('Found %i nans on %i observations (%.0f%%)' % (len(self.dataset)-len(df_tmp),
                                                                         len(self.dataset),
-                                                                        ((1-len(df_all)/len(self.dataset))*1e2)))
+                                                                        ((1-len(df_tmp)/len(self.dataset))*1e2)))
+
+        self.logger.info('Apply "%s" management on nans (available: drop|interpolate|ffill|bfill)' %
+                         self.cfg['dataset']['nansManagement'])
+        df_all = copy.deepcopy(self.dataset)
+        if self.cfg['dataset']['nansManagement'] == 'drop':
+            df_all.dropna(inplace=True)
+        elif self.cfg['dataset']['nansManagement'] == 'interpolate':
+            df_all = df_all.interpolate(method='linear')
+        elif self.cfg['dataset']['nansManagement'] == 'ffill':
+            df_all = df_all.ffill()
+        elif self.cfg['dataset']['nansManagement'] == 'bfill':
+            df_all = df_all.bfill()
+        else:
+            self.logger.info('"%s" nans management not available: drop option is chosen' %
+                             self.cfg['dataset']['nansManagement'])
+            df_all.dropna(inplace=True)
+
+        return df_all
+
+    def prepare_Xy_dfs(self):
+        # Manage the (eventual) nans in the dataset
+        df_all = self.nans_management()
 
         df_all = df_all.set_index('date')
         df_y = pd.DataFrame(df_all, columns=[self.target])
@@ -393,7 +415,7 @@ class OptimizedModelCreator:
                 'case': self.forecast_type,
                 'target': self.target,
                 'family': self.cfg['family'],
-                'datasetPeriod': self.cfg['datasetPeriod'],
+                'datasetPeriod': self.cfg['dataset'],
                 'hpoBeforeFSPars': self.cfg['hpoBeforeFS'],
                 'fsPars': self.cfg['fs'],
                 'hpoAfterFSPars': self.cfg['hpoAfterFS'],
