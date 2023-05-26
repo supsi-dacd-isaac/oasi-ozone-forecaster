@@ -45,32 +45,33 @@ if __name__ == "__main__":
 
             for target in cfg['regions'][k_region]['targets'][forecast_type]:
 
+                ft_desc = '%s__%s -> ' % (forecast_type, target)
                 # Phase N°1: Data retrieving
                 omc = OptimizedModelCreator(ig, target, k_region, forecast_type, cfg, logger)
                 omc.fill_datasets(k_region, target)
 
-                logger.info('Dataset main settings: observations = %i, features = %i' % (len(omc.dataset),
-                                                                                         len(omc.dataset.columns)))
+                logger.info('%sDataset main settings: observations = %i, features = %i' % (ft_desc, len(omc.dataset),
+                                                                                           len(omc.dataset.columns)))
 
                 # Phase N°2: First (eventual) hyperparameters optimization, performed considering all the features
                 if cfg['hpoBeforeFS']['enabled'] is True:
-                    logger.info('First HPOPT starting')
+                    logger.info('%sFirst HPOPT starting' % ft_desc)
                     omc.do_hyperparameters_optimization('before_fs')
-                    logger.info('First HPOPT ending')
+                    logger.info('%sFirst HPOPT ending' % ft_desc)
 
                 # Phase N°3: Features selection via Shapley values considering the optimized hyperparameters
-                logger.info('FS starting')
+                logger.info('%sFS starting' % ft_desc)
                 omc.do_feature_selection()
-                logger.info('FS ending')
+                logger.info('%sFS ending' % ft_desc)
 
                 # Phase N°4: Second hyperparameters optimization, performed considering only the features selected by FS
-                logger.info('Second HPOPT starting')
+                logger.info('%sSecond HPOPT starting' % ft_desc)
                 omc.do_hyperparameters_optimization('after_fs')
-                logger.info('Second HPOPT ending')
+                logger.info('%sSecond HPOPT ending' % ft_desc)
 
                 # # Phase N°5: Model training
-                logger.info('MT starting')
+                logger.info('%sMT starting' % ft_desc)
                 omc.do_models_training()
-                logger.info('MT ending')
+                logger.info('%sMT ending' % ft_desc)
 
     logger.info('Ending program')
