@@ -227,6 +227,11 @@ class OptimizedModelCreator:
             cv_idxs = self.get_sequential_cv_idxs(len(df_X_dataset.index), cfg_hpo['cv']['folds'])
         cv = (f for f in cv_idxs)
 
+        # todo weights management is not applied during the hyperparameters optimization because the currently
+        #  used version of pyforecaster (0.1) does not support it with 'full' hpo_type
+        # Manage the samples weights
+        # sample_weights = self.create_weights(self.df_y.iloc[:, [0]][self.target].values)
+
         study, replies = hyperpar_optimizer(df_X_dataset, self.df_y.iloc[:, [0]], lightgbm.LGBMRegressor(),
                                             n_trials=cfg_hpo['trials'], metric=self.METRICS[cfg_hpo['metric']],
                                             cv=cv, param_space_fun=self.param_space_fun, hpo_type=cfg_hpo['cv']['type'],
@@ -261,6 +266,20 @@ class OptimizedModelCreator:
         shapley_values = np.abs(shap_values).mean(axis=0)
         return shapley_values
 
+    def create_weights(self, y):
+        weights = np.ones(len(y))
+        for k, v in self.cfg['regions'][self.region]['weights'][self.forecast_type].items():
+            if k[0] == '>':
+                weights[y > float(k[1:])] = float(v)
+            elif k[0] == '<':
+                weights[y < float(k[1:])] = float(v)
+            elif k[0] == '=':
+                weights[y == float(k[1:])] = float(v)
+            else:
+                self.logger.error('Unable to apply weights for configuration: [%s,%.1f]' % (k, v))
+                return None
+        return weights
+
     def do_feature_selection(self):
         # Initialize an array to store Shapley values for each feature
         shapley_values = np.zeros(self.df_X_all.shape[1])
@@ -290,8 +309,11 @@ class OptimizedModelCreator:
             X_train, X_test = X[train_idx], X[test_idx]
             y_train, y_test = y[train_idx], y[test_idx]
 
+            # Manage the samples weights
+            sample_weights = self.create_weights(y_train)
+
             # Train the LightGBM regressor
-            fs_lgb.fit(X_train, y_train)
+            fs_lgb.fit(X_train, y_train, sample_weight=sample_weights)
 
             # Calculate Shapley values for the current fold
             fold_shapley_values = self.calculate_shapley_values(fs_lgb, X_test)
@@ -338,9 +360,11 @@ class OptimizedModelCreator:
 
     def do_models_training(self):
         # Training data preparation
-        train_data_Xy_lgb = lightgbm.Dataset(self.df_X_best, label=self.df_y)
         train_data_X = np.array(self.df_X_best.values)
         train_data_y = np.array(self.df_y.values).ravel()
+        sample_weights = self.create_weights(train_data_y)
+
+        train_data_Xy_lgb = lightgbm.Dataset(self.df_X_best, label=self.df_y, weight=sample_weights)
 
         # LightGBM training
         self.logger.info('LightGBM training started')
@@ -363,26 +387,27 @@ class OptimizedModelCreator:
             xgb_obj = 'reg:linear'
 
         # QFR training
+        self.logger.info('QRF training started')
         qrf_reg = qfrfQuantileRandomForestRegressor(n_estimators=lgb_reg.params['num_iterations'],
                                                     max_leaf_nodes=lgb_reg.params['num_leaves'],
                                                     max_features=lgb_reg.params['colsample_bytree'],
                                                     criterion=qrf_criterion)
-        qrf_reg.fit(train_data_X, train_data_y)
-        self.logger.info('RFQR training ended')
+        qrf_reg.fit(train_data_X, train_data_y, sample_weight=sample_weights)
+        self.logger.info('QRF training ended')
 
         # NGB + XGB training
         self.logger.info('NGBoost training started')
         ngb_reg = NGBRegressor(n_estimators=lgb_reg.params['num_iterations'],
                                learning_rate=lgb_reg.params['learning_rate'], Dist=Normal, Base=default_tree_learner,
                                natural_gradient=True, verbose=False, Score=MLE, random_state=500)
-        ngb_reg.fit(train_data_X, train_data_y)
+        ngb_reg.fit(train_data_X, train_data_y, sample_weight=sample_weights)
         self.logger.info('NGBoost training ended')
 
         self.logger.info('XGBoost training started')
         xgb_reg = xgb.XGBRegressor(objective=xgb_obj, colsample_bytree=lgb_reg.params['colsample_bytree'],
                                    learning_rate=lgb_reg.params['learning_rate'], max_depth=5, alpha=10,
                                    n_estimators=lgb_reg.params['num_iterations'])
-        xgb_reg.fit(train_data_X, train_data_y)
+        xgb_reg.fit(train_data_X, train_data_y, sample_weight=sample_weights)
         self.logger.info('XGBoost training ended')
 
         self.saving_models_training_results(lgb_reg, qrf_reg, ngb_reg, xgb_reg)
@@ -405,17 +430,13 @@ class OptimizedModelCreator:
         ngboost_pars = {key: ngb_reg.get_params()[key] for key in ngboost_keys if key in ngb_reg.get_params()}
         metadata = {
             'general': {
-                'region': {
-                    'name': self.region,
-                    'measureStations': self.cfg['regions'][self.region]['measureStations'],
-                    'forecastStations': self.cfg['regions'][self.region]['forecastStations'],
-                    'copernicusStations': self.cfg['regions'][self.region]['copernicusStations'],
-                    'dataToConsiderMinLimit': self.cfg['regions'][self.region]['dataToConsiderMinLimit'],
-                },
                 'case': self.forecast_type,
                 'target': self.target,
                 'family': self.cfg['family'],
+                'region': self.region,
+                'dataToConsiderMinLimit': self.cfg['regions'][self.region]['dataToConsiderMinLimit'],
                 'datasetPeriod': self.cfg['dataset'],
+                'weights': self.cfg['regions'][self.region]['weights'][self.forecast_type],
                 'hpoBeforeFSPars': self.cfg['hpoBeforeFS'],
                 'fsPars': self.cfg['fs'],
                 'hpoAfterFSPars': self.cfg['hpoAfterFS'],
@@ -426,7 +447,12 @@ class OptimizedModelCreator:
                 "quantileRandomForestRegressor": qrf_reg.forest.get_params(),
                 "ngboost": ngboost_pars,
                 "xgboost": xgb_reg.get_params()
-            }
+            },
+            'stations': {
+                'measureStations': self.cfg['regions'][self.region]['measureStations'],
+                'forecastStations': self.cfg['regions'][self.region]['forecastStations'],
+                'copernicusStations': self.cfg['regions'][self.region]['copernicusStations']
+            },
         }
         with open('%s%smetadata_%s.json' % (target_folder, os.sep, files_id), 'w') as of:
             json.dump(metadata, of, indent=2)
