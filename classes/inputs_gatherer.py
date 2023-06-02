@@ -413,8 +413,13 @@ class InputsGatherer:
             dt_end_meas = dt_start_meas + timedelta(hours=time_interval)
             res_meas = self.do_forecast_substitution(location, signal_code, dt_start_meas, dt_end_meas, None)
             if res_meas is not None and 'series' in res_meas.raw.keys():
-                val = float(res_meas.raw['series'][0]['values'][0][1])
-                self.io_data_sub[signal_data] = val
+                try:
+                    val = float(res_meas.raw['series'][0]['values'][0][1])
+                    self.io_data_sub[signal_data] = val
+                except Exception as e:
+                    self.logger.error('EXCEPTION: %s' % str(e))
+                    self.logger.error('Unable to find a substitute for signal %s' % signal_data)
+                    self.io_data_sub[signal_data] = np.nan
             else:
                 self.io_data_sub[signal_data] = np.nan
 
@@ -1058,8 +1063,8 @@ class InputsGatherer:
                         if k_sig in list(self.io_data.keys()) and k_sig in list(self.io_data_sub.keys()):
                             if math.isnan(self.io_data_sub[k_sig]) is False:
 
-                                # ERROR = MEASURE (substitute) - WEATHER FORECAST
-                                diff = self.io_data_sub[k_sig] - self.io_data[k_sig]
+                                # ERROR = WEATHER FORECAST - MEASURE (substitute)
+                                diff = self.io_data[k_sig] - self.io_data_sub[k_sig]
                                 diff_all[k_sig] = diff
                                 # print(signals_rank[i], k_sig, self.io_data[k_sig], self.io_data_sub[k_sig], diff)
 
@@ -1071,13 +1076,14 @@ class InputsGatherer:
                     # print(diff_ranks)
                     # Get the O3 predictions
                     _ , target_signal, predictor =  input_cfg_file.split(os.sep)[-1].split('.')[0].split('_')
+                    # todo to configure
                     res_pred = self.get_ngb_prediction(region_code, predictor, self.forecast_type, target_signal, str_date, str_date)
                     res_meas = self.get_target_measure(region_code, self.cfg['measuredSignal'], str_date, str_date)
                     pred = res_pred.raw['series'][0]['values']
                     meas = res_meas.raw['series'][0]['values']
 
-                    # ERROR = MEASURE - OZONE FORECAST
-                    err_output = meas[0][1] - pred[0][1]
+                    # ERROR = OZONE FORECAST - MEASURE
+                    err_output = pred[0][1] - meas[0][1]
 
                     for ks in diff_signals.keys():
                         if len(diff_signals[ks]) > 0:
