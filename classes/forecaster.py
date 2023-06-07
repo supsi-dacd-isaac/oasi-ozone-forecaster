@@ -147,20 +147,20 @@ class Forecaster:
             std_ngb_dist = res_ngb.dist.std()[0]
             self.ngb_output_dist = ModelTrainer.handle_ngb_normal_dist_output(self.cfg, mean_ngb_dist, std_ngb_dist,
                                                                               region_data['code'])
-            self.logger.info('Performed prediction by NGBoost: model=%s ' % predictor_file)
+            self.logger.info('Performed prediction by NGBoost: file=%s ' % predictor_file)
 
             # QRF
             self.qrf_output = ModelTrainer.handle_qrf_output(self.cfg, qrf_w, self.input_df, region_data['code'])
             self.perc_available_features = round(self.available_features * 100 / len(self.input_df.columns), 0)
-            self.logger.info('Performed prediction by QRF: model=%s ' % predictor_file)
+            self.logger.info('Performed prediction by QRF: file=%s ' % predictor_file)
 
             # XGBoost
             self.xg_reg_prediction = xg_reg.predict(self.input_df)[0]
-            self.logger.info('Performed prediction by XGBoost: model=%s ' % predictor_file)
+            self.logger.info('Performed prediction by XGBoost: file=%s ' % predictor_file)
 
             # LightGBM
             self.light_gbm_reg_prediction = light_gbm.predict(self.input_df)[0]
-            self.logger.info('Performed prediction by LightGBM: model=%s ' % predictor_file)
+            self.logger.info('Performed prediction by LightGBM: file=%s ' % predictor_file)
 
             # Define best tag: i.e. the current predictor is the best one for this case
             family = self.cfg['regions'][region_data['code']]['forecaster']['bestLabels'][self.forecast_type][self.output_signal]['family']
@@ -188,14 +188,14 @@ class Forecaster:
                 'time': self.day_to_predict,
                 'measurement': self.cfg['influxDB']['measurementOutputNormDistForecast'],
                 'fields': {
-                    "Mean": mean_ngb_dist,
-                    "StdDev": std_ngb_dist,
-                    "UpperK1": mean_ngb_dist + std_ngb_dist,
-                    "LowerK1": mean_ngb_dist - std_ngb_dist,
-                    "UpperK2": mean_ngb_dist + std_ngb_dist * 2,
-                    "LowerK2": mean_ngb_dist - std_ngb_dist * 2,
-                    "UpperK3": mean_ngb_dist + std_ngb_dist * 3,
-                    "LowerK3": mean_ngb_dist - std_ngb_dist * 3,
+                    "Mean": float(mean_ngb_dist),
+                    "StdDev": float(std_ngb_dist),
+                    "UpperK1": float(mean_ngb_dist) + float(std_ngb_dist),
+                    "LowerK1": float(mean_ngb_dist) - float(std_ngb_dist),
+                    "UpperK2": float(mean_ngb_dist) + float(std_ngb_dist) * 2.0,
+                    "LowerK2": float(mean_ngb_dist) - float(std_ngb_dist) * 2.0,
+                    "UpperK3": float(mean_ngb_dist) + float(std_ngb_dist) * 3.0,
+                    "LowerK3": float(mean_ngb_dist) - float(std_ngb_dist) * 3.0,
                 },
                 'tags': dict(location=region_data['code'], case=self.forecast_type, flag_best=self.flag_best,
                              predictor=self.model_name, signal=self.output_signal)
@@ -232,8 +232,12 @@ class Forecaster:
             dps.append(point)
 
             # Write results on InfluxDB
-            self.influxdb_client.write_points(dps, time_precision='s')
-            self.logger.info('Inserted %i points in InfluxDB' % len(dps))
+            try:
+                self.influxdb_client.write_points(dps, time_precision='s')
+                self.logger.info('Inserted %i points in InfluxDB' % len(dps))
+            except Exception as e:
+                self.logger.warning('EXCEPTION: %s' % str(e))
+                self.logger.warning('Unable to insert results for regressors of file %s ' % predictor_file)
         else:
             self.logger.error('Model %s can not perform prediction, some features cannot be surrogated' % predictor_file)
             self.ngb_output = None
