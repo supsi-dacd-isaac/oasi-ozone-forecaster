@@ -299,9 +299,12 @@ def perform_forecast(day_case, forecast_type):
         i = 0
         while True:
             item = queue_results.get()
+            logger.info('Received msg N° %.2i (%s / %s / %s / %s)' % (i+1, item['region'], item['forecast_type'],
+                                                                      item['output_signal'], item['predictor']))
             results.append(item)
             i += 1
             if i == len(procs):
+                logger.info('Received all messages (%i) via queue' % len(procs))
                 break
 
     logger.info('Print the predictors results')
@@ -309,15 +312,15 @@ def perform_forecast(day_case, forecast_type):
         dp_desc = datetime.fromtimestamp(result['day_to_predict']).strftime('%Y-%m-%d')
         if result['flag_prediction'] is True:
             logger.info('[%s;%s;%s;%s;%s] -> predictions: [ngb = %.1f, lgb = %.1f, '
-                        'xgb = %.1f, rqrf = %.1f]' % (dp_desc,
-                                                      result['region'],
-                                                      result['forecast_type'],
-                                                      result['output_signal'],
-                                                      result['predictor'],
-                                                      result['ngb_prediction'],
-                                                      result['lgb_prediction'],
-                                                      result['xgb_prediction'],
-                                                      result['qrf_prediction']['quantiles']['perc50']))
+                        'xgb = %.1f, qrf = %.1f]' % (dp_desc,
+                                                     result['region'],
+                                                     result['forecast_type'],
+                                                     result['output_signal'],
+                                                     result['predictor'],
+                                                     result['ngb_prediction'],
+                                                     result['lgb_prediction'],
+                                                     result['xgb_prediction'],
+                                                     result['qrf_prediction']['quantiles']['perc50']))
         else:
             logger.info('[%s;%s;%s;%s;%s] -> prediction not performed' % (dp_desc,
                                                                           result['region'],
