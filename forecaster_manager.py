@@ -45,7 +45,7 @@ def select_best_predictor_value(result_prediction):
         return result_prediction['xgb_prediction']
     elif result_prediction['best_predictor'] == 'lgb':
         return result_prediction['lgb_prediction']
-    elif result_prediction['best_predictor'] == 'qfr':
+    elif result_prediction['best_predictor'] == 'qrf':
         return result_prediction['qrf_prediction']['quantiles']['perc50']
 
 
