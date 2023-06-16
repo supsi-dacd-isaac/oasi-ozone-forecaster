@@ -71,34 +71,37 @@ def upload_best_results(prediction_results):
     ordered_res, res_data = sort_results(prediction_results)
 
     # Create data rows
-    dt = datetime.fromtimestamp(res_data[ordered_res[0]]['day_to_predict'])
-    for k in ordered_res:
-        result = res_data[k]
-        if result['flag_best'] is True:
-            predicted_value = select_best_predictor_value(result)
+    if len(ordered_res) > 0:
+        dt = datetime.fromtimestamp(res_data[ordered_res[0]]['day_to_predict'])
+        for k in ordered_res:
+            result = res_data[k]
+            if result['flag_best'] is True:
+                predicted_value = select_best_predictor_value(result)
 
-            str_results = '%s%s,%s,%s,%s,%.1f,%.0f' % (str_results, dt.strftime('%Y-%m-%d'), result['region'],
-                                                       forecast_type, result['output_signal'],
-                                                       predicted_value, result['perc_available_features'])
-            for k in result['qrf_prediction']['thresholds'].keys():
-                str_results = '%s,%.1f' % (str_results, result['qrf_prediction']['thresholds'][k]*100)
+                str_results = '%s%s,%s,%s,%s,%.1f,%.0f' % (str_results, dt.strftime('%Y-%m-%d'), result['region'],
+                                                           forecast_type, result['output_signal'],
+                                                           predicted_value, result['perc_available_features'])
+                for k in result['qrf_prediction']['thresholds'].keys():
+                    str_results = '%s,%.1f' % (str_results, result['qrf_prediction']['thresholds'][k]*100)
 
-            str_results = '%s\n' % str_results
+                str_results = '%s\n' % str_results
 
-    # Results file creation
-    results_file = '%s_%s.csv' % (dt.strftime('%Y-%m-%d'), forecast_type)
-    fw = open('%s%s%s' % (cfg['ftp']['localFolders']['tmp'], os.sep, results_file), 'w')
-    fw.write(str_results)
-    fw.close()
+        # Results file creation
+        results_file = '%s_%s.csv' % (dt.strftime('%Y-%m-%d'), forecast_type)
+        fw = open('%s%s%s' % (cfg['ftp']['localFolders']['tmp'], os.sep, results_file), 'w')
+        fw.write(str_results)
+        fw.close()
 
-    # Results file uploading
-    dm = DataManager(influx_client, cfg, logger)
-    dm.open_ftp_connection()
-    dm.upload_file(results_file)
-    dm.close_ftp_connection()
+        # Results file uploading
+        dm = DataManager(influx_client, cfg, logger)
+        dm.open_ftp_connection()
+        dm.upload_file(results_file)
+        dm.close_ftp_connection()
 
-    # Results file deletion
-    os.unlink('%s%s%s' % (cfg['ftp']['localFolders']['tmp'], os.sep, results_file))
+        # Results file deletion
+        os.unlink('%s%s%s' % (cfg['ftp']['localFolders']['tmp'], os.sep, results_file))
+    else:
+        logger.warning('No best cases configured, data file will not be created and uploaded to remote FTP server')
 
 
 def notify_summary(prediction_results):

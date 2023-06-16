@@ -164,8 +164,11 @@ class Forecaster:
 
             # Define best tag: i.e. the current predictor is the best one for this case
             family = self.cfg['regions'][region_data['code']]['forecaster']['bestLabels'][self.forecast_type][self.output_signal]['family']
-            if family in predictor_file:
-                self.flag_best = True
+            if family is not None:
+                if family in predictor_file:
+                    self.flag_best = True
+                else:
+                    self.flag_best = False
             else:
                 self.flag_best = False
 
