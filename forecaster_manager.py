@@ -9,6 +9,7 @@ import logging
 import json
 import glob
 import time
+import datetime
 
 from influxdb import InfluxDBClient
 from datetime import timedelta, datetime
@@ -206,10 +207,9 @@ def predictor_process(inputs_gatherer, input_cfg_file, forecast_type, region, ou
 
 
 def perform_single_forecast(inputs_gatherer, input_cfg_file, forecast_type, region_data, output_signal, model_name, cfg, logger):
-    logger.info('Launch prediction -> type: %s, location: %s, signal to predict: %s, model name: %s' % (forecast_type,
-                                                                                                        region_data['code'],
-                                                                                                        output_signal,
-                                                                                                        model_name))
+    str_day_to_predict = datetime.fromtimestamp(inputs_gatherer.day_to_predict).strftime('%Y-%m-%d')
+    logger.info('Launch prediction: [type: %s; location: %s; day to predict: %s; signal to predict: %s; '
+                'family: %s]' % (forecast_type, region_data['code'], str_day_to_predict, output_signal, model_name))
 
     forecaster = Forecaster(influxdb_client=influx_client, forecast_type=forecast_type, region=region_data,
                             output_signal=output_signal, model_name=model_name, cfg=cfg, logger=logger)
