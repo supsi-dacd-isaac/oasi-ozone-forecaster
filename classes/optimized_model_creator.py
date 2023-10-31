@@ -28,7 +28,7 @@ class OptimizedModelCreator:
     This class will perform hyperparameters optimization + feature selection + model training
     """
 
-    def __init__(self, ig, target, region, forecast_type, cfg, logger):
+    def __init__(self, ig, target, region, forecast_type, cfg, logger, override=False):
         """
         Constructor
         :param ig: Inputs gatherer
@@ -61,7 +61,7 @@ class OptimizedModelCreator:
         self.METRICS = {'nmae': nmae, 'err': err, 'squerr': squerr, 'rmse': rmse, 'mape': mape}
         self.root_folder = self.get_data_folder(self.region, self.forecast_type, self.cfg)
         self.result_folder = self.get_result_folder(self.region, self.forecast_type, self.target, self.cfg)
-        if os.path.exists(self.result_folder):
+        if os.path.exists(self.result_folder) and override is False:
             self.logger.error('Result folder %s already exists' % self.result_folder)
             self.logger.info('Exit program')
             sys.exit(-3)
@@ -241,14 +241,21 @@ class OptimizedModelCreator:
         self.hp_optimized_result = study
 
         # Save results
-        self.save_best_result(case)
+        self.save_best_result(case, cfg_hpo['metric'])
 
-    def save_best_result(self, case):
+    def save_best_result(self, case, metric):
         target_folder = '%shpo_%s' % (self.result_folder, case)
         if not os.path.exists(target_folder):
             os.makedirs(target_folder)
-        with open('%s%s%s_%s_best_pars.json' % (target_folder, os.sep, self.cfg['family'], self.target), 'w') as of:
-            json.dump(self.hp_optimized_result.best_params, of, indent=2)
+
+        best_trail_data = {
+            'metric': metric,
+            'value': self.hp_optimized_result.best_trial.value,
+            'values': self.hp_optimized_result.best_trial.values,
+            'params': self.hp_optimized_result.best_trial.params,
+        }
+        with open('%s%s%s_%s_best_trial.json' % (target_folder, os.sep, self.cfg['family'], self.target), 'w') as of:
+            json.dump(best_trail_data, of, indent=2)
 
     def initialize_lgb_model(self, pars):
         lgb = lightgbm.LGBMRegressor()
@@ -460,3 +467,71 @@ class OptimizedModelCreator:
         # Models file (structure needed for the compatibility with forecast_manager script
         pickle.dump([ngb_reg, qrf_reg, qrf_reg, xgb_reg, lgb_reg], open('%s%spredictor_%s.pkl' % (target_folder, os.sep,
                                                                                                   files_id), 'wb'))
+
+    def corr_analysis(self, target):
+        # Get features data
+        feat_file_name = '%sfs/%s_%s_features_rank.csv' % (self.result_folder, self.cfg['family'], target)
+        fs_data = pd.read_csv(feat_file_name)
+
+        corrs = {}
+        too_correlated = {}
+        limit = self.cfg['fs']['corrAnalysis']['firstFeaturesToCheck']
+        corr_threshold = self.cfg['fs']['corrAnalysis']['corrMaximumValue']
+        features_to_consider = self.cfg['fs']['corrAnalysis']['featuresToSelect']
+
+        for i in range(0, len(fs_data['feature'].values[0:limit])):
+            x1_name = fs_data['feature'].values[i]
+            self.logger.info('corr[(rank %.3d - %s) vs first %3i features] > %.2f: Start analysis' % (i, x1_name, limit,
+                                                                                                      corr_threshold))
+            flag_found = False
+            for j in range(0, len(fs_data['feature'].values[0:limit])):
+                x2_name = fs_data['feature'].values[j]
+                if x1_name != x2_name and (x2_name, x1_name) not in corrs.keys():
+                    series_x1 = self.df_X_all[x1_name]
+                    series_x2 = self.df_X_all[x2_name]
+                    corr_x1_x2 = series_x1.corr(series_x2)
+                    corrs[(x1_name, x2_name)] = corr_x1_x2
+
+                    if corr_x1_x2 > corr_threshold:
+                        if x2_name not in too_correlated:
+                            too_correlated[x2_name] = {'corr_with': x1_name, 'corr': corr_x1_x2}
+                            flag_found = True
+
+            if flag_found is True:
+                self.logger.info('corr[(rank %.3d - %s) vs first %3i features] > %.2f: At least one case' % (i, x1_name,
+                                                                                                             limit,
+                                                                                                             corr_threshold))
+            else:
+                self.logger.info('corr[(rank %.3d - %s)) vs first %3i features] > %.2f: No cases' % (i, x1_name, limit,
+                                                                                                     corr_threshold))
+
+        # Add the correlations to the related columns
+        res = []
+        fs_data_corr = copy.deepcopy(fs_data.head(limit))
+        for feat in fs_data['feature'].values[0:limit]:
+            if feat in too_correlated.keys():
+                res.append(too_correlated[feat])
+            else:
+                res.append(None)
+        fs_data_corr['corr'] = res
+
+        # Create the dataset without the too-correlated features
+        fs_data_corr_filtered = fs_data_corr[fs_data_corr['corr'].isna() | (fs_data_corr['corr'] == None)]
+        fs_data_corr_filtered = fs_data_corr_filtered.reset_index(drop=True)
+        fs_data_corr_filtered['rank'] = fs_data_corr_filtered.index + 1
+        fs_data_corr_filtered = fs_data_corr_filtered.drop(columns=['corr'])
+
+        # Set the dataframe containing only the filtered features
+        if len(fs_data_corr_filtered['feature'].values) < features_to_consider:
+            self.logger.warning('Only %i passed the correlation test, they should be at least %i' %
+                                (len(fs_data_corr_filtered['feature'].values), features_to_consider))
+            self.df_X_best = self.df_X_all[fs_data_corr_filtered['feature'].values].copy()
+        else:
+            self.df_X_best = self.df_X_all[fs_data_corr_filtered['feature'].values[0:features_to_consider]].copy()
+
+        # Save the results
+        os.mkdir('%sfs_corr_filter' % self.result_folder)
+        fs_data_corr_filtered.to_csv('%sfs_corr_filter/%s_%s_features_rank.csv' % (self.result_folder, self.cfg['family'], target), index=False)
+        fs_data_corr.to_csv('%sfs_corr_filter/%s_%s_features_rank_all.csv' % (self.result_folder, self.cfg['family'], target), index=False)
+        with open('%sfs_corr_filter/%s_%s_best_features.json' % (self.result_folder, self.cfg['family'], target), 'w') as of:
+            json.dump({'signals': list(self.df_X_best.columns)}, of, indent=2)

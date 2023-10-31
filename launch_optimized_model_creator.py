@@ -64,12 +64,18 @@ if __name__ == "__main__":
                 omc.do_feature_selection()
                 logger.info('%sFS ending' % ft_desc)
 
-                # Phase N°4: Second hyperparameters optimization, performed considering only the features selected by FS
+                # Phase N°4: Features linear correlation analysis
+                if cfg['fs']['corrAnalysis']['enabled'] is True:
+                    logger.info('%sFCA starting' % ft_desc)
+                    omc.corr_analysis(target)
+                    logger.info('%sFCA ending' % ft_desc)
+
+                # Phase N°5: Second hyperparameters optimization, performed considering only the features selected by FS
                 logger.info('%sSecond HPOPT starting' % ft_desc)
                 omc.do_hyperparameters_optimization('after_fs')
                 logger.info('%sSecond HPOPT ending' % ft_desc)
 
-                # # Phase N°5: Model training
+                # Phase N°6: Model training
                 logger.info('%sMT starting' % ft_desc)
                 omc.do_models_training()
                 logger.info('%sMT ending' % ft_desc)
