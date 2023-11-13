@@ -42,17 +42,19 @@ def calc_output(measurement, output_cfg, year, start_day, end_day):
     df_daily_locs = list()
     for location in output_cfg['sourceLocations']:
         df_tmp = res[(measurement, (('location', location),))]
-        df_tmp.columns = [location]
-        df_tmp['dt'] = df_tmp.index
+        # Check if the the dataframe contains data
+        if len(df_tmp) > 0:
+            df_tmp.columns = [location]
+            df_tmp['dt'] = df_tmp.index
 
-        # Grouping handling the daily aggregation
-        if output_cfg['aggregations']['daily'] == 'max':
-            df_tmp_agg = df_tmp.groupby(pd.Grouper(key='dt', axis=0, freq='D')).max()
-        elif output_cfg['aggregations']['daily'] == 'mean':
-            df_tmp_agg = df_tmp.groupby(pd.Grouper(key='dt', axis=0, freq='D')).mean()
-        elif output_cfg['aggregations']['daily'] == 'min':
-            df_tmp_agg = df_tmp.groupby(pd.Grouper(key='dt', axis=0, freq='D')).min()
-        df_daily_locs.append(df_tmp_agg)
+            # Grouping handling the daily aggregation
+            if output_cfg['aggregations']['daily'] == 'max':
+                df_tmp_agg = df_tmp.groupby(pd.Grouper(key='dt', axis=0, freq='D')).max()
+            elif output_cfg['aggregations']['daily'] == 'mean':
+                df_tmp_agg = df_tmp.groupby(pd.Grouper(key='dt', axis=0, freq='D')).mean()
+            elif output_cfg['aggregations']['daily'] == 'min':
+                df_tmp_agg = df_tmp.groupby(pd.Grouper(key='dt', axis=0, freq='D')).min()
+            df_daily_locs.append(df_tmp_agg)
 
     df_ret = pd.concat(df_daily_locs, axis=1)
 
