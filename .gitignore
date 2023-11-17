@@ -3,6 +3,7 @@ archive
 conf/*.json
 conf/O3*
 conf/PM*
+readmes/*
 data
 dataset_joining*
 copernicus*
