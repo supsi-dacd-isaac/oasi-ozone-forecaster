@@ -483,27 +483,36 @@ class OptimizedModelCreator:
             x1_name = fs_data['feature'].values[i]
             self.logger.info('corr[(rank %.3d - %s) vs first %3i features] > %.2f: Start analysis' % (i, x1_name, limit,
                                                                                                       corr_threshold))
-            flag_found = False
-            for j in range(0, len(fs_data['feature'].values[0:limit])):
-                x2_name = fs_data['feature'].values[j]
-                if x1_name != x2_name and (x2_name, x1_name) not in corrs.keys():
-                    series_x1 = self.df_X_all[x1_name]
-                    series_x2 = self.df_X_all[x2_name]
-                    corr_x1_x2 = series_x1.corr(series_x2)
-                    corrs[(x1_name, x2_name)] = corr_x1_x2
 
-                    if corr_x1_x2 > corr_threshold:
-                        if x2_name not in too_correlated:
-                            too_correlated[x2_name] = {'corr_with': x1_name, 'corr': corr_x1_x2}
-                            flag_found = True
-
-            if flag_found is True:
-                self.logger.info('corr[(rank %.3d - %s) vs first %3i features] > %.2f: At least one case' % (i, x1_name,
-                                                                                                             limit,
-                                                                                                             corr_threshold))
+            # Check if x1_name is already correlated with something
+            if x1_name in too_correlated.keys():
+                self.logger.info('corr[(rank %.3d - %s) vs something already checked]: '
+                                 'Skip because already correlated (%s)' % (i, x1_name, too_correlated[x1_name]))
             else:
-                self.logger.info('corr[(rank %.3d - %s)) vs first %3i features] > %.2f: No cases' % (i, x1_name, limit,
-                                                                                                     corr_threshold))
+                flag_found = False
+                for j in range(0, len(fs_data['feature'].values[0:limit])):
+                    x2_name = fs_data['feature'].values[j]
+                    # Check the following no-go cases:
+                    # *) x1_name != x2_name
+                    # *) case (x2_name, x1_name) already calculated
+                    if x1_name != x2_name and (x2_name, x1_name) not in corrs.keys():
+                        series_x1 = self.df_X_all[x1_name]
+                        series_x2 = self.df_X_all[x2_name]
+                        corr_x1_x2 = series_x1.corr(series_x2)
+                        corrs[(x1_name, x2_name)] = corr_x1_x2
+
+                        if corr_x1_x2 > corr_threshold:
+                            if x2_name not in too_correlated:
+                                too_correlated[x2_name] = {'corr_with': x1_name, 'corr': corr_x1_x2}
+                                flag_found = True
+
+                if flag_found is True:
+                    self.logger.info('corr[(rank %.3d - %s) vs first %3i features] > %.2f: At least one case' % (i, x1_name,
+                                                                                                                 limit,
+                                                                                                                 corr_threshold))
+                else:
+                    self.logger.info('corr[(rank %.3d - %s)) vs first %3i features] > %.2f: No cases' % (i, x1_name, limit,
+                                                                                                         corr_threshold))
 
         # Add the correlations to the related columns
         res = []
