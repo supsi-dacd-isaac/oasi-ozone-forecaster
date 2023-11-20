@@ -472,8 +472,9 @@ if __name__ == "__main__":
                                     single_pred_kpis[interval['label']] = calc_kpis(meas, pred, interval['limits'][0],
                                                                                     interval['limits'][1])
                                 except Exception as e:
-                                    print('WARNING: Data not available for case %s, region %s, '
-                                          'interval [%i:%i], predictor %s' % (case, region, interval['limits'][0],
+                                    print('WARNING: Data not available for case %s, region %s, signal %s, '
+                                          'interval [%i:%i], predictor %s' % (case, region, predicted_signals[i],
+                                                                              interval['limits'][0],
                                                                               interval['limits'][1], predictor))
 
                             # Save the results

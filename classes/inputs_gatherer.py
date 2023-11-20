@@ -195,12 +195,19 @@ class InputsGatherer:
 
     def retrieve_past_mean(self, code):
 
-        query = 'SELECT mean(value) FROM %s WHERE code=\'%s\' AND case=\'%s\' AND ' \
-                'time>=\'%s\' AND time<\'%s\'' % (self.cfg['influxDB']['measurementInputsHistory'], code,
-                                                  self.forecast_type,
-                                                  self.cfg['predictionGeneralSettings']['startDateForMeanImputation'],
-                                                  datetime.fromtimestamp(self.day_to_predict).strftime('%Y-%m-%d'))
-
+        if self.cfg['predictionGeneralSettings']['meanImputation']['case'] == 'fixed':
+            query = 'SELECT mean(value) FROM %s WHERE code=\'%s\' AND case=\'%s\' AND ' \
+                    'time>=\'%s\' AND time<\'%s\'' % (self.cfg['influxDB']['measurementInputsHistory'], code,
+                                                      self.forecast_type,
+                                                      self.cfg['predictionGeneralSettings']['meanImputation']['since'],
+                                                      datetime.fromtimestamp(self.day_to_predict).strftime('%Y-%m-%d'))
+        else:
+            days_to_go_back = int(self.cfg['predictionGeneralSettings']['meanImputation']['case'].replace('last', '')[:-1])
+            since = datetime.fromtimestamp(self.day_to_predict) - timedelta(days_to_go_back)
+            query = 'SELECT mean(value) FROM %s WHERE code=\'%s\' AND case=\'%s\' AND ' \
+                    'time>=\'%s\' AND time<\'%s\'' % (self.cfg['influxDB']['measurementInputsHistory'], code,
+                                                      self.forecast_type, since.strftime('%Y-%m-%d'),
+                                                      datetime.fromtimestamp(self.day_to_predict).strftime('%Y-%m-%d'))
         self.logger.info('Performing query: %s' % query)
         res = self.influxdb_client.query(query, epoch='s')
 
