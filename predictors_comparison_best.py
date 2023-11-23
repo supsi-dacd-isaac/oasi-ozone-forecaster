@@ -26,39 +26,11 @@ sns.set_style("ticks")
 def print_output_stat(region, start_date, end_date, values):
     for interval in cfg['intervals']:
         masked_values, _ = mask_dataset(values, values, interval['limits'][0], interval['limits'][1])
-        print('%s,%s,%s,%s,AVG=%.1f,MED=%.1f,STD=%.1f,N=%1d' % (region, interval['label'], start_date, end_date,
-                                                                np.mean(masked_values), np.median(masked_values),
-                                                                np.std(masked_values), len(masked_values)))
+        logger.info('%s,%s,%s,%s,AVG=%.1f,MED=%.1f,STD=%.1f,N=%1d' % (region, interval['label'], start_date, end_date,
+                                                                      np.mean(masked_values), np.median(masked_values),
+                                                                      np.std(masked_values), len(masked_values)))
 
-
-
-def print_confusion_matrix(meas, pred, desc, cfg):
-    class_meas = ['none'] * len(meas)
-    class_pred = ['none'] * len(pred)
-
-    labels = []
-    for interval in cfg['confusionMatrix']:
-        labels.append(interval['label'])
-
-    for i in range(0, len(meas)):
-        for interval in cfg['confusionMatrix']:
-            if interval['limits'][0] < meas[i] <= interval['limits'][1]:
-                class_meas[i] = interval['label']
-
-            if interval['limits'][0] < pred[i] <= interval['limits'][1]:
-                class_pred[i] = interval['label']
-
-    cm = confusion_matrix(class_meas, class_pred, labels=labels)
-    disp = ConfusionMatrixDisplay(confusion_matrix=cm, display_labels=labels)
-    disp.plot(cmap=plt.cm.Blues, values_format='g')
-    plt.title('CM %s' % desc)
-    plt.savefig('%s%s%s_cm.png' % (cfg['plotFolder'], os.sep, desc.replace(':', '_').replace('[', '').replace(']', '')), dpi=300)
-    plt.close()
-
-
-def mean_absolute_percentage_error(y_true, y_pred,
-                                   sample_weight=None,
-                                   multioutput='uniform_average'):
+def mean_absolute_percentage_error(y_true, y_pred, sample_weight=None, multioutput='uniform_average'):
     y_type, y_true, y_pred, multioutput = _check_reg_targets(
         y_true, y_pred, multioutput)
     check_consistent_length(y_true, y_pred, sample_weight)
@@ -114,85 +86,6 @@ def _check_reg_targets(y_true, y_pred, multioutput, dtype="numeric"):
     return y_type, y_true, y_pred, multioutput
 
 
-def do_hist_targets(errs, desc, cfg, hist_pars_code):
-    fig, ax = plt.subplots(figsize=(12, 12))
-    ax.set_title(desc, fontsize=20)
-    ax.set_xlim(cfg['histParams'][hist_pars_code]['xlim'])
-    ax.set_ylim(cfg['histParams'][hist_pars_code]['ylim'])
-    plt.xticks(np.arange(cfg['histParams'][hist_pars_code]['xtics']['start'],
-                         cfg['histParams'][hist_pars_code]['xtics']['end'],
-                         step=cfg['histParams'][hist_pars_code]['xtics']['step']))
-    plt.yticks(np.arange(cfg['histParams'][hist_pars_code]['ytics']['start'],
-                         cfg['histParams'][hist_pars_code]['ytics']['end'],
-                         step=cfg['histParams'][hist_pars_code]['ytics']['step']))
-    plt.hist(errs, cfg['histParams'][hist_pars_code]['bins'], facecolor=cfg['histParams'][hist_pars_code]['color'],
-             alpha=cfg['histParams'][hist_pars_code]['alpha'])
-    plt.xlabel(cfg['histParams'][hist_pars_code]['xlabel'], fontsize=18)
-    plt.ylabel('OCCURENCES', fontsize=18)
-    plt.grid()
-
-    plt.savefig('%s%s%s_%s.png' % (cfg['plotFolder'], os.sep, desc.replace(':', '_').replace('[', '').replace(']', ''),
-                                   cfg['histParams'][hist_pars_code]['fileNameSuffix']), dpi=300)
-    plt.close()
-
-
-def do_hist_all_targets(targets_data, desc, cfg, hist_pars_code):
-    fig, ax = plt.subplots(figsize=(12, 12))
-    ax.set_title(desc, fontsize=20)
-    ax.set_xlim(cfg['histParams'][hist_pars_code]['xlim'])
-    ax.set_ylim(cfg['histParams'][hist_pars_code]['ylim'])
-    plt.xticks(np.arange(cfg['histParams'][hist_pars_code]['xtics']['start'],
-                         cfg['histParams'][hist_pars_code]['xtics']['end'],
-                         step=cfg['histParams'][hist_pars_code]['xtics']['step']))
-    plt.yticks(np.arange(cfg['histParams'][hist_pars_code]['ytics']['start'],
-                         cfg['histParams'][hist_pars_code]['ytics']['end'],
-                         step=cfg['histParams'][hist_pars_code]['ytics']['step']))
-    legend = []
-    for k in targets_data.keys():
-        plt.hist(targets_data[k], cfg['histParams'][hist_pars_code]['bins'], alpha=cfg['histParams'][hist_pars_code]['alpha'])
-        legend.append(k)
-
-    plt.xlabel(cfg['histParams'][hist_pars_code]['xlabel'], fontsize=18)
-    plt.ylabel('OCCURENCES', fontsize=18)
-    plt.grid()
-    plt.legend(legend)
-
-    plt.savefig('%s%s%s_%s.png' % (cfg['plotFolder'], os.sep, desc.replace(':', '_').replace('[', '').replace(']', ''),
-                                   cfg['histParams'][hist_pars_code]['fileNameSuffix']), dpi=300)
-    plt.close()
-
-
-def do_hist_errors(pred_all, meas_all, desc, cfg, hist_pars_code):
-    fig, ax = plt.subplots(figsize=(12, 12))
-    ax.set_xlim(cfg['histParams'][hist_pars_code]['xlim'])
-    ax.set_ylim(cfg['histParams'][hist_pars_code]['ylim'])
-
-    legend_data = []
-    for th in cfg['histParams'][hist_pars_code]['thresholds']:
-        meas, pred = mask_dataset(meas_all, pred_all, th['limits'][0], th['limits'][1])
-        err = pred - meas
-        ax.set_title(desc, fontsize=20)
-        plt.xticks(np.arange(cfg['histParams'][hist_pars_code]['xtics']['start'],
-                             cfg['histParams'][hist_pars_code]['xtics']['end'],
-                             step=cfg['histParams'][hist_pars_code]['xtics']['step']))
-        plt.yticks(np.arange(cfg['histParams'][hist_pars_code]['ytics']['start'],
-                             cfg['histParams'][hist_pars_code]['ytics']['end'],
-                             step=cfg['histParams'][hist_pars_code]['ytics']['step']))
-        # plt.hist(err, cfg['histParams'][hist_pars_code]['bins'], facecolor=cfg['histParams'][hist_pars_code]['color'],
-        plt.hist(err, cfg['histParams'][hist_pars_code]['bins'],
-                 alpha=cfg['histParams'][hist_pars_code]['alpha'])
-        plt.xlabel(cfg['histParams'][hist_pars_code]['xlabel'], fontsize=18)
-        legend_data.append(th['label'])
-        plt.legend(legend_data, fontsize=14)
-        plt.ylabel('OCCURENCES', fontsize=18)
-        plt.grid()
-
-    # plt.show()
-    plt.savefig('%s%s%s_%s.png' % (cfg['plotFolder'], os.sep, desc.replace(':', '_').replace('[', '').replace(']', ''),
-                                   cfg['histParams'][hist_pars_code]['fileNameSuffix']), dpi=300)
-    plt.close()
-
-
 def calc_single_prediction(meas, region, predictor, case, signal, start_date, end_date, quantile=None):
     if quantile is not None:
         query = "select mean(PredictedValue) as prediction from %s " \
@@ -210,48 +103,6 @@ def calc_single_prediction(meas, region, predictor, case, signal, start_date, en
                                                             case, start_date, end_date)
     # logger.info(query)
     return influx_client.query(query)
-
-
-def calc_quantiles(meas, region, predictor, case, signal, start_date, end_date):
-    query = "select mean(PredictedValue) as prediction " \
-            "from %s " \
-            "where signal='%s' and location='%s' and " \
-            "predictor='%s' and case='%s' and time>='%sT00:00:00Z' and " \
-            "time<='%sT23:59:59Z' " \
-            "group by time(1d), location, predictor, quantile" % (meas, signal, region,
-                                                                  predictor, case, start_date, end_date)
-    # logger.info(query)
-    res = influx_client.query(query)
-    return cu.handle_quantiles(res, meas, region, predictor, quantiles)
-
-
-def do_qrf_plot(qs, desc, cfg):
-    for th in qs.keys():
-        fig, ax = plt.subplots(figsize=(8, 8))
-
-        ax.set_title('%s - %s' % (desc, 'QRF'))
-        ax.set_xlim([0, 1])
-        ax.set_ylim([0, 1])
-        ax.plot(quantiles_vals, qs[th]['reliability'], marker='o', markersize=6)
-        ax.plot(quantiles_vals, quantiles_vals, marker='o', markersize=6)
-        plt.xticks(np.arange(0, 1, step=0.1))
-        plt.yticks(np.arange(0, 1, step=0.1))
-        plt.xlabel('QUANTILES')
-        plt.ylabel('ESTIMATED')
-        plt.grid()
-        plt.savefig('%s/%s_%s_%s.png' % (cfg['plotFolder'], desc[1:-1].replace(':', '_'), 'QRF', th), dpi=300)
-        plt.close()
-
-        fig, ax = plt.subplots(figsize=(8, 8))
-        ax.set_title('%s - %s' % (desc, 'QRF'))
-        ax.set_xlim([0, 1])
-        ax.plot(np.arange(0.1, 1, step=0.1), qs[th]['skill'], marker='o', markersize=6)
-        plt.xticks(np.arange(0, 1, step=0.1))
-        plt.xlabel('QUANTILES')
-        plt.ylabel('QUANTILE SCORE')
-        plt.grid()
-        plt.savefig('%s/%s_%s_qs_%s.png' % (cfg['plotFolder'], desc[1:-1].replace(':', '_') , 'QRF', th), dpi=300)
-        plt.close()
 
 
 def mask_dataset(meas, pred, low, up):
@@ -303,41 +154,6 @@ def persistence(step, df_measure, low, up):
         'mape': mean_absolute_percentage_error(meas_mask, pred_mask)*1e2,
     }
 
-
-def print_kpis(start_date, end_date, pred_kpis, pred_pers_kpis):
-    print('\nCASE,REGION,TARGET,PREDICTOR,REGRESSOR,START,END,INTERVAL,MAE,RMSE,MBE,MAPE,CMAE,CRMSE,NMAE,NRMSE,NMBE,NCMAE,NCRMSE')
-    pers_flag = {}
-    for pred in pred_kpis.keys():
-        for interval in cfg['kpiTargetGraph']['intervals']:
-            if (pred[1], pred[2], interval['label']) not in pers_flag.keys() and pred[2][-2:] == 'd0':
-                str_data = '*,%s,%s,%s,*,%s,%s,%s' % (pred[1], pred[2], 'PERS', start_date, end_date, interval['label'])
-                str_data = '%s,%.1f' % (str_data, pred_pers_kpis[(pred[1], interval['label'], 'd0')]['mae'])
-                str_data = '%s,%.1f' % (str_data, pred_pers_kpis[(pred[1], interval['label'], 'd0')]['rmse'])
-                str_data = '%s,%.1f' % (str_data, pred_pers_kpis[(pred[1], interval['label'], 'd0')]['mbe'])
-                str_data = '%s,%.1f' % (str_data, pred_pers_kpis[(pred[1], interval['label'], 'd0')]['mape'])
-                str_data = '%s,*,*,*,*,*,*,*' % str_data
-                pers_flag[(pred[1], pred[2], interval['label'])] = True
-                print(str_data)
-
-        for kpis_set in pred_kpis[pred].keys():
-            str_data = '%s,%s,%s,%s,%s,%s,%s,%s' % (pred[0], pred[1], pred[2], pred[3], pred[4], start_date, end_date,
-                                                    kpis_set)
-
-            str_data = '%s,%.1f' % (str_data, pred_kpis[pred][kpis_set]['mae'])
-            str_data = '%s,%.1f' % (str_data, pred_kpis[pred][kpis_set]['rmse'])
-            str_data = '%s,%.1f' % (str_data, pred_kpis[pred][kpis_set]['mbe'])
-            str_data = '%s,%.1f' % (str_data, pred_kpis[pred][kpis_set]['mape'])
-            str_data = '%s,%.1f' % (str_data, pred_kpis[pred][kpis_set]['cmae'])
-            str_data = '%s,%.1f' % (str_data, pred_kpis[pred][kpis_set]['crmse'])
-            str_data = '%s,%.3f' % (str_data, pred_kpis[pred][kpis_set]['nmae'])
-            str_data = '%s,%.3f' % (str_data, pred_kpis[pred][kpis_set]['nrmse'])
-            str_data = '%s,%.3f' % (str_data, pred_kpis[pred][kpis_set]['nmbe'])
-            str_data = '%s,%.3f' % (str_data, pred_kpis[pred][kpis_set]['ncmae'])
-            str_data = '%s,%.3f' % (str_data, pred_kpis[pred][kpis_set]['ncrmse'])
-
-            print(str_data)
-
-
 if __name__ == "__main__":
     # --------------------------------------------------------------------------- #
     # Configuration file
@@ -379,6 +195,8 @@ if __name__ == "__main__":
         logger.error('EXCEPTION: %s' % str(e))
         sys.exit(3)
 
+    logger.info('Starting program')
+
     # Set the main variables
     measured_signals = cfg['measuredSignals']
     predicted_signals = cfg['predictedSignals']
@@ -396,12 +214,8 @@ if __name__ == "__main__":
         predictors = []
         for elem in res.raw['series'][0]['values']:
             predictors.append(elem[1])
-        # predictors = predictors[0:1]
     else:
         predictors = cfg['predictorsFilter']
-
-    quantiles = ['perc10', 'perc20', 'perc30', 'perc40', 'perc50', 'perc60', 'perc70', 'perc80', 'perc90']
-    quantiles_vals = [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9]
 
     pred_kpis = dict()
     pred_pers_kpis = dict()
@@ -426,9 +240,6 @@ if __name__ == "__main__":
                 df_measure = df_measure.drop(days_to_drop)
 
                 df_predictors = {}
-                df_mean_std_predictors_ngb = {}
-                df_median_predictors_qrf = {}
-                df_quantiles_predictors_qrf = {}
 
                 print_output_stat(region, start_date, end_date, df_measure.values.ravel())
 
@@ -437,7 +248,6 @@ if __name__ == "__main__":
                     step = int(predicted_signals[i].split('-')[1][1:]) + 1
                     for interval in cfg['intervals']:
                         pred_pers_kpis[(region, interval['label'], predicted_signals[i][-2:])] = persistence(step, df_measure, interval['limits'][0], interval['limits'][1])
-                    # flag_pers = True
 
                 for predictor in predictors:
                     for regressor in ['ngb', 'xgb', 'lgb', 'qrf']:
@@ -460,7 +270,6 @@ if __name__ == "__main__":
                         key = (meas_pred, (('location', region), ('predictor', predictor)))
 
                         if key in res.keys():
-                            # print('ANALISYS: %s,%s,%s' % (case, region, predictor))
                             df_predictors[(predictor, regressor)] = res[key]
 
                             meas = df_measure['measure'].values
@@ -472,10 +281,12 @@ if __name__ == "__main__":
                                     single_pred_kpis[interval['label']] = calc_kpis(meas, pred, interval['limits'][0],
                                                                                     interval['limits'][1])
                                 except Exception as e:
-                                    print('WARNING: Data not available for case %s, region %s, signal %s, '
-                                          'interval [%i:%i], predictor %s' % (case, region, predicted_signals[i],
-                                                                              interval['limits'][0],
-                                                                              interval['limits'][1], predictor))
+                                    logger.warning('Data not available for case %s, region %s, signal %s, '
+                                                   'interval [%i:%i], predictor %s' % (case, region,
+                                                                                       predicted_signals[i],
+                                                                                       interval['limits'][0],
+                                                                                       interval['limits'][1],
+                                                                                       predictor))
 
                             # Save the results
                             pred_kpis[(case, region, predicted_signals[i], predictor, regressor)] = single_pred_kpis
@@ -484,7 +295,7 @@ if __name__ == "__main__":
     
     interval = cfg['intervalToConsider']
     kpi = cfg['kpi']
-    print('ANALYSIS OF BEST PREDICTORS-REGRESSORS:')
+    logger.info('Start of analysis of best predictors')
     sorted_dfs = {}
     for case in cases:
         for region in regions:
@@ -506,7 +317,8 @@ if __name__ == "__main__":
                                                 'MAPE_QRF': np.round(pred_kpis[k_qrf][interval]['mape'], 1),
                                                 'MAPE_DIFF': np.round(pred_kpis[k_best][interval]['mape'], 1) - np.round(pred_kpis[k_qrf][interval]['mape'], 1)}
                             except Exception as e:
-                                print('EXCEPTION: %s' % str(e))
+                                logger.warning('EXCEPTION: %s' % str(e))
+                                logger.warning('Exit program')
                                 sys.exit()
                             df_best = pd.concat([df_best, pd.DataFrame([new_row_best])], ignore_index=True)
 
@@ -516,7 +328,7 @@ if __name__ == "__main__":
                     predictor = cfg['bestCases'][region]['forecaster']['bestLabels'][case]['%s-d%i' % (cfg['output'], i)]['predictor']
                     k_in_charge_best = (case, region, '%s-d%i' % (cfg['output'], i), family, predictor)
                     k_in_charge_qrf = (case, region, '%s-d%i' % (cfg['output'], i), family, 'qrf')
-                    new_row = {'ID': ('BEST', k_in_charge_best[3], k_in_charge_best[4]),
+                    new_row = {'ID': 'BEST',
                                'MAE': np.round(pred_kpis[k_in_charge_best][interval]['mae'], 1),
                                'RMSE': np.round(pred_kpis[k_in_charge_best][interval]['rmse'], 1),
                                'MBE': np.round(pred_kpis[k_in_charge_best][interval]['mbe'], 1),
@@ -552,9 +364,11 @@ if __name__ == "__main__":
 
                     sorted_dfs['%s_%s_%s-d%i' % (region, case, cfg['output'], i)] = sorted_df_best
 
-    with pd.ExcelWriter('%s%sresume_%s.xlsx' % (cfg['outputFolder'], os.sep, kpi)) as writer:
+    output_resume_file_name = '%s%sresume_%s.xlsx' % (cfg['outputFolder'], os.sep, kpi)
+    logger.info('Write resume on file %s' % output_resume_file_name)
+    with pd.ExcelWriter(output_resume_file_name) as writer:
         for k in sorted(list(sorted_dfs.keys())):
             if ('MOR' in k) or ('EVE' in k and 'd0' in k):
                 sorted_dfs[k].to_excel(writer, sheet_name=k, index=True)
 
-
+    logger.info('Ending program')
