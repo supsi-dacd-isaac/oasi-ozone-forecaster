@@ -12,7 +12,7 @@ logs
 meteo_forecast_analysis*
 models*
 mfc_models*
-output*
+output*/*
 performances_analysis*
 tmp
 venv*
