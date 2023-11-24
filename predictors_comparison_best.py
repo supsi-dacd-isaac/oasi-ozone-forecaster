@@ -224,7 +224,8 @@ if __name__ == "__main__":
 
         days_to_drop = []
         for dtd in cfg['daysToDrop'][region]:
-            days_to_drop.append(pd.Timestamp(dtd))
+            dtd_str = '%s 00:00:00+00:00' % dtd
+            days_to_drop.append(pd.to_datetime(dtd_str, format='%Y-%m-%d %H:%M:%S%z'))
 
         flag_pers = False
         for i in range(0, len(measured_signals)):
@@ -234,9 +235,11 @@ if __name__ == "__main__":
                         "where signal='%s' and location='%s' and " \
                         "time>='%sT00:00:00Z' and time<='%sT23:59:59Z' " \
                         "group by time(1d), location" % (measured_signals[i], region, start_date, end_date)
-                # logger.info(query)
+
                 res = influx_client.query(query)
                 df_measure = res[('inputs_measurements', (('location', region),))]
+
+                # Drop configured days from the analysis
                 df_measure = df_measure.drop(days_to_drop)
 
                 df_predictors = {}
@@ -272,6 +275,9 @@ if __name__ == "__main__":
                         if key in res.keys():
                             df_predictors[(predictor, regressor)] = res[key]
 
+                            # Drop configured days from the analysis
+                            df_predictors[(predictor, regressor)] = df_predictors[(predictor, regressor)].drop(days_to_drop)
+
                             meas = df_measure['measure'].values
                             pred = df_predictors[(predictor, regressor)].values.ravel()
 
@@ -281,7 +287,7 @@ if __name__ == "__main__":
                                     single_pred_kpis[interval['label']] = calc_kpis(meas, pred, interval['limits'][0],
                                                                                     interval['limits'][1])
                                 except Exception as e:
-                                    logger.warning('Data not available for case %s, region %s, signal %s, '
+                                    logger.warning('Problems with data analysis for case %s, region %s, signal %s, '
                                                    'interval [%i:%i], predictor %s' % (case, region,
                                                                                        predicted_signals[i],
                                                                                        interval['limits'][0],
