@@ -220,6 +220,7 @@ if __name__ == "__main__":
     pred_kpis = dict()
     pred_pers_kpis = dict()
     targets = dict()
+    target_measurement = cfg['targetMeasurement']
     for region in regions:
 
         days_to_drop = []
@@ -231,13 +232,13 @@ if __name__ == "__main__":
         for i in range(0, len(measured_signals)):
             for case in cases:
                 # Get measured output
-                query = "select mean(value) as measure from inputs_measurements " \
+                query = "select mean(value) as measure from %s " \
                         "where signal='%s' and location='%s' and " \
                         "time>='%sT00:00:00Z' and time<='%sT23:59:59Z' " \
-                        "group by time(1d), location" % (measured_signals[i], region, start_date, end_date)
+                        "group by time(1d), location" % (target_measurement, measured_signals[i], region, start_date, end_date)
 
                 res = influx_client.query(query)
-                df_measure = res[('inputs_measurements', (('location', region),))]
+                df_measure = res[(target_measurement, (('location', region),))]
 
                 # Drop configured days from the analysis
                 df_measure = df_measure.drop(days_to_drop)
