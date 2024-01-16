@@ -345,6 +345,9 @@ class InputsGatherer:
             except Exception as e:
                 self.logger.error('Data not available')
                 self.io_data[signal_data] = np.nan
+        else:
+            self.logger.error('Data not available')
+            self.io_data[signal_data] = np.nan
 
     def do_forecast_step_query(self, signal_data, measurement, forecast_substitution, force_substitution=False):
         if len(signal_data.split('__')) == 4:
