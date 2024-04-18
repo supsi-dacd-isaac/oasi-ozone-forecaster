@@ -949,7 +949,11 @@ class InputsGatherer:
                     signal_list.extend(self.hourly_forecasted_signals(forecastStation, forecastedSignal, 33, 120+1, 3))
                 else:
                     # COSMO1 goes until 33 hours ahead with a resolution of 1 hour
-                    signal_list.extend(self.hourly_forecasted_signals(forecastStation, forecastedSignal, 0, 33+1, 1))
+                    # If signal == GLOB (Irradiance) => step0 has not to be considered
+                    if forecastedSignal == 'GLOB':
+                        signal_list.extend(self.hourly_forecasted_signals(forecastStation, forecastedSignal, 1, 33+1, 1))
+                    else:
+                        signal_list.extend(self.hourly_forecasted_signals(forecastStation, forecastedSignal, 0, 33+1, 1))
                     # Chunk aggregation
                     signal_list.extend(self.chunks_forecasted_signals(forecastStation, forecastedSignal))
 
