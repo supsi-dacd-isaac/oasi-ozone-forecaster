@@ -119,8 +119,10 @@ class DataManager:
         except Exception as e:
             self.logger.error('Connection exception: %s' % str(e))
 
-    def is_meteosuisse_forecast_file(self, file_name):
-        if 'VNXA51' in file_name or 'VQCA19' in file_name or 'VNYA34' in file_name or 'VNYA32' in file_name or 'VNXA54' in file_name:
+    @staticmethod
+    def is_meteosuisse_forecast_file(file_name):
+        if ('VNXA51' in file_name or 'VQCA19' in file_name or 'VNYA34' in file_name or 'VNYA32' in file_name or
+                'VNXA54' in file_name or 'icon' in file_name):
             return True
         else:
             return False
@@ -303,14 +305,19 @@ class DataManager:
         :param input_file: input file
         :type input_file: string
         """
-
-        self.logger.info('Getting data from %s' % input_file)
-        (code, dt_code, ext) = input_file.split('.')
+        if 'icon' in input_file:
+            self.logger.info('Getting ICON data from file %s' % input_file)
+            (prefix, code, suffix) = input_file.split(os.sep)[-1].split('-')
+        else:
+            self.logger.info('Getting COSMO data from file %s' % input_file)
+            prefix = 'cosmo'
+            (code, dt_code, ext) = input_file.split('.')
 
         f = open(input_file, 'rb')
 
-        # Meteosuisse forecasts for specific locations (VNXA51 case: COSMO1, VNYA34 case: COSMO2)
-        if 'VNYA34' in code or 'VNXA51' in code:
+        # Single predition (COSMO codes: VNXA51 -> COSMO1, VNYA34 -> COSMO2)
+        if ('VNYA34' in code or 'VNXA51' in code or             # COSMO case
+           (prefix == 'icon' and 'profile' not in suffix)):     # ICON case
 
             dt_run = None
             signals = None
@@ -343,7 +350,8 @@ class DataManager:
 
                             # Step and COSMO2 suffix handling
                             step = int(data[2].split(':')[0])
-                            if 'VNYA34' in code:
+                            #   COSMOS case         ICON case
+                            if 'VNYA34' in code or code == 'ch2':
                                 str_step = 'step%03d' % step
                                 signal_suffix = '_c2'
                             else:
@@ -365,28 +373,9 @@ class DataManager:
                     # skip the line related to unit measures
                     f.readline()
 
-        # VQCA19 case: global forecast about meteorological situation in Ticino
-        elif 'VQCA19' in code:
-            for raw_row in f:
-                row = raw_row.decode(constants.ENCODING)
-                row = row[:-1]
-                if 'RHW' in row:
-                    # row = row.replace(' ', '')
-                    (signal, day, value) = row.replace('  ', ',').replace(' ', '').replace(',,', ',')[0:-2].split(',')
-
-                    utc_day = datetime.strptime(day, self.cfg['local']['timeFormatGlobal'])
-                    utc_day = pytz.utc.localize(utc_day)
-
-                    point = {
-                        'time': int(utc_day.timestamp()),
-                        'measurement': self.cfg['influxDB']['measurementGlobal'],
-                        'fields': dict(value=float(value)),
-                        'tags': dict(signal=signal)
-                    }
-                    dps.append(copy.deepcopy(point))
-
-        # VNYA32 and VNXA54 cases: vertical gradients
-        elif 'VNYA32' in code or 'VNXA54' in code:
+        # Vertical gradients (COSMO codes: VNXA54 -> COSMO1, VNYA32 -> COSMO2)
+        elif (('VNYA32' in code or 'VNXA54' in code) or         # COSMO
+              (prefix == 'icon' and 'profile' in suffix)):      # ICON
             dt_run = None
 
             single_sigs = self.get_single_signals(f)
@@ -407,7 +396,8 @@ class DataManager:
 
                     # Step and COSMO2 suffix handling
                     step = int(data[2].split(':')[0])
-                    if 'VNYA32' in code:
+                    #   COSMOS case         ICON case
+                    if 'VNYA32' in code or code == 'ch2':
                         str_step = 'step%03d' % step
                         signal_suffix = '_c2'
                     else:
@@ -422,6 +412,26 @@ class DataManager:
                                      step=str_step)
                     }
                     dps = self.point_handling(dps, point)
+
+        # VQCA19 case: global forecast about meteorological situation in Ticino (available only for COSMO)
+        elif 'VQCA19' in code:
+            for raw_row in f:
+                row = raw_row.decode(constants.ENCODING)
+                row = row[:-1]
+                if 'RHW' in row:
+                    # row = row.replace(' ', '')
+                    (signal, day, value) = row.replace('  ', ',').replace(' ', '').replace(',,', ',')[0:-2].split(',')
+
+                    utc_day = datetime.strptime(day, self.cfg['local']['timeFormatGlobal'])
+                    utc_day = pytz.utc.localize(utc_day)
+
+                    point = {
+                        'time': int(utc_day.timestamp()),
+                        'measurement': self.cfg['influxDB']['measurementGlobal'],
+                        'fields': dict(value=float(value)),
+                        'tags': dict(signal=signal)
+                    }
+                    dps.append(copy.deepcopy(point))
 
         # close the file
         f.close()
