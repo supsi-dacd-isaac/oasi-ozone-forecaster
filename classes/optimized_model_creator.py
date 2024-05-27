@@ -444,7 +444,7 @@ class OptimizedModelCreator:
                 'target': self.target,
                 'family': self.cfg['family'],
                 'region': self.region,
-                'dataToConsiderMinLimit': self.cfg['regions'][self.region]['dataToConsiderMinLimit'],
+                'dataToConsiderInterval': self.cfg['regions'][self.region]['dataToConsiderInterval'],
                 'datasetPeriod': self.cfg['dataset'],
                 'weights': self.cfg['regions'][self.region]['weights'][self.forecast_type],
                 'hpoBeforeFSPars': self.cfg['hpoBeforeFS'],
