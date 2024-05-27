@@ -89,8 +89,11 @@ class OptimizedModelCreator:
         # Read the data file
         tmp_df = pd.read_csv(file_path_df)
 
-        # Filtering on data -> only observations related to output values higher than the limit will be considered
-        mask = tmp_df[target] >= self.cfg['regions'][region]['dataToConsiderMinLimit']
+        # Filtering on data -> only observations related to output values in a configured interval will be considered
+        self.logger.info('Consider only occurrences in interval [%.1f:%.1f]' % (self.cfg['regions'][region]['dataToConsiderInterval']['min'],
+                                                                                self.cfg['regions'][region]['dataToConsiderInterval']['max']))
+        mask = ((tmp_df[target] >= self.cfg['regions'][region]['dataToConsiderInterval']['min']) &
+                (tmp_df[target] < self.cfg['regions'][region]['dataToConsiderInterval']['max']))
         output_dfs[region] = {'dataset': tmp_df[mask], 'targetColumns': target}
 
         # Select only configured input signals
