@@ -280,6 +280,8 @@ class OptimizedModelCreatorV2:
 
         # Cycle over the targets
         for target in self.targets_labels:
+            self.logger.info('Hyperparameter optimization started: location: %s, target: %s' % (self.location, target))
+
             y_target = self.y_all[target].to_frame()
 
             # CV folds creation
@@ -297,6 +299,7 @@ class OptimizedModelCreatorV2:
             assert trials_df['value'].isna().sum() == 0
             self.logger.info('Location: %s, target %s -> params: %s' % (self.location, target, study.best_params))
             self.logger.info('Location: %s, target %s -> score: %.4f' % (self.location, target, study.best_value))
+            self.logger.info('Hyperparameter optimization ended: location: %s, target: %s' % (self.location, target))
             self.opt_pars[target] = study.best_params
             self.opt_score[target] = study.best_value
 

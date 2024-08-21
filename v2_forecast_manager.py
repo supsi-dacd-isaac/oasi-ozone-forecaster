@@ -7,7 +7,7 @@ import time
 import datetime
 
 import urllib3
-from influxdb import DataFrameClient
+from influxdb import DataFrameClient, InfluxDBClient
 
 urllib3.disable_warnings()
 
@@ -34,9 +34,6 @@ if __name__ == "__main__":
     cfg_conns = json.loads(open(cfg['connectionsFile']).read())
     cfg.update(cfg_conns)
 
-    # Define the forecast type
-    # forecast_type = args.t
-
     # --------------------------------------------------------------------------- #
     # Set logging object
     # --------------------------------------------------------------------------- #
@@ -53,15 +50,18 @@ if __name__ == "__main__":
 
     logger.info('Connection to InfluxDb server on socket [%s:%s]' % (cfg['influxDB']['host'], cfg['influxDB']['port']))
     try:
-        influx_client = DataFrameClient(host=cfg['influxDB']['host'], port=cfg['influxDB']['port'],
-                                        password=cfg['influxDB']['password'], username=cfg['influxDB']['user'],
-                                        database=cfg['influxDB']['database'], ssl=cfg['influxDB']['ssl'])
+        ifc_df = DataFrameClient(host=cfg['influxDB']['host'], port=cfg['influxDB']['port'],
+                                 password=cfg['influxDB']['password'], username=cfg['influxDB']['user'],
+                                 database=cfg['influxDB']['database'], ssl=cfg['influxDB']['ssl'])
+        ifc = InfluxDBClient(host=cfg['influxDB']['host'], port=cfg['influxDB']['port'],
+                             password=cfg['influxDB']['password'], username=cfg['influxDB']['user'],
+                             database=cfg['influxDB']['database'], ssl=cfg['influxDB']['ssl'])
     except Exception as e:
         logger.error('EXCEPTION: %s' % str(e))
         sys.exit(3)
     logger.info('Connection successful')
 
-    forecaster = ForecasterV2(influx_client, cfg, logger)
+    forecaster = ForecasterV2(ifc_df, ifc, cfg, logger)
     forecaster.retrieve_predictors()
 
     if cfg['forecastPeriod']['case'] == 'current':
