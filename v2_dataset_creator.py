@@ -13,6 +13,14 @@ from classes.inputs_gatherer_v2 import InputsGathererV2
 
 urllib3.disable_warnings()
 
+def get_data_file_path(region, main_cfg):
+    str_input_folder = '%s%s_%s%s_%s%s%s' % (main_cfg['outputFolder'], region,
+                                             main_cfg['dataset']['startYear'],
+                                             main_cfg['dataset']['startDay'],
+                                             main_cfg['dataset']['endYear'],
+                                             main_cfg['dataset']['endDay'], os.sep)
+    return '%s%s_dataset.csv' % (str_input_folder, str_input_folder.split(os.sep)[1])
+
 if __name__ == "__main__":
     # --------------------------------------------------------------------------- #
     # Configuration file

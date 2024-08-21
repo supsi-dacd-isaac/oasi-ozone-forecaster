@@ -399,10 +399,3 @@ class OptimizedModelCreatorV2:
             pickle.dump(self.lgb_regressors[target], open('%s%s___%s___predictor.pkl' % (target_folder, self.main_cfg['family'], target), 'wb'))
 
 
-def get_data_file_path(region, main_cfg):
-    str_input_folder = '%s%s_%s%s_%s%s%s' % (main_cfg['outputFolder'], region,
-                                             main_cfg['dataset']['startYear'],
-                                             main_cfg['dataset']['startDay'],
-                                             main_cfg['dataset']['endYear'],
-                                             main_cfg['dataset']['endDay'], os.sep)
-    return '%s%s_dataset.csv' % (str_input_folder, str_input_folder.split(os.sep)[1])
