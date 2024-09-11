@@ -10,6 +10,7 @@ from sklearn.model_selection import KFold, cross_val_score
 
 from pyforecaster.trainer import hyperpar_optimizer, retrieve_cv_results
 from pyforecaster.metrics import err, squerr, rmse, nmae, mape
+from pyforecaster.forecasters_dictionaries import FORECASTER_MAP
 
 
 class OptimizedModelCreatorV2:
@@ -35,8 +36,9 @@ class OptimizedModelCreatorV2:
         self.opt_pars = None
         self.opt_score = None
 
-        self.lgb_regressors = None
-        self.lgb_pars = None
+        self.forecaster_model_caller = FORECASTER_MAP[self.main_cfg['forecaster'].get('type', 'LGB')]
+        self.forecast_regressors= None
+        self.forecast_pars = None
 
         self.METRICS = {'nmae': nmae, 'err': err, 'squerr': squerr, 'rmse': rmse, 'mape': mape}
 
@@ -256,8 +258,8 @@ class OptimizedModelCreatorV2:
             self.mean_fs_score[target] = -folds_scores.mean()
 
     def train(self):
-        self.lgb_regressors = {}
-        self.lgb_pars = {}
+        self.forecast_regressors= {}
+        self.forecast_pars = {}
 
         # Cycle over the targets
         for target in self.targets_labels:
@@ -268,10 +270,12 @@ class OptimizedModelCreatorV2:
             if target in self.opt_pars.keys():
                 pars.update(self.opt_pars[target])
 
-            self.lgb_pars[target] = copy.deepcopy(pars)
-            num_boost_round = pars.pop('n_estimators')
-            self.lgb_regressors[target] = lgb.train(pars, lgb.Dataset(self.x_fs[target], label=y_target),
-                                                    num_boost_round=num_boost_round)
+            self.forecast_pars[target] = copy.deepcopy(pars)
+            # num_boost_round = pars.pop('n_estimators')
+            model = self.forecaster_model_caller(**self.forecast_pars[target])
+            self.forecast_regressors[target] = model.fit(self.x_fs[target], y_target)
+            # self.forecast_regressors[target] = lgb.train(pars, lgb.Dataset(self.x_fs[target], label=y_target),
+            #                                         num_boost_round=num_boost_round)
             self.logger.info('Training ended, target %s' % target)
 
     def optimize(self):
@@ -288,11 +292,11 @@ class OptimizedModelCreatorV2:
             cv_idxs = self.get_sequential_cv_idxs(len(self.x_fs[target].index), self.main_cfg['hpo']['cv']['folds'])
             cv_folds = (f for f in cv_idxs)
 
-            study, replies = hyperpar_optimizer(self.x_fs[target], y_target, lgb.LGBMRegressor(),
+            study, replies = hyperpar_optimizer(self.x_fs[target], y_target, self.forecaster_model_caller(),
                                                 n_trials=self.main_cfg['hpo']['trials'],
                                                 metric=self.METRICS[self.main_cfg['hpo']['metric']],
                                                 cv=cv_folds, param_space_fun=self.param_space_fun,
-                                                hpo_type=self.main_cfg['hpo']['cv']['type'],
+                                                cv_type=self.main_cfg['hpo']['cv']['type'],
                                                 callbacks=[self.stop_on_no_improvement_callback])
 
             trials_df = retrieve_cv_results(study)
@@ -302,6 +306,7 @@ class OptimizedModelCreatorV2:
             self.logger.info('Hyperparameter optimization ended: location: %s, target: %s' % (self.location, target))
             self.opt_pars[target] = study.best_params
             self.opt_score[target] = study.best_value
+        print('Optimization ended')
 
 
     def stop_on_no_improvement_callback(self, study, _):
@@ -384,7 +389,7 @@ class OptimizedModelCreatorV2:
                 },
                 'predictorPars': self.predictor_cfg,
                 'fsResults': { 'crossValidationMeanScore': self.mean_fs_score[target] },
-                'optResults': { 'lightGBM': { 'score': self.opt_score[target], 'optimizedPars': self.lgb_pars[target]} }
+                'optResults': { 'lightGBM': { 'score': self.opt_score[target], 'optimizedPars': self.forecast_pars[target]} }
             }
             with open('%s%s___%s___main_cfg.json' % (target_folder, self.main_cfg['family'], target), 'w') as of:
                 json.dump(metadata, of, indent=2)
@@ -399,6 +404,7 @@ class OptimizedModelCreatorV2:
 
 
             # Model file
-            pickle.dump(self.lgb_regressors[target], open('%s%s___%s___predictor.pkl' % (target_folder, self.main_cfg['family'], target), 'wb'))
+            with open('%s%s___%s___predictor.pkl' % (target_folder, self.main_cfg['family'], target), 'wb') as of:
+                pickle.dump(self.forecast_regressors[target], of)
 
 

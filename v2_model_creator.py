@@ -55,7 +55,7 @@ if __name__ == "__main__":
 
             # Raw data loading
             raw_df = pd.read_csv(get_data_file_path(cfg['locations'][k_location]['region'], cfg), index_col=0, parse_dates=True)
-            # raw_df = raw_df.head(2000)
+            raw_df = raw_df.head(2000)
 
             # Dataset creation
             omc_v2.io_dataset_creation(raw_df)
