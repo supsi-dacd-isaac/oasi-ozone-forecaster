@@ -34,6 +34,11 @@ class DataManager:
     Generic interface for data (measures and forecasts) management
     """
 
+    FORECAST_SIGNAL_ALIASES = {
+        'glob_s_1h': 'GLOB',
+        'tot_prec_1h_smooth': 'TOT_PREC',
+    }
+
     def __init__(self, influxdb_client, cfg, logger, influx_df_client=None):
         """
         Constructor
@@ -369,7 +374,8 @@ class DataManager:
 
                 # define signals
                 if row[0:3] == 'stn':
-                    signals = row.split(';')
+                    # Normalize renamed MeteoSwiss headers so DB tags remain backward compatible.
+                    signals = [self.FORECAST_SIGNAL_ALIASES.get(sig, sig) for sig in row.split(';')]
                     # skip the line related to unit measures
                     f.readline()
 
